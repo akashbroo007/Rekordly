@@ -1,0 +1,42 @@
+# Environment variables
+.env
+
+# Dependencies
+node_modules/
+
+# Uploads and recordings
+uploads/
+*.mp4
+*.webm
+*.mov
+
+# Database
+data/
+*.sqlite
+*.db
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
+*.swo
+.history/
+
+# Build output
+dist/
+out/
+release/
+
+# Electron build resources are tracked (icon), ignore nothing there
+!apps/desktop/build/**
+
+# Old/backup files
+*.old
+*.backup
