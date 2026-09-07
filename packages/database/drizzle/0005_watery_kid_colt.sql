@@ -1,0 +1,1 @@
+ALTER TABLE `download_queue` ADD `quality` text DEFAULT 'best' NOT NULL;

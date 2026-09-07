@@ -1,0 +1,20 @@
+packages:
+  - apps/*
+  - packages/*
+  - plugins/*
+
+allowBuilds:
+  better-sqlite3: true
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+  sqlite3: true
+
+onlyBuiltDependencies:
+  - electron
+  - better-sqlite3
+  - esbuild
+  - electron-winstaller
+
+ignoredBuiltDependencies:
+  - sqlite3

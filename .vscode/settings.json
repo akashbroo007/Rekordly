@@ -1,0 +1,13 @@
+{
+  // ponytail: Tailwind v4 uses @theme/@apply/@layer at-rules that the built-in
+  // CSS language server doesn't know — silence those false-positive warnings.
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  // ponytail: keep the TS server honest about workspace packages.
+  "typescript.tsserver.experimental.enableProjectDiagnostics": true,
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/dist/**": true,
+    "**/out/**": true
+  }
+}

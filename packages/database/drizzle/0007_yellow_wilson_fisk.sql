@@ -1,0 +1,1 @@
+ALTER TABLE `creators` ADD `auto_record` integer DEFAULT false NOT NULL;

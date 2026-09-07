@@ -1,0 +1,22 @@
+{
+  "id": "twitch",
+  "name": "Twitch",
+  "version": "0.1.0",
+  "description": "Monitor and record livestreams from Twitch via the Helix API.",
+  "author": "Rekordly",
+  "license": "MIT",
+  "homepage": "https://github.com/Rekordly/Rekordly",
+  "setupHint": "Requires a free Twitch Client-ID and Secret. Open Settings for a step-by-step guide.",
+  "entry": "dist/index.js",
+  "minAppVersion": "0.1.0",
+  "capabilities": [
+    "auth",
+    "creator-search",
+    "live-detection",
+    "stream-extraction",
+    "settings",
+    "health-check",
+    "metadata"
+  ],
+  "permissions": ["network", "cookies", "recording"]
+}

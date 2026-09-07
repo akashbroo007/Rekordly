@@ -1,0 +1,1 @@
+ALTER TABLE `download_queue` ADD `audio_only` integer DEFAULT false NOT NULL;

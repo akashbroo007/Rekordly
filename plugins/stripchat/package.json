@@ -1,0 +1,16 @@
+{
+  "name": "@rekordly/plugin-stripchat",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "playwright-core": "^1.58.1"
+  },
+  "devDependencies": {
+    "@rekordly/plugin-sdk": "workspace:*"
+  }
+}

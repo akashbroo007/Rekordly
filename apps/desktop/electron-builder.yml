@@ -1,0 +1,62 @@
+appId: com.rekordly.app
+productName: Rekordly
+copyright: Copyright © 2026 Rekordly Contributors
+
+directories:
+  output: release
+  buildResources: build
+
+# ponytail: runtime icon assets (tray / window icon) — resolved by
+# src/main/icons.ts via process.resourcesPath in the packaged app.
+extraResources:
+  # ponytail: filter excludes binaries/ — they get their own top-level
+  # entry below (avoiding a 156 MB duplicate inside resources/).
+  - from: resources
+    to: resources
+    filter:
+      - "**/*"
+      - "!binaries/**"
+  # ponytail: built-in plugins are loaded from disk at runtime (PluginLoader
+  # requires manifest.json + dist/) — ship them read-only; userData/plugins
+  # stays for user-installed ones. Only the built output is needed.
+  - from: ../../plugins/
+    to: plugins
+    filter:
+      - "*/dist/**"
+      - "*/manifest.json"
+  # ponytail: the stripchat plugin does require('playwright-core') at runtime
+  # (MOUFLON decoder). Plugins live OUTSIDE app.asar, so Node cannot resolve
+  # the copy inside the asar — ship it next to the plugin instead.
+  - from: ../../plugins/stripchat/node_modules/playwright-core
+    to: plugins/stripchat/node_modules/playwright-core
+  # ponytail: vendored yt-dlp/ffmpeg — end users get a fully working app with
+  # zero external installs (resolved via resolveExecutable, see binaries.ts).
+  - from: resources/binaries
+    to: binaries
+
+files:
+  - out/**
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Rekordly
+
+portable:
+  artifactName: Rekordly-${version}-portable.exe
+
+extraMetadata:
+  main: out/main/index.js

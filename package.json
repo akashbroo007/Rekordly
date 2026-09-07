@@ -1,0 +1,16 @@
+{
+  "name": "rekordly",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Rekordly monorepo",
+  "scripts": {
+    "dev": "pnpm --filter @rekordly/desktop dev",
+    "build": "pnpm -r build && pnpm --filter @rekordly/desktop build",
+    "typecheck": "pnpm -r typecheck",
+    "package": "pnpm --filter @rekordly/desktop package"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3"
+  }
+}

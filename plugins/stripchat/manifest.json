@@ -1,0 +1,21 @@
+{
+  "id": "stripchat",
+  "name": "Stripchat",
+  "version": "0.1.0",
+  "description": "Monitor and record livestreams from Stripchat (stripchat.ooo).",
+  "author": "Rekordly",
+  "license": "MIT",
+  "homepage": "https://github.com/Rekordly/Rekordly",
+  "entry": "dist/index.js",
+  "minAppVersion": "0.1.0",
+  "capabilities": [
+    "auth",
+    "creator-search",
+    "live-detection",
+    "stream-extraction",
+    "settings",
+    "health-check",
+    "metadata"
+  ],
+  "permissions": ["network", "cookies", "recording"]
+}

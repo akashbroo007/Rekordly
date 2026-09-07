@@ -1,0 +1,21 @@
+{
+  "id": "youtube",
+  "name": "YouTube",
+  "version": "0.1.0",
+  "description": "Monitor and record livestreams from YouTube via the Data API v3.",
+  "author": "Rekordly",
+  "license": "MIT",
+  "homepage": "https://github.com/Rekordly/Rekordly",
+  "setupHint": "Requires a free YouTube Data API v3 key. Open Settings for a step-by-step guide.",
+  "entry": "dist/index.js",
+  "minAppVersion": "0.1.0",
+  "capabilities": [
+    "creator-search",
+    "live-detection",
+    "stream-extraction",
+    "settings",
+    "health-check",
+    "metadata"
+  ],
+  "permissions": ["network", "cookies", "recording"]
+}

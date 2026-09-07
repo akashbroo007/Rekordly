@@ -1,0 +1,1 @@
+ALTER TABLE `creators` ADD `auto_record_quality` text DEFAULT 'best' NOT NULL;
