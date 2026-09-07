@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="apps/desktop/resources/icons/icon-256x256px.png" width="128" alt="Rekordly logo">
+
 # Rekordly
 
 **Monitor, record, and download live streams — automatically.**
