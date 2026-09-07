@@ -42,4 +42,4 @@ See [docs/](./docs) - start with `ARCHITECTURE.md`, `PRD.md`, and `PLUGIN_GUIDE.
 
 ## License
 
-See [LICENSE.txt](./LICENSE.txt).
+See [LICENSE.txt](../LICENSE.txt).
