@@ -1,18 +1,20 @@
 import { Link } from "react-router-dom";
 import { Globe, Github } from "lucide-react";
-import { navLinks, site } from "../../content/site";
+import { navLinks, secondaryNavLinks, site } from "../../content/site";
 import { useCurrency } from "../../lib/CurrencyContext";
 import { CURRENCY_OPTIONS } from "../../lib/currency";
 
 const footerNav = [
   {
     heading: "Product",
-    links: [...navLinks],
+    // Full product nav — the navbar only shows the top three.
+    links: [...navLinks, ...secondaryNavLinks],
   },
   {
     heading: "Resources",
     links: [
       { label: "Documentation", href: "/docs" },
+      { label: "Blog", href: "/blog" },
       { label: "Roadmap", href: "/roadmap" },
       { label: "Changelog", href: `${site.repoUrl}/blob/main/docs/CHANGELOG.md` },
       { label: "Plugin guide", href: site.pluginGuideUrl },
@@ -37,7 +39,13 @@ export function Footer() {
         <div className="grid grid-cols-3 gap-6 md:grid-cols-[1.5fr_repeat(3,1fr)] md:gap-12">
           <div className="col-span-3 md:col-span-1">
             <Link to="/" className="flex items-center gap-2.5">
-              <img src="./icon.png" alt="" className="h-7 w-7" />
+              <img
+                src="./icon.png"
+                alt=""
+                width={28}
+                height={28}
+                className="h-7 w-7"
+              />
               <span className="text-lg font-bold text-white">{site.name}</span>
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-6 text-white/60">

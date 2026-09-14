@@ -5,6 +5,7 @@ export default function TermsPage() {
   return (
     <LegalPage
       title="Terms of Service"
+      path="/terms"
       intro="These terms govern your use of the Rekordly website and the Rekordly desktop application. By using either, you agree to them."
     >
       <div className="markdown">

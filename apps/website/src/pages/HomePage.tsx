@@ -16,6 +16,7 @@ import {
 } from "../content/site";
 import { Reveal } from "../components/shared/Reveal";
 import { useCurrency } from "../lib/CurrencyContext";
+import { useSeo, faqSchema, softwareAppSchema } from "../lib/seo";
 
 function HowItWorks() {
   return (
@@ -51,8 +52,10 @@ function Showcase() {
     <Section className="pt-4">
       <Reveal>
         <ScreenshotFrame
-          src="./screenshots/dashboard.png"
+          src="./screenshots/dashboard.webp"
           alt="Rekordly dashboard showing live creator status, the recording queue, and the library"
+          width={1800}
+          height={1020}
           caption="The Rekordly dashboard — live status, recording queue, and your library in one window."
         />
       </Reveal>
@@ -404,6 +407,14 @@ function FinalCta() {
 }
 
 export function HomePage() {
+  useSeo({
+    title: "Rekordly — Monitor, record, and download live streams",
+    description:
+      "A free, source-available Windows desktop app for monitoring creators, automatically recording live streams, downloading videos and VODs, and organizing your recordings.",
+    path: "/",
+    schema: [faqSchema(faqs), softwareAppSchema()],
+  });
+
   return (
     <>
       <Hero />

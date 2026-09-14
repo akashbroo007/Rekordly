@@ -64,7 +64,7 @@ commercial license.
 | Monitor creators                 | Unlimited                     | Unlimited                    |
 | Add creators                     | Unlimited                     | Unlimited                    |
 | Auto-record creators             | Up to 2                       | Unlimited                    |
-| Concurrent live recordings       | Up to 2                       | Unlimited                    |
+| Concurrent live recordings       | Up to 5                       | Unlimited                    |
 | Live recording length            | Up to 15 minutes per recording| Unlimited                    |
 | Manual video/VOD downloads       | Unlimited                     | Unlimited                    |
 | Long-form video downloads        | Yes                           | Yes                          |

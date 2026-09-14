@@ -1,3 +1,6 @@
+/** Absolute origin used for canonical URLs, OG tags, and the sitemap. */
+export const siteUrl = "https://rekordly.in";
+
 export const site = {
   name: "Rekordly",
   tagline: "Monitor, record, and download live streams — automatically.",
@@ -13,13 +16,20 @@ export const site = {
   email: "hello@rekordly.in",
 } as const;
 
+/** Primary links shown in the navbar pill (kept deliberately short). */
 export const navLinks = [
   { label: "Features", href: "/features" },
   { label: "Docs", href: "/docs" },
-  { label: "Plugins", href: "/plugins" },
   { label: "Download", href: "/download" },
+] as const;
+
+/** Secondary links live in the "More" dropdown and the footer. */
+export const secondaryNavLinks = [
+  { label: "Plugins", href: "/plugins" },
+  { label: "Blog", href: "/blog" },
   { label: "Pricing", href: "/pricing" },
   { label: "Roadmap", href: "/roadmap" },
+  { label: "Contact", href: "/contact" },
 ] as const;
 
 export const hero = {

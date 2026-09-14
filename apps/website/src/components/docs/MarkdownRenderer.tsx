@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -115,6 +116,15 @@ export function MarkdownRenderer({ source }: { source: string }) {
                 <a href={href} target="_blank" rel="noreferrer">
                   {label}
                 </a>
+              );
+            }
+            // Root-absolute paths (/pricing, /blog/…) route directly;
+            // bare slugs (installation, auto-record…) stay docs-relative.
+            if (href.startsWith("/")) {
+              return (
+                <Link to={href} className="!p-0 !underline">
+                  {label}
+                </Link>
               );
             }
             return (

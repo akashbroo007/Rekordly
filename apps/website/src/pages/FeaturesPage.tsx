@@ -6,6 +6,7 @@ import { ShimmerLinkButton } from "../components/hero/ShimmerButton";
 import { Reveal } from "../components/shared/Reveal";
 import { useCurrency } from "../lib/CurrencyContext";
 import { features, safetyRails, site } from "../content/site";
+import { useSeo } from "../lib/seo";
 
 const BUY_URL = "https://buy.polar.sh/rekordly-pro";
 
@@ -246,11 +247,19 @@ function GroupBlock({ group }: { group: ComparisonGroup }) {
 }
 
 export default function FeaturesPage() {
+  useSeo({
+    title: "Features — monitoring, auto-record, downloads, editor & more",
+    description:
+      "Every Rekordly feature: live monitoring across 7 sites, auto-record with safety rails, VOD downloads, built-in editor, cloud uploads, and a Secure Proxy for blocked networks.",
+    path: "/features",
+  });
+
   return (
     <>
       <Section>
         <SectionHeading
           eyebrow="Features"
+          as="h1"
           title="Everything Rekordly does"
           description="A local-first desktop app that covers the whole pipeline: watching, capturing, organizing, and pushing to the cloud."
         />
@@ -317,9 +326,11 @@ export default function FeaturesPage() {
         <Reveal className="mt-12">
           <ScreenshotFrame
             videoSrc="./demo/rekordly-demo.mp4"
-            poster="./screenshots/dashboard.png"
-            src="./screenshots/dashboard.png"
+            poster="./screenshots/dashboard.webp"
+            src="./screenshots/dashboard.webp"
             alt="Rekordly product walkthrough video showing creator setup, live monitoring, recording, and library"
+            width={1800}
+            height={1020}
             caption="Product walkthrough — monitoring, recording, and library in one flow."
           />
         </Reveal>

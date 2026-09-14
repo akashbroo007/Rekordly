@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+
+# AI scraper bots blocked by choice — remove lines to allow
+User-agent: GPTBot
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+# Sitemap
+Sitemap: https://rekordly.in/sitemap.xml

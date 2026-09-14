@@ -12,6 +12,7 @@ import { Reveal } from "../components/shared/Reveal";
 import { ShimmerLinkButton } from "../components/hero/ShimmerButton";
 import { site, type RoadmapStatus } from "../content/site";
 import { fetchRoadmap, type RoadmapSource } from "../lib/roadmap";
+import { useSeo } from "../lib/seo";
 
 const STATUS_STYLES: Record<
   RoadmapStatus,
@@ -136,6 +137,13 @@ function SourceNote({ source }: { source: RoadmapSource }) {
 }
 
 export default function RoadmapPage() {
+  useSeo({
+    title: "Roadmap — what shipped, what's next",
+    description:
+      "The Rekordly development roadmap: shipped features like the plugin system and video editor, work in progress, and what's planned for upcoming releases.",
+    path: "/roadmap",
+  });
+
   const [source, setSource] = useState<RoadmapSource | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -165,6 +173,7 @@ export default function RoadmapPage() {
       <Section>
         <SectionHeading
           eyebrow="Roadmap"
+          as="h1"
           title="How development is going"
           description="Everything Rekordly has shipped, what is being built right now, and what comes next — synced straight from GitHub Issues."
         />

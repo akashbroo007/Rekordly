@@ -1,0 +1,54 @@
+# Rekordly
+
+> Rekordly is a free, source-available Windows desktop app that monitors
+> content creators, automatically records their live streams, downloads
+> videos and VODs, and organizes everything into a searchable local library.
+
+Rekordly watches the creators you follow across supported streaming sites,
+hits record the moment they go live, and files every capture into a
+searchable local library. Recording is a lossless straight copy powered by
+bundled yt-dlp and ffmpeg — nothing else to install. The app is local-first:
+no account, no telemetry, all data stays in SQLite on your machine. Free for
+personal, educational, and other noncommercial use under the PolyForm
+Noncommercial License 1.0.0; Pro is a one-time payment that removes
+live-recording limits; commercial use requires a separate license.
+
+Supported platforms: Chaturbate, Stripchat, BongaCams, CamSoda, MyFreeCams,
+Twitch, and YouTube — extensible to any site through the community plugin
+system and its typed SDK.
+
+## Main pages
+
+- [Home](https://rekordly.in/): product overview, features, FAQ, and download links
+- [Features](https://rekordly.in/features): every feature in detail with a Free vs Pro comparison
+- [Download](https://rekordly.in/download): installer and portable builds for Windows 10/11
+- [Pricing](https://rekordly.in/pricing): free tier, $29 one-time Pro license, commercial licensing
+- [Plugins](https://rekordly.in/plugins): the plugin system and how to build a site plugin
+- [Blog](https://rekordly.in/blog): guides and product notes
+- [Roadmap](https://rekordly.in/roadmap): shipped, in-progress, and planned work
+- [Contact](https://rekordly.in/contact): bug reports, feature requests, and general inquiries
+
+## Documentation
+
+- [Docs home](https://rekordly.in/docs): full documentation index
+- [Getting started](https://rekordly.in/docs/getting-started): install, add a creator, enable Auto-Record
+- [Auto-Record](https://rekordly.in/docs/auto-record): unattended recording with safety rails
+- [Recording & downloads](https://rekordly.in/docs/recording-downloads): capture streams and download VODs
+- [Blocked networks](https://rekordly.in/docs/blocked-networks): built-in Secure Proxy and Cloudflare WARP
+- [Plugins reference](https://rekordly.in/docs/plugins): writing site plugins against the SDK
+- [Troubleshooting](https://rekordly.in/docs/troubleshooting): crash recovery, disk guardrails, low-resource mode
+- [FAQ](https://rekordly.in/docs/faq): frequently asked questions
+- [License](https://rekordly.in/docs/license): licensing model details
+
+## Blog posts
+
+- [What is Rekordly and how do you get started?](https://rekordly.in/blog/what-is-rekordly): a plain-English tour and a four-step quick start
+- [The problem Rekordly solves](https://rekordly.in/blog/the-problem-rekordly-solves): why streams disappear and how auto-archiving fixes it
+- [Who is Rekordly for?](https://rekordly.in/blog/who-is-rekordly-for): five user groups and their workflows
+
+## Optional
+
+- [Terms of Service](https://rekordly.in/terms): license scope and acceptable use
+- [Privacy Policy](https://rekordly.in/privacy): what data exists (almost none) and where it lives
+- [GitHub repository](https://github.com/akashbroo007/Rekordly): source code, issues, and releases
+- [Changelog](https://github.com/akashbroo007/Rekordly/blob/main/docs/CHANGELOG.md): release history

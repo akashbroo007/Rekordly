@@ -1,7 +1,15 @@
 import { Link } from "react-router-dom";
 import { Home } from "lucide-react";
+import { useSeo } from "../lib/seo";
 
 export default function NotFoundPage() {
+  useSeo({
+    title: "Page not found",
+    description: "The page you're looking for doesn't exist or has moved.",
+    path: "/404",
+    noindex: true,
+  });
+
   return (
     <div className="flex min-h-[70vh] flex-col items-center justify-center px-6 text-center">
       <p className="text-7xl font-bold text-white/10">404</p>

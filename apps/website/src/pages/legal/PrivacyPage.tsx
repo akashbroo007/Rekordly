@@ -4,6 +4,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy Policy"
+      path="/privacy"
       intro="Rekordly is built to be private by default: there is no account system, no telemetry, and no advertising. This policy explains what little data exists and where it lives."
     >
       <div className="markdown">

@@ -20,6 +20,8 @@ interface SectionHeadingProps {
   title: string;
   description?: string;
   align?: "left" | "center";
+  /** Render as h1 when this is the page's primary heading (one per page). */
+  as?: "h1" | "h2";
 }
 
 export function SectionHeading({
@@ -27,8 +29,10 @@ export function SectionHeading({
   title,
   description,
   align = "center",
+  as = "h2",
 }: SectionHeadingProps) {
   const alignClass = align === "center" ? "mx-auto text-center" : "text-left";
+  const Tag = as;
   return (
     <Reveal className={`max-w-2xl ${alignClass}`}>
       {eyebrow && (
@@ -36,9 +40,9 @@ export function SectionHeading({
           {eyebrow}
         </p>
       )}
-      <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+      <Tag className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
         {title}
-      </h2>
+      </Tag>
       {description && (
         <p className="mt-4 text-lg leading-7 text-white/70">{description}</p>
       )}

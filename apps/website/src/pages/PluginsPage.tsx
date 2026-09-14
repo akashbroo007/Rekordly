@@ -10,6 +10,7 @@ import { Section, SectionHeading } from "../components/layout/Section";
 import { ShimmerLinkButton } from "../components/hero/ShimmerButton";
 import { Reveal } from "../components/shared/Reveal";
 import { site } from "../content/site";
+import { useSeo } from "../lib/seo";
 
 const pillars = [
   {
@@ -46,11 +47,19 @@ const responsibilities = [
 ] as const;
 
 export default function PluginsPage() {
+  useSeo({
+    title: "Plugins — add support for any streaming site",
+    description:
+      "Rekordly site support ships as plugins with a typed SDK, capability detection, and health checks. Build a plugin for your favorite streaming site in an afternoon.",
+    path: "/plugins",
+  });
+
   return (
     <>
       <Section>
         <SectionHeading
           eyebrow="Plugins"
+          as="h1"
           title="Site support that never goes stale"
           description="Rekordly's plugin system keeps the core app small and the ecosystem open. Site logic lives in plugins with capability detection, health checks, and per-plugin settings."
         />

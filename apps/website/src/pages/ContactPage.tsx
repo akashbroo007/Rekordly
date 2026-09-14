@@ -3,6 +3,7 @@ import { Bug, Lightbulb, Mail, MessageSquare, ClipboardCopy, ExternalLink } from
 import { Section, SectionHeading } from "../components/layout/Section";
 import { Reveal } from "../components/shared/Reveal";
 import { contactChannels, site } from "../content/site";
+import { useSeo } from "../lib/seo";
 
 const icons = [Bug, MessageSquare, Mail] as const;
 
@@ -181,11 +182,19 @@ function QuickBugReport() {
 }
 
 export default function ContactPage() {
+  useSeo({
+    title: "Contact — bug reports, feature ideas & press",
+    description:
+      "Get in touch with the Rekordly team: report bugs on GitHub, request features, ask about commercial licensing, or email us for anything else.",
+    path: "/contact",
+  });
+
   return (
     <>
       <Section>
         <SectionHeading
           eyebrow="Contact"
+          as="h1"
           title="Get in touch"
           description="Rekordly is developed in the open — most conversations happen on GitHub where they benefit everyone."
         />

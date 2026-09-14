@@ -1,8 +1,16 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, GitBranch, Search } from "lucide-react";
 import { docGroups } from "../../lib/docs";
+import { useSeo } from "../../lib/seo";
 
 export default function DocsHomePage() {
+  useSeo({
+    title: "Documentation — guides, references & FAQ",
+    description:
+      "Rekordly documentation: install, add your first creator, master Auto-Record, the library, the editor, plugins, troubleshooting, and the FAQ.",
+    path: "/docs",
+  });
+
   return (
     <div className="pb-16">
       <div className="max-w-2xl">

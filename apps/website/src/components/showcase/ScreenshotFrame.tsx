@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 interface ScreenshotFrameProps {
-  /** Path under /public, e.g. "./screenshots/dashboard.png" */
+  /** Path under /public, e.g. "./screenshots/dashboard.webp" */
   src?: string;
   alt?: string;
   caption?: string;
@@ -10,6 +10,9 @@ interface ScreenshotFrameProps {
   videoSrc?: string;
   /** Poster image shown before the video plays */
   poster?: string;
+  /** Intrinsic width/height for aspect-ratio reservation (prevents layout shift). */
+  width?: number;
+  height?: number;
 }
 
 /**
@@ -25,6 +28,8 @@ export function ScreenshotFrame({
   children,
   videoSrc,
   poster,
+  width,
+  height,
 }: ScreenshotFrameProps) {
   return (
     <figure className="w-full">
@@ -35,7 +40,13 @@ export function ScreenshotFrame({
           <span className="h-3 w-3 rounded-full bg-[#FEBC2E] ring-1 ring-black/30" />
           <span className="h-3 w-3 rounded-full bg-[#28C840] ring-1 ring-black/30" />
           <span className="ml-3 flex items-center gap-2 text-xs text-white/50">
-            <img src="./icon.png" alt="" className="h-3.5 w-3.5" />
+            <img
+              src="./icon.png"
+              alt=""
+              width={14}
+              height={14}
+              className="h-3.5 w-3.5"
+            />
             Rekordly
           </span>
         </div>
@@ -49,6 +60,8 @@ export function ScreenshotFrame({
               controls
               preload="metadata"
               playsInline
+              width={width}
+              height={height}
               className="aspect-video w-full bg-black object-contain"
             >
               {alt}
@@ -58,13 +71,15 @@ export function ScreenshotFrame({
               src={src}
               alt={alt}
               loading="lazy"
-              className="block h-auto w-full object-contain"
+              decoding="async"
+              width={width}
+              height={height}
+              className="h-auto w-full object-contain"
             />
           ) : (
-            <div className="flex aspect-[16/10] h-full w-full flex-col items-center justify-center gap-3 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.05),transparent_70%)] p-6 text-center">
+            <div className="flex aspect-[16/10] items-center justify-center p-10 text-center">
               {children ?? (
-                <>
-                  <div className="h-14 w-14 rounded-xl border border-white/10 bg-white/5" />
+                <div className="flex aspect-video items-center justify-center gap-3 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.05),transparent_70%)] p-6 text-center">
                   <p className="max-w-sm text-sm text-white/40">
                     Screenshot slot — drop a capture into{" "}
                     <code className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-xs text-white/70">
@@ -76,7 +91,7 @@ export function ScreenshotFrame({
                     </code>{" "}
                     prop.
                   </p>
-                </>
+                </div>
               )}
             </div>
           )}

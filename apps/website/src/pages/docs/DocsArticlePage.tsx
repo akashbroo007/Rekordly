@@ -3,10 +3,18 @@ import { ArrowLeft, ArrowRight, CircleAlert } from "lucide-react";
 import { extractHeadings, getDoc, getNeighbors } from "../../lib/docs";
 import { MarkdownRenderer } from "../../components/docs/MarkdownRenderer";
 import { Toc } from "../../components/docs/Toc";
+import { useSeo } from "../../lib/seo";
 
 export default function DocsArticlePage() {
   const { section } = useParams();
   const doc = getDoc(section ?? "");
+
+  useSeo({
+    title: doc ? `${doc.title} — Docs` : "Page not found — Docs",
+    description: doc?.description ?? "This documentation page does not exist.",
+    path: doc ? `/docs/${doc.slug}` : "/docs",
+    noindex: !doc,
+  });
 
   if (!doc) {
     return (

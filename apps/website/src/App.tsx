@@ -8,6 +8,8 @@ import { CurrencyProvider } from "./lib/CurrencyContext";
 import { HomePage } from "./pages/HomePage";
 
 const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
+const BlogIndexPage = lazy(() => import("./pages/BlogIndexPage"));
+const BlogPostPage = lazy(() => import("./pages/BlogPostPage"));
 const PluginsPage = lazy(() => import("./pages/PluginsPage"));
 const DownloadPage = lazy(() => import("./pages/DownloadPage"));
 const PricingPage = lazy(() => import("./pages/PricingPage"));
@@ -47,6 +49,22 @@ export default function App() {
             element={
               <Lazy>
                 <FeaturesPage />
+              </Lazy>
+            }
+          />
+          <Route
+            path="/blog"
+            element={
+              <Lazy>
+                <BlogIndexPage />
+              </Lazy>
+            }
+          />
+          <Route
+            path="/blog/:slug"
+            element={
+              <Lazy>
+                <BlogPostPage />
               </Lazy>
             }
           />

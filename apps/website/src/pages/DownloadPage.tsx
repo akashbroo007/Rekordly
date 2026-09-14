@@ -3,6 +3,7 @@ import { Section, SectionHeading } from "../components/layout/Section";
 import { ShimmerLinkButton } from "../components/hero/ShimmerButton";
 import { Reveal } from "../components/shared/Reveal";
 import { site } from "../content/site";
+import { useSeo } from "../lib/seo";
 
 const builds = [
   {
@@ -155,11 +156,19 @@ function SystemRequirements() {
 }
 
 export default function DownloadPage() {
+  useSeo({
+    title: "Download Rekordly for Windows — free installer & portable",
+    description:
+      "Download Rekordly free for Windows 10 and 11. Installer or portable build, yt-dlp and ffmpeg bundled, automatic updates, and no account required.",
+    path: "/download",
+  });
+
   return (
     <>
       <Section>
         <SectionHeading
           eyebrow="Download"
+          as="h1"
           title="Get Rekordly for Windows"
           description="Free for personal use under the PolyForm Noncommercial license. Every release ships an installer and a portable build."
         />

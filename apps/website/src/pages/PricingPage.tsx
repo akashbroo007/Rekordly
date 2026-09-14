@@ -4,6 +4,7 @@ import { ShimmerLinkButton } from "../components/hero/ShimmerButton";
 import { Reveal } from "../components/shared/Reveal";
 import { useCurrency } from "../lib/CurrencyContext";
 import { site } from "../content/site";
+import { useSeo } from "../lib/seo";
 
 const BUY_URL = "https://buy.polar.sh/rekordly-pro";
 const TRIAL_URL = `mailto:${site.email}?subject=Rekordly%20Pro%20trial%20key`;
@@ -41,11 +42,19 @@ export default function PricingPage() {
   const { format, currency } = useCurrency();
   const proPrice = format(29);
 
+  useSeo({
+    title: "Pricing — free for personal use, Pro for power users",
+    description:
+      "Rekordly pricing: a permanent free tier with unlimited monitoring and downloads, Pro at $29 one-time removing live-recording limits, and commercial licenses.",
+    path: "/pricing",
+  });
+
   return (
     <>
       <Section>
         <SectionHeading
           eyebrow="Pricing"
+          as="h1"
           title="Free for personal use. Pro for power users."
           description="Rekordly is source-available and free for personal, educational, and other noncommercial use. The free tier is permanent — not a trial — and Pro removes the live-recording limits for people who record everything."
         />
