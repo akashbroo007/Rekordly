@@ -13,6 +13,10 @@ downloads/
 *.mov
 *.mkv
 
+# Exception: website demo video is a small tracked asset (~1.8 MB),
+# not a recording — must stay committed for Cloudflare Pages deploys.
+!apps/website/public/demo/*.mp4
+
 # Database
 data/
 *.sqlite
