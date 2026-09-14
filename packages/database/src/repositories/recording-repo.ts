@@ -1,5 +1,5 @@
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { and, asc, count, desc, eq, like, or, sql, inArray, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNotNull, isNull, like, or, sql, inArray, type SQL } from 'drizzle-orm';
 import { collectionRecordings, recordingJobs, recordings, recordingTags, tags } from '../schema';
 
 export interface RecordingJobRecord {
@@ -49,6 +49,10 @@ export interface RecordingRecord {
   fps?: number | null;
   notes?: string | null;
   isFavorite: boolean;
+  /** ponytail: built-in editor — source recording id for non-destructive edits. */
+  sourceRecordingId?: string | null;
+  /** ponytail: built-in editor — JSON-encoded edit history. */
+  editHistory?: string | null;
   startedAt?: string | null;
   endedAt?: string | null;
   createdAt: string;
@@ -72,6 +76,8 @@ export interface LibraryFilters {
   tagIds?: string[];
   dateFrom?: string;
   dateTo?: string;
+  /** ponytail: Edited tab — true = editor outputs only, false = originals only. */
+  isEdited?: boolean;
 }
 
 export interface LibrarySort {
@@ -108,6 +114,15 @@ export interface RecordingRepo {
   bulkRemoveTag(ids: string[], tagId: string): void;
   bulkDelete(ids: string[]): void;
   bulkMoveToCollection(ids: string[], collectionId: string): void;
+  /** ponytail: per-creator library aggregates for the Creators details dialog. */
+  statsByCreator(creatorId: string): CreatorRecordingStats;
+}
+
+export interface CreatorRecordingStats {
+  recordingCount: number;
+  totalDurationSeconds: number;
+  totalSizeBytes: number;
+  lastRecordedAt?: string | null;
 }
 
 export function createRecordingRepo(orm: BetterSQLite3Database): RecordingRepo {
@@ -274,6 +289,25 @@ export function createRecordingRepo(orm: BetterSQLite3Database): RecordingRepo {
       const values = ids.map((recordingId) => ({ collectionId, recordingId }));
       orm.insert(collectionRecordings).values(values).onConflictDoNothing().run();
     },
+
+    statsByCreator(creatorId: string): CreatorRecordingStats {
+      const row = orm
+        .select({
+          recordingCount: count(),
+          totalDurationSeconds: sql<number>`coalesce(sum(${recordings.durationSeconds}), 0)`,
+          totalSizeBytes: sql<number>`coalesce(sum(${recordings.sizeBytes}), 0)`,
+          lastRecordedAt: sql<string | null>`max(${recordings.createdAt})`,
+        })
+        .from(recordings)
+        .where(eq(recordings.creatorId, creatorId))
+        .get();
+      return {
+        recordingCount: row?.recordingCount ?? 0,
+        totalDurationSeconds: Number(row?.totalDurationSeconds ?? 0),
+        totalSizeBytes: Number(row?.totalSizeBytes ?? 0),
+        lastRecordedAt: row?.lastRecordedAt ?? null,
+      };
+    },
   };
 }
 
@@ -302,6 +336,13 @@ function buildLibraryWhere(filters: LibraryFilters): SQL<unknown> | undefined {
   }
   if (filters.isFavorite !== undefined) {
     conditions.push(eq(recordings.isFavorite, filters.isFavorite));
+  }
+  // ponytail: "edited" = produced by the built-in editor, i.e. linked to a
+  // source recording. Concat outputs count too (they set sourceRecordingId).
+  if (filters.isEdited === true) {
+    conditions.push(isNotNull(recordings.sourceRecordingId));
+  } else if (filters.isEdited === false) {
+    conditions.push(isNull(recordings.sourceRecordingId));
   }
   if (filters.minDuration !== undefined) {
     conditions.push(sql`${recordings.durationSeconds} >= ${filters.minDuration}`);

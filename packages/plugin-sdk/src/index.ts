@@ -6,4 +6,5 @@ export * from './events';
 export * from './settings';
 export * from './types';
 export * from './plugin';
+export * from './proxy-registry';
 export type { StreamObject, StreamMetadata, StreamQualityOption, HttpHeaders, HttpCookie } from '@rekordly/shared';

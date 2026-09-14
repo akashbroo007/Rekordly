@@ -9,11 +9,13 @@ import {
   Puzzle,
   ScrollText,
   Settings,
+  Shield,
   Users,
   Video,
   type LucideIcon,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Button, Tooltip } from '@rekordly/ui';
 import { useSidebarStore } from '../../stores/sidebar-store';
 import { useMediaQuery } from '../../lib/use-media-query';
@@ -35,19 +37,38 @@ const NAV_ITEMS: readonly NavItem[] = [
   { to: '/downloads', label: 'Downloads', icon: Download, tourId: 'nav-downloads' },
   { to: '/uploads', label: 'Uploads', icon: CloudUpload },
   { to: '/plugins', label: 'Plugins', icon: Puzzle, tourId: 'nav-plugins' },
+  { to: '/proxy', label: 'Secure Proxy', icon: Shield },
   { to: '/analytics', label: 'Analytics', icon: BarChart3, tourId: 'nav-analytics' },
   { to: '/logs', label: 'Logs', icon: ScrollText, tourId: 'nav-logs' },
   { to: '/settings', label: 'Settings', icon: Settings, tourId: 'nav-settings' },
 ];
 
+/**
+ * ponytail: the Secure Proxy entry only materializes once the user has
+ * enabled the proxy for any creator (latched `secureProxyUsed` app setting).
+ * No tourId on purpose — the first-launch spotlight tour must not target a
+ * nav item most users never see.
+ */
+function useProxyNavVisible(): boolean {
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: () => window.desktop.settings.getAll(),
+    staleTime: Infinity,
+  });
+  return settings?.secureProxyUsed === true;
+}
+
 export function Sidebar() {
   const collapsed = useSidebarStore((state) => state.collapsed);
   const toggle = useSidebarStore((state) => state.toggle);
+  const proxyNavVisible = useProxyNavVisible();
 
   // ponytail: auto-collapse to the icon rail on narrow windows so content
   // always gets room; the manual toggle still works on wider sizes.
   const narrow = useMediaQuery('(max-width: 900px)');
   const isCollapsed = collapsed || narrow;
+
+  const visibleItems = NAV_ITEMS.filter((item) => item.to !== '/proxy' || proxyNavVisible);
 
   return (
     <aside
@@ -56,7 +77,7 @@ export function Sidebar() {
       }`}
     >
       <nav className="flex flex-1 flex-col gap-2 overflow-y-auto p-2">
-        {NAV_ITEMS.map((item) => {
+        {visibleItems.map((item) => {
           const link = (
             <NavLink
               key={item.to}

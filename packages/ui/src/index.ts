@@ -9,6 +9,7 @@ export * from './components/page-container';
 export * from './components/scrollable';
 export * from './components/section-header';
 export * from './components/select';
+export * from './components/multi-select';
 export * from './components/skeleton';
 export * from './components/spinner';
 export * from './components/switch';

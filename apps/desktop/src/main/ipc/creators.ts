@@ -1,5 +1,6 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
-import { IPC_CHANNELS } from '@rekordly/shared';
+import { IPC_CHANNELS, AppError } from '@rekordly/shared';
+import { getEntitlements } from '@rekordly/core';
 import type { IpcContext } from './context';
 
 function trusted(event: IpcMainInvokeEvent, getWindow: IpcContext['getWindow']): void {
@@ -13,7 +14,59 @@ function isString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= 500;
 }
 
-export function registerCreatorsIpc({ getWindow, creatorRepo, monitoring }: IpcContext): void {
+/**
+ * ponytail: latch the nav-visibility flag the moment any creator's secure
+ * proxy is enabled — instant feedback ("first use") that survives restarts.
+ * Purely cosmetic; the actual routing decision stays per-creator in the DB.
+ */
+function latchProxyUsedFlag(context: IpcContext, enabled: boolean): void {
+  if (!enabled || context.settings.getAll().secureProxyUsed) return;
+  try {
+    context.settings.set({ secureProxyUsed: true });
+  } catch {
+    /* flag write must never fail creator operations */
+  }
+}
+
+/**
+ * Pro tier gate: the free tier may keep auto-record enabled on a limited
+ * number of creators. Disabling is always allowed; enabling past the limit
+ * throws AUTO_RECORD_LIMIT (the UI toggle stays off and shows the upgrade
+ * CTA). Creators already over the limit (e.g. downgraded after enabling)
+ * are grandfathered — they keep recording until turned off by the user.
+ */
+function enforceAutoRecordLimit(
+  context: IpcContext,
+  enabled: boolean,
+  apply: () => void,
+  newEnableCount = 1,
+): void {
+  const { creatorRepo, license } = context;
+  // Disabling is always allowed — the gate only limits new enables.
+  if (!enabled) {
+    apply();
+    return;
+  }
+  const limit = getEntitlements(license.getStatus()).maxAutoRecordCreators;
+  if (!Number.isFinite(limit)) {
+    apply();
+    return;
+  }
+  const enabledCount = creatorRepo.list().filter((c) => c.autoRecord).length;
+  if (enabledCount + newEnableCount > limit) {
+    context.gateNotifier.autoRecordLimitReached(enabledCount, limit);
+    throw new AppError({
+      code: 'AUTO_RECORD_LIMIT',
+      message: `Auto-record is already on for ${limit} creators — the free-tier maximum. Upgrade to Pro to add more.`,
+      recoverable: true,
+      details: { limit, enabledCount },
+    });
+  }
+  apply();
+}
+
+export function registerCreatorsIpc(context: IpcContext): void {
+  const { getWindow, creatorRepo, monitoring, recordingRepo } = context;
   ipcMain.handle(IPC_CHANNELS.creatorsList, (event) => {
     trusted(event, getWindow);
     return creatorRepo.list();
@@ -49,12 +102,16 @@ export function registerCreatorsIpc({ getWindow, creatorRepo, monitoring }: IpcC
         typeof d['autoRecordQuality'] === 'string' && d['autoRecordQuality'].length > 0
           ? (d['autoRecordQuality'] as string)
           : 'best',
+      // ponytail: per-creator secure-proxy opt-in (Add dialog switch) —
+      // regional ISP blocks make this a user decision, never a plugin default.
+      useProxy: d['useProxy'] === true,
       notes: (d['notes'] as string) ?? null,
       metadata: {} as Record<string, unknown>,
       createdAt: now,
       updatedAt: now,
     };
     creatorRepo.create(record);
+    latchProxyUsedFlag(context, record.useProxy);
     const creatorId = `${d['pluginId']}:${d['externalId']}`;
     monitoring.addCreator(creatorId, d['pluginId'] as string);
     return record;
@@ -65,6 +122,10 @@ export function registerCreatorsIpc({ getWindow, creatorRepo, monitoring }: IpcC
     if (!isString(id)) throw new Error('Invalid creator id');
     if (typeof patch !== 'object' || patch === null) throw new Error('Invalid patch');
     creatorRepo.update(id, patch as Record<string, unknown>);
+    const p = patch as Record<string, unknown>;
+    if (typeof p['useProxy'] === 'boolean') {
+      latchProxyUsedFlag(context, p['useProxy']);
+    }
   });
 
   ipcMain.handle(IPC_CHANNELS.creatorsRemove, (event, id: unknown) => {
@@ -95,7 +156,17 @@ export function registerCreatorsIpc({ getWindow, creatorRepo, monitoring }: IpcC
     trusted(event, getWindow);
     if (!isString(id)) throw new Error('Invalid creator id');
     if (typeof enabled !== 'boolean') throw new Error('Invalid autoRecord value');
-    creatorRepo.setAutoRecord(id, enabled);
+    enforceAutoRecordLimit(context, enabled, () => {
+      creatorRepo.setAutoRecord(id, enabled);
+    });
+  });
+
+  ipcMain.handle(IPC_CHANNELS.creatorsSetUseProxy, (event, id: unknown, enabled: unknown) => {
+    trusted(event, getWindow);
+    if (!isString(id)) throw new Error('Invalid creator id');
+    if (typeof enabled !== 'boolean') throw new Error('Invalid useProxy value');
+    creatorRepo.setUseProxy(id, enabled);
+    latchProxyUsedFlag(context, enabled);
   });
 
   ipcMain.handle(IPC_CHANNELS.creatorsGetTags, (event) => {
@@ -210,6 +281,7 @@ export function registerCreatorsIpc({ getWindow, creatorRepo, monitoring }: IpcC
             // ponytail: imports default to auto-record OFF — opt in per card
             autoRecord: false,
             autoRecordQuality: 'best',
+            useProxy: false,
             notes: (item['notes'] as string) ?? null,
             metadata: {},
             createdAt: now,
@@ -266,6 +338,7 @@ export function registerCreatorsIpc({ getWindow, creatorRepo, monitoring }: IpcC
           // ponytail: imports default to auto-record OFF — opt in per card
           autoRecord: false,
           autoRecordQuality: 'best',
+          useProxy: false,
           notes: row['notes'] || null,
           metadata: {},
           createdAt: now,
@@ -279,5 +352,58 @@ export function registerCreatorsIpc({ getWindow, creatorRepo, monitoring }: IpcC
       }
     }
     return { imported, errors };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.creatorsBulkFavorite, (event, ids: unknown, favorite: unknown) => {
+    trusted(event, getWindow);
+    if (!Array.isArray(ids) || !ids.every(isString)) throw new Error('Invalid creator ids');
+    if (typeof favorite !== 'boolean') throw new Error('Invalid favorite value');
+    creatorRepo.bulkSetFavorite(ids, favorite);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.creatorsBulkSetAutoRecord, (event, ids: unknown, enabled: unknown) => {
+    trusted(event, getWindow);
+    if (!Array.isArray(ids) || !ids.every(isString)) throw new Error('Invalid creator ids');
+    if (typeof enabled !== 'boolean') throw new Error('Invalid autoRecord value');
+    enforceAutoRecordLimit(
+      context,
+      enabled,
+      () => {
+        creatorRepo.bulkSetAutoRecord(ids, enabled);
+      },
+      ids.filter((id) => creatorRepo.get(id)?.autoRecord !== true).length,
+    );
+  });
+
+  ipcMain.handle(IPC_CHANNELS.creatorsBulkAddTag, (event, ids: unknown, tagId: unknown) => {
+    trusted(event, getWindow);
+    if (!Array.isArray(ids) || !ids.every(isString)) throw new Error('Invalid creator ids');
+    if (!isString(tagId)) throw new Error('Invalid tag id');
+    creatorRepo.bulkAddTag(ids, tagId);
+  });
+
+  // ponytail: bulk delete must also unwind monitoring jobs — fetch the
+  // records first so the plugin:externalId monitor keys stay resolvable.
+  ipcMain.handle(IPC_CHANNELS.creatorsBulkRemove, (event, ids: unknown) => {
+    trusted(event, getWindow);
+    if (!Array.isArray(ids) || !ids.every(isString)) throw new Error('Invalid creator ids');
+    for (const id of ids) {
+      const creator = creatorRepo.get(id);
+      if (creator) {
+        monitoring.removeCreator(`${creator.pluginId}:${creator.externalId}`);
+      }
+    }
+    creatorRepo.bulkRemove(ids);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.creatorsGetAllTagAssignments, (event) => {
+    trusted(event, getWindow);
+    return creatorRepo.listAllTagAssignments();
+  });
+
+  ipcMain.handle(IPC_CHANNELS.creatorsStats, (event, id: unknown) => {
+    trusted(event, getWindow);
+    if (!isString(id)) throw new Error('Invalid creator id');
+    return recordingRepo.statsByCreator(id);
   });
 }

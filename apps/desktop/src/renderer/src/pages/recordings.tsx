@@ -17,6 +17,7 @@ import {
   Copy,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Badge, Button, Card, EmptyState, Input, PageContainer, SectionHeader, Skeleton } from '@rekordly/ui';
 import type { RecordingJobDto } from '@rekordly/shared/contracts';
 import { formatBytes, formatDuration } from '@rekordly/shared/format';
@@ -45,7 +46,12 @@ const ACTIVE_STATUSES = ['queued', 'recording', 'paused', 'preparing', 'verifyin
 export function RecordingsPage() {
   const queryClient = useQueryClient();
   const pushToast = useToastStore((state) => state.push);
-  const [filterTab, setFilterTab] = useState<FilterTab>('all');
+  // ponytail: honour ?filter= deep links (e.g. dashboard → failed jobs).
+  const [searchParams] = useSearchParams();
+  const filterParam = searchParams.get('filter');
+  const [filterTab, setFilterTab] = useState<FilterTab>(
+    filterParam === 'active' || filterParam === 'completed' || filterParam === 'failed' ? filterParam : 'all',
+  );
   const [search, setSearch] = useState('');
 
   const { data: jobs, isLoading } = useQuery({

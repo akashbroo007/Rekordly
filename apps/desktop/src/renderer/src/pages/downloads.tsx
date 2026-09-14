@@ -33,23 +33,9 @@ import {
 } from '@rekordly/ui';
 import type { DownloadProbeResultDto, DownloadQueueItemDto } from '@rekordly/shared/contracts';
 import { useToastStore } from '../stores/toast-store';
-import { formatBytes } from '@rekordly/shared/format';
+import { formatBytes, formatEta } from '@rekordly/shared/format';
 
 type FilterStatus = 'all' | 'queued' | 'downloading' | 'paused' | 'completed' | 'failed' | 'cancelled';
-
-/**
- * ponytail: eta is stored in SECONDS (straight from yt-dlp's "ETA 00:32").
- * Format it as m/s instead of showing raw seconds.
- */
-function formatEta(etaSeconds: number): string {
-  if (!Number.isFinite(etaSeconds) || etaSeconds <= 0) return '';
-  if (etaSeconds < 60) return `${Math.round(etaSeconds)}s`;
-  const minutes = Math.floor(etaSeconds / 60);
-  const seconds = Math.round(etaSeconds % 60);
-  if (minutes < 60) return `${minutes}m ${seconds}s`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
-}
 
 export function DownloadsPage() {
   const queryClient = useQueryClient();

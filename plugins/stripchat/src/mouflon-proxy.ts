@@ -238,6 +238,21 @@ export class MouflonProxy {
     return `http://127.0.0.1:${addr.port}/index.m3u8`;
   }
 
+  /**
+   * ponytail: true while this proxy still pins a headless Chromium (before
+   * pure-Node decoding verifies and releases it). The proxy REGISTRY bounds
+   * only browser-holding proxies — a released proxy is a tiny local server
+   * and must never be evicted out from under a live recording.
+   */
+  holdsBrowser(): boolean {
+    return this.browser !== null;
+  }
+
+  /** ms epoch of the last consumer request (LRU input for eviction). */
+  lastActivityAt(): number {
+    return this.lastRequestAt;
+  }
+
   async stop(): Promise<void> {
     if (this.refreshTimer) clearInterval(this.refreshTimer);
     this.refreshTimer = null;

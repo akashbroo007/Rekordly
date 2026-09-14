@@ -87,6 +87,14 @@ export const creators = sqliteTable(
     autoRecord: integer('auto_record', { mode: 'boolean' }).notNull().default(false),
     /** Quality for this creator's auto-recordings ('best' | '1080p' | …). */
     autoRecordQuality: text('auto_record_quality').notNull().default('best'),
+    /**
+     * ponytail: per-creator secure-proxy opt-in. Site reachability differs
+     * per user network (ISP/DNS blocks are regional), so this is a user
+     * decision made per creator (Add/Edit dialog), not a plugin property.
+     * When true, the host routes this creator's plugin traffic and recording
+     * child processes through the embedded proxy.
+     */
+    useProxy: integer('use_proxy', { mode: 'boolean' }).notNull().default(false),
     notes: text('notes'),
     /** JSON metadata snapshot provided by the plugin. */
     metadata: text('metadata').notNull().default('{}'),
@@ -196,6 +204,15 @@ export const recordings = sqliteTable(
     fps: integer('fps'),
     notes: text('notes'),
     isFavorite: integer('is_favorite', { mode: 'boolean' }).notNull().default(false),
+    /**
+     * ponytail: built-in editor — id of the recording this row was cut from
+     * (null for original captures). Plain TEXT without an FK: a self-FK would
+     * hit TDZ issues at table definition and block deleting sources.
+     * Originals are never touched; edits always create a new row + file.
+     */
+    sourceRecordingId: text('source_recording_id'),
+    /** ponytail: built-in editor — JSON array of {op, params, createdAt}. */
+    editHistory: text('edit_history'),
     startedAt: text('started_at'),
     endedAt: text('ended_at'),
     createdAt: text('created_at').notNull(),
@@ -207,6 +224,7 @@ export const recordings = sqliteTable(
     index('recordings_platform_idx').on(table.platformId),
     index('recordings_started_idx').on(table.startedAt),
     index('recordings_favorite_idx').on(table.isFavorite),
+    index('recordings_source_idx').on(table.sourceRecordingId),
   ],
 );
 

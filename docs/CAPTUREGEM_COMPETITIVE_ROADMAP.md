@@ -39,12 +39,12 @@
 - **Key Differentiator:** VR recording, proxy mode, cross-site grouping, built-in editor
 
 ### Rekordly
-- **Type:** Open-source desktop app (MIT licensed, completely free)
+- **Type:** Source-available desktop app (PolyForm Noncommercial licensed, free for personal use)
 - **Tech Stack:** Electron 37 + React 19 + TypeScript 5.9 + Tailwind CSS v4 + SQLite (Drizzle ORM)
 - **Platforms:** Windows only (build config; codebase is cross-platform)
-- **Pricing:** 100% free, no monetization, no premium features
+- **Pricing:** Free for personal/noncommercial use; commercial use requires a paid license
 - **Supported Sites:** 4 plugins (YouTube, Twitch, Stripchat, Chaturbate) + yt-dlp generic support for 1000+ sites
-- **Key Differentiator:** Plugin architecture, open-source, analytics, generic download manager
+- **Key Differentiator:** Plugin architecture, source-available, analytics, generic download manager
 
 ### Gap Summary
 CaptureGem has **~15 features** Rekordly lacks. Rekordly has **~10 features** CaptureGem lacks. The critical gaps are: platform coverage, VR support, proxy mode, video editor, and live monitoring.
@@ -296,7 +296,7 @@ CaptureGem operates on a **freemium subscription model**:
 | Windows | Yes | Yes | **Tie** |
 | macOS | Yes (Apple Silicon + Intel) | No (build config only) | **CaptureGem** |
 | Linux | Yes | No (build config only) | **CaptureGem** |
-| Open source | No (closed-source) | Yes (MIT) | **Rekordly** |
+| Source-available | No (closed-source) | Yes (PolyForm Noncommercial) | **Rekordly** |
 | No signup required | Yes | Yes (local app) | **Tie** |
 
 ### 4.5 Community & Ecosystem
@@ -317,9 +317,9 @@ CaptureGem operates on a **freemium subscription model**:
 | Feature | CaptureGem | Rekordly | Winner |
 |---------|-----------|----------|--------|
 | Free tier | Yes (limited) | Yes (unlimited, all features) | **Rekordly** |
-| Premium tier | $10.99/month | None | N/A |
+| Premium tier | $10.99/month | Commercial license for business use | N/A |
 | Crypto payment | Yes (Bitcoin) | None | N/A |
-| Open source | No | Yes (MIT) | **Rekordly** |
+| Source-available | No | Yes (PolyForm Noncommercial) | **Rekordly** |
 
 ---
 
@@ -327,9 +327,9 @@ CaptureGem operates on a **freemium subscription model**:
 
 These are features where Rekordly **already beats** CaptureGem and should be leveraged in marketing:
 
-### 5.1 Free & Open Source
-- **No $10.99/month subscription** — all features free, including auto-record, unlimited recordings, unlimited duration
-- MIT licensed — community can contribute, fork, audit code
+### 5.1 Free for Personal Use
+- **No $10.99/month subscription** — all features free for personal use, including auto-record, unlimited recordings, unlimited duration
+- PolyForm Noncommercial licensed — community can contribute, fork, and audit code
 - No account required, no data sent to servers
 - **Marketing angle:** "CaptureGem charges $10.99/mo for features we give you for free"
 
@@ -1282,7 +1282,7 @@ Add to sidebar navigation:
 ## 8. Monetization Strategy
 
 ### Option A: Keep 100% Free (Current)
-- **Pros:** Maximum adoption, community goodwill, open-source purity
+- **Pros:** Maximum adoption, community goodwill, source-available simplicity
 - **Cons:** No revenue for development, sustainability concerns
 - **Recommendation:** Good for initial growth phase
 

@@ -44,6 +44,13 @@ export interface StreamObject {
   headers?: HttpHeaders;
   cookies?: HttpCookie[];
   startedAt?: string;
+  /**
+   * ponytail: HTTP proxy URL for the recorder's child processes — when the
+   * host proxied the plugin's requests (e.g. embedded Tor for an ISP-blocked
+   * site), the recording child (ffmpeg `-proxy` / yt-dlp `--proxy`) must use
+   * the same route or segment fetches fail while detection succeeded.
+   */
+  proxyUrl?: string;
 }
 
 export const RECORDING_STATES = [

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, CheckCheck, Inbox } from 'lucide-react';
+import { Bell, CheckCheck, Inbox, Sparkles } from 'lucide-react';
 import { useEffect } from 'react';
 import { Button, Dialog, DialogContent, DialogTrigger, EmptyState } from '@rekordly/ui';
 import type { NotificationDto } from '@rekordly/shared/contracts';
@@ -99,6 +99,17 @@ function NotificationItem({ notification }: { notification: NotificationDto }) {
     },
   });
 
+  // Pro tier gate records carry an upgrade URL — render a real CTA button.
+  const data = notification.data as Record<string, unknown> | undefined;
+  const upgradeUrl = typeof data?.upgradeUrl === 'string' ? data.upgradeUrl : undefined;
+  const isGate = data?.gate === true;
+
+  const openUpgrade = (): void => {
+    if (upgradeUrl !== undefined) {
+      void window.desktop.app.openUrl(upgradeUrl);
+    }
+  };
+
   return (
     <li
       onClick={() => {
@@ -111,7 +122,7 @@ function NotificationItem({ notification }: { notification: NotificationDto }) {
       }`}
     >
       <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${LEVEL_CLASSES[notification.level]}`} aria-hidden="true" />
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="flex items-baseline justify-between gap-2">
           <span className="truncate text-sm font-medium text-foreground">{notification.title}</span>
           <time className="shrink-0 text-[10px] text-foreground-muted" title={new Date(notification.time).toLocaleString()}>
@@ -120,6 +131,20 @@ function NotificationItem({ notification }: { notification: NotificationDto }) {
         </p>
         {notification.message !== '' && (
           <p className="mt-0.5 text-xs text-foreground-secondary">{notification.message}</p>
+        )}
+        {isGate && upgradeUrl !== undefined && (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="mt-2"
+            onClick={(event) => {
+              event.stopPropagation();
+              openUpgrade();
+            }}
+          >
+            <Sparkles size={12} />
+            Upgrade to Pro
+          </Button>
         )}
       </div>
     </li>

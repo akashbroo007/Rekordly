@@ -1,0 +1,14 @@
+{
+  "name": "@rekordly/plugin-myfreecams",
+  "version": "0.1.0",
+  "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@rekordly/plugin-sdk": "workspace:*"
+  }
+}

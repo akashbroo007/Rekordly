@@ -6,9 +6,14 @@
 
 **Monitor, record, and download live streams — automatically.**
 
-A free and open-source desktop app that watches your favorite creators,
-records them the moment they go live, and organizes everything into a
-searchable library.
+Rekordly is a free, source-available Windows desktop app that monitors
+creators, automatically records live streams, downloads videos and VODs,
+and organizes your recordings into a searchable library.
+
+The source code is publicly available for inspection, building, and
+contribution. Rekordly is licensed under the
+[PolyForm Noncommercial License 1.0.0](LICENSE.txt) — free for personal
+use, paid for commercial use.
 
 [Download](https://github.com/akashbroo007/Rekordly/releases) •
 [Features](#features) •
@@ -17,7 +22,7 @@ searchable library.
 [Contributing](#contributing)
 
 [![GitHub release](https://img.shields.io/github/v/release/akashbroo007/Rekordly?style=flat-square)](https://github.com/akashbroo007/Rekordly/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE.txt)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm_Noncommercial_1.0.0-blue.svg?style=flat-square)](LICENSE.txt)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-blue?style=flat-square)](https://github.com/akashbroo007/Rekordly/releases)
 [![Electron](https://img.shields.io/badge/Electron-37-47848F?style=flat-square&logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
@@ -29,16 +34,49 @@ searchable library.
 
 ## Table of Contents
 
+- [Free & Pro](#free--pro)
 - [Features](#features)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
 - [Supported Platforms](#supported-platforms)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
-- [Development](#development)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
+- [Why Source Available?](#why-source-available)
 - [License](#license)
+
+---
+
+## Free & Pro
+
+Rekordly is **free for personal, educational, and other noncommercial use**.
+The free tier is a permanent tier, not a trial: unlimited creator monitoring,
+unlimited downloads, and full access to the local library, cloud uploads,
+and the plugin system.
+
+[Rekordly Pro](https://rekordly.in/pricing) removes the automatic-recording
+limits for people who record everything. Commercial use requires a separate
+commercial license.
+
+| Capability                       | Free                          | Pro                          |
+| -------------------------------- | ----------------------------- | ---------------------------- |
+| Monitor creators                 | Unlimited                     | Unlimited                    |
+| Add creators                     | Unlimited                     | Unlimited                    |
+| Auto-record creators             | Up to 2                       | Unlimited                    |
+| Concurrent live recordings       | Up to 2                       | Unlimited                    |
+| Live recording length            | Up to 15 minutes per recording| Unlimited                    |
+| Manual video/VOD downloads       | Unlimited                     | Unlimited                    |
+| Long-form video downloads        | Yes                           | Yes                          |
+| Local library                    | Yes                           | Yes                          |
+| Community plugins                | Yes                           | Yes                          |
+| Commercial use                   | Requires a commercial license | Requires a commercial license|
+
+> **Download Manager and Auto-Recording are separate workflows.** The
+> Download Manager is designed for downloading supported non-live videos,
+> VODs, and clips and does not impose an artificial duration limit on normal
+> downloads — a 45-minute or 3-hour video downloads in full on the free tier.
+> The live-recording caps above apply to recording live streams only.
 
 ---
 
@@ -63,7 +101,8 @@ Safety rails included:
 ### Recording & Downloads
 
 - High-quality capture powered by vendored **yt-dlp + ffmpeg** — zero external installs
-- Generic download manager with direct-HTTP and site-extraction engines
+- Download Manager for supported non-live videos, VODs, and clips — no
+  artificial duration limit on normal downloads
 - Audio-only (MP3) extraction and per-URL quality probing
 - Pause / resume / retry, priorities, and bandwidth limits
 
@@ -92,10 +131,15 @@ Push finished recordings to the cloud with built-in providers:
 - In-app notification center plus native desktop notifications
 - Dark and light themes, low-resource mode for weaker machines
 
-### Plugin System
+### Plugin System — built with the community
 
-Site support ships as plugins with capability detection, health checks, and
+Site support is implemented through plugins. Every bundled site is a plugin,
+built on the public Plugin SDK, with capability detection, health checks, and
 per-plugin settings — new sites can be added without touching the core app.
+
+Developers can create new plugins for platforms Rekordly does not support
+yet, and community-built integrations are welcome. Start with
+[PLUGIN_GUIDE.md](docs/PLUGIN_GUIDE.md).
 
 ---
 
@@ -148,7 +192,8 @@ pnpm package     # build the Windows installer + portable exe
 2. **Enable Auto-Record** (optional) — per-creator toggle; recordings start the
    moment the creator goes live and stop when the stream ends.
 3. **Manual recording** — hit record on any live creator with your choice of quality.
-4. **Downloads** — paste any supported URL to download VODs or clips.
+4. **Downloads** — paste any supported URL to download VODs or clips. Normal
+   downloads run to completion regardless of length.
 5. **Library** — browse, tag, favorite, and organize everything you've captured.
 6. **Uploads** — send finished files to Gofile, Catbox, MixDrop, or Google Drive.
 
@@ -156,14 +201,21 @@ pnpm package     # build the Windows installer + portable exe
 
 ## Supported Platforms
 
-| Site      | Live detection | Recording | Downloads |
-| --------- | :------------: | :-------: | :-------: |
-| Chaturbate|       ✓        |     ✓     |     ✓     |
-| Stripchat |       ✓        |     ✓     |     ✓     |
-| Twitch    |       ✓        |     ✓     |     ✓     |
-| YouTube   |       ✓        |     ✓     |     ✓     |
+Platform support can differ per capability — a site may support live
+detection and automatic recording but not generic downloads, or vice versa.
+The table below reflects what each bundled plugin currently implements.
 
-Want another site? See [Writing a plugin](docs/PLUGIN_GUIDE.md).
+| Site       | Live detection | Auto-record | Manual recording | Downloads |
+| ---------- | :------------: | :---------: | :--------------: | :-------: |
+| Chaturbate |       ✓        |      ✓      |        ✓         |     ✓     |
+| Stripchat  |       ✓        |      ✓      |        ✓         |     ✓     |
+| Twitch     |       ✓        |      ✓      |        ✓         |     ✓     |
+| YouTube    |       ✓        |      ✓      |        ✓         |     ✓     |
+| BongaCams  |       ✓        |      ✓      |        ✓         |     —     |
+| CamSoda    |       ✓        |      ✓      |        ✓         |     —     |
+
+Want another site — or better support for an existing one?
+See [Writing a plugin](docs/PLUGIN_GUIDE.md).
 
 ---
 
@@ -217,8 +269,18 @@ Full docs live in [`docs/`](docs/):
 
 ## Contributing
 
-Contributions are welcome — bug reports, feature ideas, new site plugins, and
-pull requests.
+Rekordly is built in the open, and contributions are genuinely welcome:
+
+- **Bug fixes** and code improvements
+- **New platform plugins** and maintenance of existing ones
+- **Documentation** — guides, docs pages, README clarity
+- **Testing** — unit tests, integration tests, real-world site coverage
+- **UX improvements** — flows, copy, accessibility
+- **Performance improvements** — capture pipeline, UI responsiveness, memory
+
+The source is publicly available specifically so developers can inspect how
+it works, learn from it, contribute improvements, and build the plugin
+ecosystem around it.
 
 1. Fork the repo and create a branch (`git checkout -b feat/my-change`).
 2. Make your changes with tests where it makes sense.
@@ -230,10 +292,41 @@ configs are in the repo; Husky hooks run on commit).
 
 ---
 
+## Why Source Available?
+
+Rekordly is intentionally source available. We want developers to be able to
+inspect how it works, contribute improvements, and build plugins for
+platforms we do not support yet.
+
+At the same time, keeping the project sustainable matters. The official
+Rekordly distribution is supported through Pro features and commercial
+licensing, which fund ongoing development of the core app and the plugin
+ecosystem.
+
+Because Rekordly is source available, you are free to inspect and modify the
+code within the license terms. Modified builds are not official Rekordly
+releases and are not covered by official support or release guarantees.
+
+---
+
 ## License
 
-Rekordly is free and open-source software licensed under the
-[MIT License](LICENSE.txt).
+Rekordly is source-available software licensed under the
+[PolyForm Noncommercial License 1.0.0](LICENSE.txt).
+
+The source code is publicly available and may be used, modified, and shared
+within the permissions granted by the license.
+
+- **Personal, educational, and other permitted noncommercial use:** free.
+- **Commercial use** is not granted by the PolyForm Noncommercial license
+  and requires a separate commercial license from Rekordly — contact
+  [hello@rekordly.in](mailto:hello@rekordly.in).
+- Rekordly Pro removes the live-recording limits for personal use and is
+  available at [rekordly.in/pricing](https://rekordly.in/pricing).
+
+Rekordly is source-available under the PolyForm Noncommercial License —
+free for personal, educational, and other noncommercial use; commercial
+use requires a paid license.
 
 The capture engine shells out to [yt-dlp](https://github.com/yt-dlp/yt-dlp)
 and [ffmpeg](https://ffmpeg.org/) (both vendored for convenience); those

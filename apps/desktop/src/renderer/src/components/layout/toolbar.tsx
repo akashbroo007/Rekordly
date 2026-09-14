@@ -1,15 +1,12 @@
-import { Moon, Plus, Puzzle, Search, Settings, Sun } from 'lucide-react';
+import { Moon, Plus, Puzzle, Settings, Sun } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Button, Input } from '@rekordly/ui';
-import { useUiStore } from '../../stores/ui-store';
+import { Button } from '@rekordly/ui';
 import { useThemeStore } from '../../stores/theme-store';
 import { NotificationCenter } from '../notification-center';
 
 export function Toolbar() {
   const navigate = useNavigate();
-  const searchQuery = useUiStore((state) => state.searchQuery);
-  const setSearchQuery = useUiStore((state) => state.setSearchQuery);
 
   // ponytail: classy one-click theme switch — sun/moon crossfade + spin.
   const themeMode = useThemeStore((state) => state.mode);
@@ -37,36 +34,28 @@ export function Toolbar() {
     refetchInterval: 3000,
   });
 
-  const activeCount = (jobs ?? []).filter((j) => ['recording', 'queued', 'preparing'].includes(j.status)).length;
+  const activeCount = (jobs ?? []).filter((j) =>
+    ['recording', 'queued', 'preparing'].includes(j.status),
+  ).length;
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-panel px-4">
-      {/* ponytail: search collapses away on narrow windows to keep the
-          action icons reachable at any size. */}
-      <div className="relative hidden w-full max-w-md md:block">
-        <Search
-          size={14}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted"
-        />
-        <Input
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Search..."
-          aria-label="Search"
-          className="w-full pl-8"
-        />
-      </div>
-
       <div className="ml-auto flex items-center gap-2">
         <span className="hidden items-center gap-1.5 text-xs text-foreground-muted lg:flex">
           {activeCount > 0 ? (
             <>
-              <span className="h-1.5 w-1.5 rounded-full bg-error animate-pulse" aria-hidden="true" />
+              <span
+                className="h-1.5 w-1.5 rounded-full bg-error animate-pulse"
+                aria-hidden="true"
+              />
               {activeCount} active recording{activeCount > 1 ? 's' : ''}
             </>
           ) : (
             <>
-              <span className="h-1.5 w-1.5 rounded-full bg-foreground-disabled" aria-hidden="true" />
+              <span
+                className="h-1.5 w-1.5 rounded-full bg-foreground-disabled"
+                aria-hidden="true"
+              />
               No active recording
             </>
           )}

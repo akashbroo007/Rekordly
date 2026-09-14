@@ -12,6 +12,10 @@ export interface UploadServiceOptions {
   logger: Logger;
   /** How many uploads may run at the same time (default 1). */
   maxConcurrentUploads?: number;
+  /** Base delay for the retry backoff (doubled per attempt, default 5s). */
+  retryBaseDelayMs?: number;
+  /** ponytail: live concurrency limit (user can change it in Settings). */
+  getLimits?: () => { maxConcurrentUploads: number };
 }
 
 export interface UploadServiceEvents {
@@ -23,6 +27,7 @@ export interface UploadServiceEvents {
   'upload-cancelled': [{ uploadId: string; timestamp: string }];
   'upload-paused': [{ uploadId: string; timestamp: string }];
   'upload-resumed': [{ uploadId: string; timestamp: string }];
+  'upload-removed': [{ uploadId: string; timestamp: string }];
 }
 
 export interface UploadProvider {
@@ -61,15 +66,32 @@ export class UploadService extends EventEmitter<UploadServiceEvents> {
   private readonly active = new Map<string, AbortController>();
   /** Items whose runItem() has been kicked off but not yet registered as active. */
   private readonly startingIds = new Set<string>();
+  /** ponytail: next retry timestamps — items wait here between attempts. */
+  private readonly retryAt = new Map<string, number>();
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private started = false;
-  private readonly maxConcurrent: number;
+  private readonly limits: () => { maxConcurrentUploads: number };
+  private readonly retryBaseDelayMs: number;
+
+  private maxConcurrent(): number {
+    return Math.max(1, this.limits().maxConcurrentUploads);
+  }
 
   constructor(options: UploadServiceOptions) {
     super();
     this.repo = options.repo;
     this.notifications = options.notifications;
     this.logger = options.logger;
-    this.maxConcurrent = Math.max(1, options.maxConcurrentUploads ?? 1);
+    this.limits = options.getLimits ?? (() => ({ maxConcurrentUploads: options.maxConcurrentUploads ?? 1 }));
+    this.retryBaseDelayMs = options.retryBaseDelayMs ?? 5_000;
+  }
+
+  /**
+   * ponytail: user changed the concurrency limit (or toggled Low-Resource
+   * Mode) — re-evaluate the queue so waiting items can start right away.
+   */
+  notifyLimitsChanged(): void {
+    this.kick();
   }
 
   registerProvider(provider: UploadProvider): void {
@@ -128,12 +150,22 @@ export class UploadService extends EventEmitter<UploadServiceEvents> {
   }
 
   removeUpload(id: string): void {
+    // ponytail: removing an in-flight transfer must also tear the transfer
+    // down, otherwise the slot stays blocked until the server times out.
+    this.active.get(id)?.abort();
+    this.retryAt.delete(id);
     this.repo.remove(id);
+    this.emit('upload-removed', { uploadId: id, timestamp: new Date().toISOString() });
   }
 
   pauseUpload(id: string): void {
     const item = this.repo.get(id);
-    if (item && item.status === 'uploading') {
+    if (item === undefined) return;
+    // ponytail: queued items are pauseable too — previously only in-flight
+    // transfers could be paused and clicking Pause on a queued row was a
+    // silent no-op.
+    if (item.status === 'uploading' || item.status === 'queued') {
+      this.retryAt.delete(id);
       this.repo.update(id, { status: 'paused' });
       this.active.get(id)?.abort();
       this.emit('upload-paused', { uploadId: id, timestamp: new Date().toISOString() });
@@ -165,6 +197,7 @@ export class UploadService extends EventEmitter<UploadServiceEvents> {
   retryUpload(id: string): void {
     const item = this.repo.get(id);
     if (item && (item.status === 'failed' || item.status === 'cancelled')) {
+      this.retryAt.delete(id);
       this.repo.update(id, { status: 'queued', retries: 0, error: null });
       this.kick();
     }
@@ -184,6 +217,7 @@ export class UploadService extends EventEmitter<UploadServiceEvents> {
       this.repo.update(item.id, { status: 'queued' });
       this.logger.info({ uploadId: item.id }, 'recovered stale uploading item');
     }
+    this.retryAt.clear();
     this.logger.info('upload worker started');
     this.kick();
   }
@@ -191,6 +225,10 @@ export class UploadService extends EventEmitter<UploadServiceEvents> {
   /** Stop the worker and abort any active uploads. */
   stop(): void {
     this.started = false;
+    if (this.retryTimer !== null) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
     for (const [id, controller] of this.active) {
       try {
         controller.abort();
@@ -204,7 +242,7 @@ export class UploadService extends EventEmitter<UploadServiceEvents> {
   private kick(): void {
     if (!this.started) return;
     let guard = 0;
-    while (this.active.size + this.startingIds.size < this.maxConcurrent && guard < 20) {
+    while (this.active.size + this.startingIds.size < this.maxConcurrent() && guard < 20) {
       guard += 1;
       const next = this.nextQueued();
       if (next === undefined) break;
@@ -215,12 +253,43 @@ export class UploadService extends EventEmitter<UploadServiceEvents> {
         this.kick();
       });
     }
+    this.scheduleRetrySweep();
+  }
+
+  /** Earliest retry deadline across queued items, or undefined. */
+  private nextRetryAt(): number | undefined {
+    let earliest: number | undefined;
+    for (const at of this.retryAt.values()) {
+      if (earliest === undefined || at < earliest) earliest = at;
+    }
+    return earliest;
+  }
+
+  /** Wake the queue when the next delayed retry comes due. */
+  private scheduleRetrySweep(): void {
+    if (this.retryTimer !== null) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+    const nextAt = this.nextRetryAt();
+    if (nextAt === undefined) return;
+    const delay = Math.max(250, nextAt - Date.now());
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      this.kick();
+    }, delay);
   }
 
   private nextQueued(): UploadQueueRecord | undefined {
+    const now = Date.now();
     const queued = this.repo
       .list('queued')
-      .filter((item) => !this.active.has(item.id) && !this.startingIds.has(item.id));
+      .filter(
+        (item) =>
+          !this.active.has(item.id) &&
+          !this.startingIds.has(item.id) &&
+          (this.retryAt.get(item.id) ?? 0) <= now,
+      );
     queued.sort(
       (a, b) => a.priority - b.priority || a.createdAt.localeCompare(b.createdAt),
     );
@@ -228,6 +297,7 @@ export class UploadService extends EventEmitter<UploadServiceEvents> {
   }
 
   private async runItem(item: UploadQueueRecord): Promise<void> {
+    this.retryAt.delete(item.id);
     const provider = this.providers.get(item.providerId);
     if (provider === undefined) {
       const message = `Upload provider "${item.providerId}" is not registered`;
@@ -310,11 +380,18 @@ export class UploadService extends EventEmitter<UploadServiceEvents> {
 
     const retries = fresh.retries + 1;
     if (retries <= fresh.maxRetries) {
+      // ponytail: exponential backoff — the old instant retry loop slammed
+      // the host 3 times in a row (ECONNRESET spam) instead of giving the
+      // server/network a moment to recover.
+      const delayMs = Math.min(60_000, this.retryBaseDelayMs * 2 ** (retries - 1));
+      this.retryAt.set(item.id, Date.now() + delayMs);
       this.repo.update(item.id, { status: 'queued', retries, error: message });
-      this.logger.info({ uploadId: item.id, retries }, 'upload requeued for retry');
+      this.logger.info({ uploadId: item.id, retries, retryInMs: delayMs }, 'upload requeued for retry');
+      this.scheduleRetrySweep();
       return;
     }
 
+    this.retryAt.delete(item.id);
     this.repo.update(item.id, { status: 'failed', error: message, finishedAt: new Date().toISOString() });
     this.emit('upload-failed', { uploadId: item.id, error: message, timestamp: new Date().toISOString() });
     this.notifications.send({

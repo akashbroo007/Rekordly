@@ -359,8 +359,6 @@ Yes
 
 Contains
 
-Search
-
 Quick Actions
 
 Notifications
@@ -370,6 +368,8 @@ Current Recording
 Settings Shortcut
 
 Plugin Indicator
+
+Global search lives in the Command Palette (Ctrl + K), not the toolbar.
 
 ---
 

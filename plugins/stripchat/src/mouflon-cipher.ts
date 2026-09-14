@@ -12,7 +12,7 @@
  *
  * The pdkey is a hardcoded `pkey -> pdkey` pair inside Stripchat's obfuscated
  * MMP player bundle. It changes with player updates, so resolution order is:
- *   1. seed map (community-tracked, MIT: kesamom/stripchat_mouflon)
+ *   1. seed map (community-tracked: kesamom/stripchat_mouflon)
  *   2. runtime scrape of the player's chunk JS (`"<pkey>":"<pdkey>"`)
  *
  * Every decoded URL is SELF-VERIFIED (the decoded filename must contain the
@@ -21,7 +21,7 @@
  */
 import { createHash } from 'crypto';
 
-/** Community-tracked pkey -> pdkey pairs (MIT: kesamom/stripchat_mouflon). */
+/** Community-tracked pkey -> pdkey pairs (source: kesamom/stripchat_mouflon). */
 const SEED_PDKEYS: Record<string, string> = {
   Zokee2OhPh9kugh4: 'Quean4cai9boJa5a',
   Zeechoej4aleeshi: 'ubahjae7goPoodi6',

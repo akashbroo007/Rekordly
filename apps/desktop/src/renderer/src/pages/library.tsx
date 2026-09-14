@@ -7,6 +7,7 @@ import {
   Eye,
   FolderOpen,
   Heart,
+  Layers,
   LayoutGrid,
   Library,
   List,
@@ -14,6 +15,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  Scissors,
   Search,
   SlidersHorizontal,
   Star,
@@ -50,14 +52,16 @@ import {
 } from '@rekordly/ui';
 import type { RecordingDto, DownloadQueueItemDto, LibraryFiltersDto, LibrarySortDto } from '@rekordly/shared/contracts';
 import { useToastStore } from '../stores/toast-store';
+import { useDrilldownStore } from '../stores/drilldown-store';
 import { formatBytes, formatDuration } from '@rekordly/shared/format';
-import { toMediaUrl, VideoPlayerDialog } from '../components/video-player-dialog';
+import { toMediaUrl, VideoPlayerDialog, watchProgressFor } from '../components/video-player-dialog';
+import { ConcatDialog } from '../components/editor/concat-dialog';
 
 type ViewMode = 'grid' | 'list' | 'compact' | 'details';
 type SortField = 'title' | 'createdAt' | 'startedAt' | 'durationSeconds' | 'sizeBytes' | 'platformId';
 type SortDir = 'asc' | 'desc';
-/** Top-level library sections: live recordings vs finished generic downloads. */
-type LibraryTab = 'recordings' | 'downloads';
+/** Top-level library sections: original recordings, editor outputs, finished generic downloads. */
+type LibraryTab = 'recordings' | 'edited' | 'downloads';
 
 const STORAGE_KEY = 'Rekordly:library-view';
 const TAB_STORAGE_KEY = 'Rekordly:library-tab';
@@ -101,9 +105,15 @@ export function LibraryPage() {
   const [collectionsOpen, setCollectionsOpen] = useState(false);
   const [detailsRecording, setDetailsRecording] = useState<RecordingDto | null>(null);
   const [playerRecording, setPlayerRecording] = useState<RecordingDto | null>(null);
+  const [playerEditing, setPlayerEditing] = useState(false);
+  const [concatOpen, setConcatOpen] = useState(false);
   const [playerDownload, setPlayerDownload] = useState<DownloadQueueItemDto | null>(null);
   const [editNotes, setEditNotes] = useState<RecordingDto | null>(null);
   const [activeCollection, setActiveCollection] = useState<string>('');
+  // ponytail: analytics drill-down — a one-shot date window pushed by the
+  // Analytics page before navigating here.
+  const [filterDateFrom, setFilterDateFrom] = useState<string>(() => useDrilldownStore.getState().dateFrom ?? '');
+  const [filterDateTo, setFilterDateTo] = useState<string>(() => useDrilldownStore.getState().dateTo ?? '');
   const pageSize = 50;
 
   useEffect(() => {
@@ -126,7 +136,12 @@ export function LibraryPage() {
     resolution: filterResolution || undefined,
     minDuration: Number.isFinite(minDurationSec) ? minDurationSec : undefined,
     maxDuration: Number.isFinite(maxDurationSec) ? maxDurationSec : undefined,
-  }), [searchQuery, filterFavorites, activeCollection, filterPluginId, filterResolution, minDurationSec, maxDurationSec]);
+    // ponytail: Edited tab shows only editor outputs (trim/cut/combine);
+    // Recordings shows only originals. Downloads tab ignores these filters.
+    isEdited: tab === 'edited' ? true : tab === 'recordings' ? false : undefined,
+    dateFrom: filterDateFrom || undefined,
+    dateTo: filterDateTo || undefined,
+  }), [tab, searchQuery, filterFavorites, activeCollection, filterPluginId, filterResolution, minDurationSec, maxDurationSec, filterDateFrom, filterDateTo]);
 
   const sort = useMemo<LibrarySortDto>(() => ({
     field: sortField,
@@ -157,6 +172,11 @@ export function LibraryPage() {
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / pageSize);
 
+  // #10 playlist — the player navigates within the current filtered page.
+  const playerIndex = playerRecording !== null ? recordings.findIndex((r) => r.id === playerRecording.id) : -1;
+  const previousRecording = playerIndex > 0 ? recordings[playerIndex - 1] ?? null : null;
+  const nextRecording = playerIndex >= 0 && playerIndex < recordings.length - 1 ? recordings[playerIndex + 1] ?? null : null;
+
   // Map creatorId -> display name so cards can show "Creator · Date" instead
   // of the raw stream title (which is often long/noisy).
   const { data: creators } = useQuery({
@@ -169,11 +189,22 @@ export function LibraryPage() {
     return map;
   }, [creators]);
 
-  useEffect(() => { setPage(0); }, [searchQuery, sortField, sortDir, filterFavorites, activeCollection, filterPluginId, filterResolution, filterMinDuration, filterMaxDuration]);
+  useEffect(() => { setPage(0); }, [searchQuery, sortField, sortDir, filterFavorites, activeCollection, filterPluginId, filterResolution, filterMinDuration, filterMaxDuration, filterDateFrom, filterDateTo]);
+
+  // ponytail: consume the drill-down window once so returning to the library
+  // later starts clean.
+  useEffect(() => {
+    if (filterDateFrom) useDrilldownStore.getState().clear();
+  }, [filterDateFrom]);
+
+  // ponytail: tabs share paging/selection state — reset both on switch so the
+  // Edited tab never opens on page 3 of Recordings or with stale checkboxes.
+  useEffect(() => { setPage(0); setSelectedIds(new Set()); }, [tab]);
 
   const hasActiveFilters =
     filterFavorites || filterPluginId !== '' || filterResolution !== '' ||
-    filterMinDuration !== '' || filterMaxDuration !== '' || activeCollection !== '';
+    filterMinDuration !== '' || filterMaxDuration !== '' || activeCollection !== '' ||
+    filterDateFrom !== '' || filterDateTo !== '';
 
   const clearFilters = (): void => {
     setFilterFavorites(false);
@@ -182,6 +213,8 @@ export function LibraryPage() {
     setFilterMinDuration('');
     setFilterMaxDuration('');
     setActiveCollection('');
+    setFilterDateFrom('');
+    setFilterDateTo('');
   };
 
   const toggleSelect = useCallback((id: string) => {
@@ -227,13 +260,35 @@ export function LibraryPage() {
     },
   });
 
+  // ponytail: built-in editor — refresh every recordings view after an export.
+  const refreshAfterEdit = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ['library'] });
+    void queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+    void queryClient.invalidateQueries({ queryKey: ['recordings-recent'] });
+  }, [queryClient]);
+
+  // ponytail: open the player straight into edit mode for trim/cut.
+  const openEditor = useCallback((recording: RecordingDto) => {
+    setDetailsRecording(null);
+    setPlayerRecording(recording);
+    setPlayerEditing(true);
+  }, []);
+
+  const selectedRecordings = useMemo(
+    () => recordings.filter((r) => selectedIds.has(r.id) && r.filePath),
+    [recordings, selectedIds],
+  );
+
   return (
     <PageContainer>
-      {/* ponytail: top-level switch between the two library collections —
+      {/* ponytail: top-level switch between the three library collections —
           each tab keeps its own heading, toolbar and content below. */}
       <div className="flex items-center gap-1">
         <Button variant={tab === 'recordings' ? 'secondary' : 'ghost'} size="sm" onClick={() => setTab('recordings')}>
           <Video size={14} /> Recordings
+        </Button>
+        <Button variant={tab === 'edited' ? 'secondary' : 'ghost'} size="sm" onClick={() => setTab('edited')}>
+          <Scissors size={14} /> Edited
         </Button>
         <Button variant={tab === 'downloads' ? 'secondary' : 'ghost'} size="sm" onClick={() => setTab('downloads')}>
           <Download size={14} /> Downloads
@@ -255,13 +310,15 @@ export function LibraryPage() {
       </div>
 
       <SectionHeader
-        title={tab === 'recordings' ? 'Recordings' : 'Downloads'}
+        title={tab === 'recordings' ? 'Recordings' : tab === 'edited' ? 'Edited' : 'Downloads'}
         description={
           tab === 'recordings'
             ? 'Browse and manage completed recordings.'
-            : 'Browse completed video downloads.'
+            : tab === 'edited'
+              ? 'Trimmed, cut, and combined clips — originals stay in Recordings.'
+              : 'Browse completed video downloads.'
         }
-        actions={tab === 'recordings' ? (
+        actions={(tab === 'recordings' || tab === 'edited') ? (
           <div className="flex items-center gap-2">
             {selectedIds.size > 0 && (
               <>
@@ -269,6 +326,11 @@ export function LibraryPage() {
                 <Button variant="ghost" size="sm" onClick={() => bulkFavorite.mutate()}>
                   <Heart size={14} /> Favorite
                 </Button>
+                {selectedRecordings.length >= 2 && (
+                  <Button variant="ghost" size="sm" onClick={() => setConcatOpen(true)}>
+                    <Layers size={14} /> Combine
+                  </Button>
+                )}
                 <Button variant="danger" size="sm" onClick={() => bulkDelete.mutate()}>
                   <Trash2 size={14} /> Delete
                 </Button>
@@ -280,6 +342,7 @@ export function LibraryPage() {
             <Button variant="secondary" size="sm" onClick={() => setCollectionsOpen(true)}>
               Collections
             </Button>
+            {tab === 'recordings' && (
             <Button
               variant="secondary"
               size="sm"
@@ -295,13 +358,14 @@ export function LibraryPage() {
             >
               <FolderOpen size={14} /> Scan Folder
             </Button>
+            )}
           </div>
         ) : undefined}
       />
 
       {tab === 'downloads' && <DownloadsLibrary onPlay={setPlayerDownload} />}
 
-      {tab === 'recordings' && (<>
+      {(tab === 'recordings' || tab === 'edited') && (<>
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative w-full max-w-sm">
@@ -309,7 +373,7 @@ export function LibraryPage() {
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search recordings..."
+            placeholder={tab === 'edited' ? 'Search edited videos...' : 'Search recordings...'}
             className="pl-8"
           />
         </div>
@@ -349,6 +413,18 @@ export function LibraryPage() {
           <SlidersHorizontal size={14} /> Filters
           {hasActiveFilters && <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />}
         </Button>
+        {filterDateFrom && (
+          <button
+            type="button"
+            onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); }}
+            className="flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20"
+            title="Clear date range"
+          >
+            {new Date(filterDateFrom).toLocaleDateString()}
+            {filterDateTo ? ` – ${new Date(filterDateTo).toLocaleDateString()}` : ''}
+            <X size={12} />
+          </button>
+        )}
         <div className="ml-auto flex items-center gap-1">
           <Button variant={viewMode === 'grid' ? 'secondary' : 'ghost'} size="icon" onClick={() => setViewMode('grid')}>
             <LayoutGrid size={14} />
@@ -447,9 +523,15 @@ export function LibraryPage() {
 
       {!isLoading && !isError && recordings.length === 0 && (
         <EmptyState
-          icon={Library}
-          title="No recordings found"
-          description={searchQuery ? 'Try a different search term.' : 'Recordings will appear here after they are completed.'}
+          icon={tab === 'edited' ? Scissors : Library}
+          title={tab === 'edited' ? 'No edited videos yet' : 'No recordings found'}
+          description={
+            searchQuery
+              ? 'Try a different search term.'
+              : tab === 'edited'
+                ? 'Trim, cut, or combine a recording and it will appear here. Originals stay in Recordings.'
+                : 'Recordings will appear here after they are completed.'
+          }
         />
       )}
 
@@ -477,6 +559,7 @@ export function LibraryPage() {
                   onEditNotes={setEditNotes}
                   onToggleFavorite={(id) => toggleFav.mutate(id)}
                   onPlay={setPlayerRecording}
+                  onEdit={openEditor}
                 />
               ))}
             </div>
@@ -495,6 +578,7 @@ export function LibraryPage() {
                   onDetails={setDetailsRecording}
                   onEditNotes={setEditNotes}
                   onToggleFavorite={(id) => toggleFav.mutate(id)}
+                  onEdit={openEditor}
                 />
               ))}
             </div>
@@ -550,8 +634,8 @@ export function LibraryPage() {
       )}
       </>)}
 
-      <TagsDialog open={tagsOpen && tab === 'recordings'} onOpenChange={setTagsOpen} />
-      <CollectionsDialog open={collectionsOpen && tab === 'recordings'} onOpenChange={setCollectionsOpen} />
+      <TagsDialog open={tagsOpen && (tab === 'recordings' || tab === 'edited')} onOpenChange={setTagsOpen} />
+      <CollectionsDialog open={collectionsOpen && (tab === 'recordings' || tab === 'edited')} onOpenChange={setCollectionsOpen} />
       {detailsRecording && (
         <RecordingDetailsDialog
           recording={detailsRecording}
@@ -559,6 +643,8 @@ export function LibraryPage() {
           onOpenChange={() => setDetailsRecording(null)}
           onEditNotes={setEditNotes}
           onPlay={setPlayerRecording}
+          onEdit={openEditor}
+          onNavigate={setDetailsRecording}
         />
       )}
       {editNotes && (
@@ -573,8 +659,28 @@ export function LibraryPage() {
           title={playerRecording.title}
           filePath={playerRecording.filePath}
           posterPath={playerRecording.thumbnailPath}
+          recordingId={playerRecording.id}
+          fps={playerRecording.fps ?? null}
+          initialEditing={playerEditing}
+          previousRecording={previousRecording}
+          nextRecording={nextRecording}
+          onPlayRecording={(rec) => {
+            setPlayerRecording(rec);
+            setPlayerEditing(false);
+          }}
+          onEdited={refreshAfterEdit}
+          onOpenResult={(rec) => {
+            refreshAfterEdit();
+            setPlayerRecording(rec);
+            setPlayerEditing(false);
+          }}
           open
-          onOpenChange={() => setPlayerRecording(null)}
+          onOpenChange={(v) => {
+            if (!v) {
+              setPlayerRecording(null);
+              setPlayerEditing(false);
+            }
+          }}
         />
       )}
       {playerDownload?.filePath && (
@@ -584,6 +690,19 @@ export function LibraryPage() {
           posterPath={playerDownload.thumbnailPath ?? undefined}
           open
           onOpenChange={() => setPlayerDownload(null)}
+        />
+      )}
+      {concatOpen && (
+        <ConcatDialog
+          recordings={selectedRecordings}
+          open
+          onOpenChange={setConcatOpen}
+          onDone={(rec) => {
+            refreshAfterEdit();
+            setSelectedIds(new Set());
+            setPlayerRecording(rec);
+            setPlayerEditing(false);
+          }}
         />
       )}
     </PageContainer>
@@ -723,6 +842,7 @@ function RecordingGridCard({
   onEditNotes,
   onToggleFavorite,
   onPlay,
+  onEdit,
 }: {
   recording: RecordingDto;
   creatorName?: string;
@@ -732,6 +852,7 @@ function RecordingGridCard({
   onEditNotes: (r: RecordingDto) => void;
   onToggleFavorite: (id: string) => void;
   onPlay: (r: RecordingDto) => void;
+  onEdit: (r: RecordingDto) => void;
 }) {
   const queryClient = useQueryClient();
 
@@ -777,6 +898,15 @@ function RecordingGridCard({
                 {formatDuration(recording.durationSeconds)}
               </span>
             )}
+            {/* #9 watch progress — resumes mid-video show a red watch bar */}
+            {watchProgressFor(recording.id, recording.filePath ?? '') > 0 && (
+              <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50">
+                <div
+                  className="h-full bg-error"
+                  style={{ width: `${watchProgressFor(recording.id, recording.filePath ?? '') * 100}%` }}
+                />
+              </div>
+            )}
             <button
               type="button"
               className="absolute left-1 top-1"
@@ -815,6 +945,11 @@ function RecordingGridCard({
         <ContextMenuItem onClick={() => onDetails(recording)}>
           <Eye size={14} /> Details
         </ContextMenuItem>
+        {recording.filePath && (
+          <ContextMenuItem onClick={() => onEdit(recording)}>
+            <Scissors size={14} /> Trim / Edit
+          </ContextMenuItem>
+        )}
         <ContextMenuItem onClick={() => onEditNotes(recording)}>
           <FileText size={14} /> Notes
         </ContextMenuItem>
@@ -850,6 +985,7 @@ function RecordingListCard({
   onDetails,
   onEditNotes,
   onToggleFavorite,
+  onEdit,
 }: {
   recording: RecordingDto;
   creatorName?: string;
@@ -858,6 +994,7 @@ function RecordingListCard({
   onDetails: (r: RecordingDto) => void;
   onEditNotes: (r: RecordingDto) => void;
   onToggleFavorite: (id: string) => void;
+  onEdit: (r: RecordingDto) => void;
 }) {
   return (
     <ContextMenu>
@@ -905,6 +1042,7 @@ function RecordingListCard({
       </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onClick={() => onDetails(recording)}><Eye size={14} /> Details</ContextMenuItem>
+        {recording.filePath && <ContextMenuItem onClick={() => onEdit(recording)}><Scissors size={14} /> Trim / Edit</ContextMenuItem>}
         <ContextMenuItem onClick={() => onEditNotes(recording)}><FileText size={14} /> Notes</ContextMenuItem>
         {recording.filePath && <ContextMenuItem onClick={() => window.desktop.library.revealInExplorer(recording.filePath!)}><FolderOpen size={14} /> Open Folder</ContextMenuItem>}
         {recording.filePath && <ContextMenuItem onClick={() => navigator.clipboard.writeText(recording.filePath!)}><Copy size={14} /> Copy Path</ContextMenuItem>}
@@ -1096,23 +1234,46 @@ function CollectionsDialog({ open, onOpenChange }: { open: boolean; onOpenChange
   );
 }
 
+/** Human label for the first op in an edit-history JSON blob. Never throws. */
+function editOpLabel(history?: string | null): string {
+  try {
+    const arr: unknown = JSON.parse(history ?? 'null');
+    const op = Array.isArray(arr) ? (arr[0] as { op?: unknown } | undefined)?.op : undefined;
+    if (op === 'trim') return 'Trimmed';
+    if (op === 'cut') return 'Edited';
+    if (op === 'concat') return 'Combined';
+  } catch { /* corrupt history — generic label */ }
+  return 'Edited';
+}
+
 function RecordingDetailsDialog({
   recording,
   open,
   onOpenChange,
   onEditNotes,
   onPlay,
+  onEdit,
+  onNavigate,
 }: {
   recording: RecordingDto;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onEditNotes: (r: RecordingDto) => void;
   onPlay: (r: RecordingDto) => void;
+  onEdit: (r: RecordingDto) => void;
+  onNavigate: (r: RecordingDto) => void;
 }) {
   const { data: tags } = useQuery({ queryKey: ['library-tags'], queryFn: () => window.desktop.library.getTags() });
   const { data: recordingTags } = useQuery({
     queryKey: ['library-recording-tags', recording.id],
     queryFn: () => window.desktop.library.listRecordingTags(recording.id),
+  });
+  // ponytail: Edited tab — link back to the source recording. Disabled while
+  // loading; falls back to "Original deleted" when the source is gone.
+  const { data: sourceRecording, isLoading: sourceLoading } = useQuery({
+    queryKey: ['library-recording', recording.sourceRecordingId],
+    queryFn: () => window.desktop.library.getRecording(recording.sourceRecordingId!),
+    enabled: recording.sourceRecordingId !== undefined && recording.sourceRecordingId !== null,
   });
   const queryClient = useQueryClient();
 
@@ -1134,6 +1295,26 @@ function RecordingDetailsDialog({
         <div className="space-y-4">
           {recording.thumbnailPath && (
             <img src={toMediaUrl(recording.thumbnailPath)} alt="" className="w-full rounded-sm object-cover" />
+          )}
+          {recording.sourceRecordingId && (
+            sourceRecording !== undefined ? (
+              <button
+                type="button"
+                onClick={() => onNavigate(sourceRecording)}
+                title="Open the original recording"
+                className="flex w-full items-center gap-1.5 rounded-sm bg-primary/10 px-2 py-1.5 text-xs text-primary transition-colors hover:bg-primary/20"
+              >
+                <Scissors size={12} className="shrink-0" />
+                <span className="truncate">
+                  {editOpLabel(recording.editHistory)} from “{sourceRecording.title}”
+                </span>
+              </button>
+            ) : (
+              <p className="rounded-sm bg-elevated px-2 py-1.5 text-xs text-foreground-muted">
+                <Scissors size={12} className="mr-1 inline" />
+                {sourceLoading ? 'Loading original…' : 'Original recording deleted — this edit is kept.'}
+              </p>
+            )
           )}
           <dl className="space-y-2 text-sm">
             <DetailRow label="Platform" value={recording.platformId} />
@@ -1191,6 +1372,9 @@ function RecordingDetailsDialog({
                 <Button variant="secondary" size="sm" onClick={() => onPlay(recording)}>
                   <Play size={14} /> Play
                 </Button>
+                <Button variant="secondary" size="sm" onClick={() => onEdit(recording)}>
+                  <Scissors size={14} /> Trim / Edit
+                </Button>
                 <Button variant="secondary" size="sm" onClick={() => window.desktop.library.revealInExplorer(recording.filePath!)}>
                   <FolderOpen size={14} /> Open Folder
                 </Button>
@@ -1239,8 +1423,7 @@ function EditNotesDialog({
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
+function DetailRow({ label, value }: { label: string; value: string }) {  return (
     <div className="flex items-start justify-between gap-4 py-2 first:pt-0 last:pb-0">
       <dt className="text-[11px] font-medium uppercase tracking-wide text-foreground-muted">{label}</dt>
       <dd className="max-w-[60%] truncate text-right tabular-nums text-foreground-secondary" title={value}>{value}</dd>

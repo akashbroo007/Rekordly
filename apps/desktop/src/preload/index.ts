@@ -7,6 +7,8 @@ import type {
   MonitoringEventDto,
   RecordingEventDto,
   DownloadEventDto,
+  EditorExportProgressDto,
+  ProxyStatusDto,
   UploadEventDto,
 } from '@rekordly/shared/contracts';
 
@@ -18,7 +20,13 @@ const desktopApi: DesktopApi = {
     getNetworkStats: () => ipcRenderer.invoke(IPC_CHANNELS.appGetNetworkStats),
     getPaths: () => ipcRenderer.invoke(IPC_CHANNELS.appGetPaths),
     openPath: (path) => ipcRenderer.invoke(IPC_CHANNELS.appOpenPath, path),
+    openUrl: (url) => ipcRenderer.invoke(IPC_CHANNELS.appOpenUrl, url),
     getHardwareProfile: () => ipcRenderer.invoke(IPC_CHANNELS.appGetHardwareProfile),
+    extractFrame: (request) => ipcRenderer.invoke(IPC_CHANNELS.appExtractFrame, request),
+    copyImage: (request) => ipcRenderer.invoke(IPC_CHANNELS.appCopyImage, request),
+    saveImage: (request) => ipcRenderer.invoke(IPC_CHANNELS.appSaveImage, request),
+    getMediaInfo: (request) => ipcRenderer.invoke(IPC_CHANNELS.appGetMediaInfo, request),
+    findSubtitle: (request) => ipcRenderer.invoke(IPC_CHANNELS.appFindSubtitle, request),
   },
   windowControls: {
     minimize: () => ipcRenderer.invoke(IPC_CHANNELS.windowMinimize),
@@ -46,6 +54,11 @@ const desktopApi: DesktopApi = {
     validate: (values) => ipcRenderer.invoke(IPC_CHANNELS.settingsValidate, values),
     importFromFile: () => ipcRenderer.invoke(IPC_CHANNELS.settingsImport),
     exportToFile: () => ipcRenderer.invoke(IPC_CHANNELS.settingsExport),
+  },
+  license: {
+    getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.licenseGetStatus),
+    activate: (key) => ipcRenderer.invoke(IPC_CHANNELS.licenseActivate, key),
+    deactivate: () => ipcRenderer.invoke(IPC_CHANNELS.licenseDeactivate),
   },
   plugins: {
     list: () => ipcRenderer.invoke(IPC_CHANNELS.pluginsList),
@@ -93,6 +106,7 @@ const desktopApi: DesktopApi = {
     search: (query) => ipcRenderer.invoke(IPC_CHANNELS.creatorsSearch, query),
     setFavorite: (id, favorite) => ipcRenderer.invoke(IPC_CHANNELS.creatorsSetFavorite, id, favorite),
     setAutoRecord: (id, enabled) => ipcRenderer.invoke(IPC_CHANNELS.creatorsSetAutoRecord, id, enabled),
+    setUseProxy: (id, enabled) => ipcRenderer.invoke(IPC_CHANNELS.creatorsSetUseProxy, id, enabled),
     getTags: () => ipcRenderer.invoke(IPC_CHANNELS.creatorsGetTags),
     createTag: (name, color) => ipcRenderer.invoke(IPC_CHANNELS.creatorsCreateTag, name, color),
     removeTag: (id) => ipcRenderer.invoke(IPC_CHANNELS.creatorsRemoveTag, id),
@@ -107,6 +121,27 @@ const desktopApi: DesktopApi = {
     exportCsv: () => ipcRenderer.invoke(IPC_CHANNELS.creatorsExportCsv),
     importJson: (data) => ipcRenderer.invoke(IPC_CHANNELS.creatorsImportJson, data),
     importCsv: (data) => ipcRenderer.invoke(IPC_CHANNELS.creatorsImportCsv, data),
+    bulkFavorite: (ids, favorite) => ipcRenderer.invoke(IPC_CHANNELS.creatorsBulkFavorite, ids, favorite),
+    bulkSetAutoRecord: (ids, enabled) => ipcRenderer.invoke(IPC_CHANNELS.creatorsBulkSetAutoRecord, ids, enabled),
+    bulkRemove: (ids) => ipcRenderer.invoke(IPC_CHANNELS.creatorsBulkRemove, ids),
+    bulkAddTag: (ids, tagId) => ipcRenderer.invoke(IPC_CHANNELS.creatorsBulkAddTag, ids, tagId),
+    getAllTagAssignments: () => ipcRenderer.invoke(IPC_CHANNELS.creatorsGetAllTagAssignments),
+    stats: (creatorId) => ipcRenderer.invoke(IPC_CHANNELS.creatorsStats, creatorId),
+  },
+  proxy: {
+    getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.proxyGetStatus),
+    start: () => ipcRenderer.invoke(IPC_CHANNELS.proxyStart),
+    test: () => ipcRenderer.invoke(IPC_CHANNELS.proxyTest),
+    getNetworkMode: () => ipcRenderer.invoke(IPC_CHANNELS.proxyGetNetworkMode),
+    onEvent: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: ProxyStatusDto): void => {
+        callback(status);
+      };
+      ipcRenderer.on(IPC_CHANNELS.proxyEvent, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC_CHANNELS.proxyEvent, listener);
+      };
+    },
   },
   recordings: {
     list: (limit) => ipcRenderer.invoke(IPC_CHANNELS.recordingsList, limit),
@@ -239,6 +274,8 @@ const desktopApi: DesktopApi = {
     providers: () => ipcRenderer.invoke(IPC_CHANNELS.uploadsProviders),
     providersMeta: () => ipcRenderer.invoke(IPC_CHANNELS.uploadsProvidersMeta),
     testProvider: (id) => ipcRenderer.invoke(IPC_CHANNELS.uploadsTestProvider, id),
+    connectGoogleDrive: (clientId, clientSecret) =>
+      ipcRenderer.invoke(IPC_CHANNELS.uploadsConnectGoogleDrive, clientId, clientSecret),
     onEvent: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, uploadEvent: UploadEventDto): void => {
         callback(uploadEvent);
@@ -255,6 +292,24 @@ const desktopApi: DesktopApi = {
     cleanup: (options) => ipcRenderer.invoke(IPC_CHANNELS.storageCleanup, options),
     getLargestRecordings: (limit) => ipcRenderer.invoke(IPC_CHANNELS.storageGetLargestRecordings, limit),
     getLargestFolders: (limit) => ipcRenderer.invoke(IPC_CHANNELS.storageGetLargestFolders, limit),
+  },
+  editor: {
+    trim: (request) => ipcRenderer.invoke(IPC_CHANNELS.editorTrim, request),
+    cut: (request) => ipcRenderer.invoke(IPC_CHANNELS.editorCut, request),
+    concat: (request) => ipcRenderer.invoke(IPC_CHANNELS.editorConcat, request),
+    timeline: (request) => ipcRenderer.invoke(IPC_CHANNELS.editorTimeline, request),
+    extractAudio: (request) => ipcRenderer.invoke(IPC_CHANNELS.editorExtractAudio, request),
+    detectSilence: (request) => ipcRenderer.invoke(IPC_CHANNELS.editorDetectSilence, request),
+    cancelExport: (request) => ipcRenderer.invoke(IPC_CHANNELS.editorCancelExport, request),
+    onExportProgress: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, progress: EditorExportProgressDto): void => {
+        callback(progress);
+      };
+      ipcRenderer.on(IPC_CHANNELS.editorExportProgress, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC_CHANNELS.editorExportProgress, listener);
+      };
+    },
   },
 };
 

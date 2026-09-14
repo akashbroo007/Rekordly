@@ -27,7 +27,7 @@ If an SDK improvement is needed, implement it in a platform-agnostic way.
 
 # Target Platform
 
-https://www.cht.xxx
+www.cam4.com
 
 ---
 
@@ -80,6 +80,43 @@ The core application should receive only the standardized Stream object defined 
 
 ---
 
+# Long-Lived Per-Model Resources (proxies, browsers, servers)
+
+If `extractStream` creates anything the recorder consumes AFTER you return
+(a local proxy server, a headless browser, an authenticated tunnel), that
+resource outlives your function call. This has caused real production bugs —
+read these rules before hand-rolling resource tracking:
+
+1. **Use `ProxyRegistry` from `@rekordly/plugin-sdk`.** Do not write your own
+   map + eviction loop. It encodes the hard-won rules below and is unit-tested.
+2. **Key entries by STABLE model identity** (lowercased username), never by a
+   per-extraction URL. Every extraction mints fresh signed URLs — keying by
+   URL means re-recording model A evicts some OTHER model's live resource,
+   and ffmpeg dies with `Connection refused` on `127.0.0.1:<port>`.
+   Same-model re-extract MUST replace its own entry (fresh signed URL); the
+   registry returns the displaced entry for you to stop.
+3. **Caps count heavy resources, never live consumers.** A proxy that released
+   its browser is a tiny local server — evicting it kills a recording to save
+   nothing. Cap browser-holding entries; never evict a warming-up entry (the
+   registry's startup grace); when nothing is evictable, overflow the cap
+   rather than killing a live recording.
+4. **The registry never stops anything itself** — stop returned entries
+   asynchronously with `.catch(() => undefined)`; a stop failure must never
+   fail the extraction.
+5. **Self-clean on death.** Wire idle watchdogs / `onIdleStop` callbacks to
+   `registry.delete(key)`, and `cleanup()` to stopping everything the
+   registry reports, so dead entries never count against live ones.
+6. **Packaging constraint.** Bundled plugins ship WITHOUT `node_modules`
+   (see `apps/desktop/electron-builder.yml`). Value-imports from
+   `@rekordly/plugin-sdk` work in dev via workspace symlinks but resolve in
+   the installed app ONLY through the shared copy shipped at
+   `resources/plugins/node_modules` — which covers the SDK plus its runtime
+   dependencies. If you add a NEW runtime dependency to the SDK, you MUST add
+   a matching `extraResources` entry or packaged plugins will fail to load
+   (dev will not catch it).
+
+---
+
 # Monitoring
 
 Support monitoring of multiple creators.
@@ -89,6 +126,21 @@ Implement efficient polling.
 Reuse browser sessions where possible.
 
 Avoid unnecessary browser launches.
+
+---
+
+# Secure Proxy Routing (direct-first with proxy fallback)
+
+Site reachability is a property of the USER'S network — ISP/DNS blocks are regional, never a property of the plugin. The host provides `context.network` (`ensureProxy(identifier)` / `getProxyAgent(identifier)` / `getProxyHttpUrl(identifier)`) and resolves the per-creator opt-in (`creators.use_proxy`) itself.
+
+Follow this pattern for every outbound request that must reach the site:
+
+1. **Attempt DIRECT first** with a short timeout (~8s). Transport-level failures (`ECONNRESET`, `ETIMEDOUT`, `ENOTFOUND`, socket hang-up) and block-page signatures (HTML where JSON was expected) are what an ISP block looks like.
+2. **On network failure only, retry through the proxy**: `await context.network.ensureProxy(identifier)` (may download and bootstrap the proxy on first use), then retry with `getProxyAgent(identifier)`. HTTP-level answers (404/403, real API errors) are the site talking — never retry those through the proxy.
+3. **Stay on the chosen route for the whole fetch cycle** (playlist fetches, variant resolution) so detection and extraction agree.
+4. **Set `StreamObject.proxyUrl` only when the extraction actually used the proxy** (`getProxyHttpUrl(identifier)`) — the recorder's child processes (ffmpeg `-proxy` / yt-dlp `--proxy`) then follow the same route. When a system VPN like Cloudflare WARP makes the direct route work, `proxyUrl` stays unset and the embedded proxy never starts.
+
+Reference implementation: `plugins/bongacams/src/index.ts` (`withSmartRoute`, `fetchRoomDataSmart`).
 
 ---
 
@@ -170,6 +222,8 @@ Before completion:
 - Monitoring works.
 - Live detection works.
 - Stream extraction works.
+- Long-lived resources (if any) use `ProxyRegistry` keyed by stable model
+  identity — burst-starting 3+ recordings kills none of them.
 - No core architecture violations.
 
 ---

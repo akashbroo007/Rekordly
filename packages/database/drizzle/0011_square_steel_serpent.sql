@@ -1,0 +1,1 @@
+ALTER TABLE `creators` ADD `use_proxy` integer DEFAULT false NOT NULL;

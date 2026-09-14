@@ -57,6 +57,14 @@ export function UploadsPage() {
     queryFn: () => window.desktop.uploads.list(),
   });
 
+  // ponytail: fire-and-forget actions (pause/resume/cancel/retry/remove) had
+  // no immediate refresh — the list only updated when the next backend event
+  // arrived, which made the buttons feel broken. Refresh right away.
+  const refreshUploads = (): void => {
+    void queryClient.invalidateQueries({ queryKey: ['uploads'] });
+    void queryClient.invalidateQueries({ queryKey: ['uploads-count'] });
+  };
+
   const { data: providers } = useQuery({
     queryKey: ['upload-providers'],
     queryFn: () => window.desktop.uploads.providers(),
@@ -80,6 +88,36 @@ export function UploadsPage() {
 
   const selectedMeta = providerMeta?.find((m) => m.id === selectedProvider);
   const availableProviders = providers?.filter((p) => p.authenticated) ?? [];
+
+  // All known providers merged with live registration/health state so the
+  // dropdown and badges can show everything, flagging what still needs setup.
+  const allProviders = (providerMeta ?? []).map((meta) => {
+    const status = providers?.find((p) => p.id === meta.id);
+    return {
+      id: meta.id,
+      name: meta.name,
+      available: status?.authenticated ?? false,
+      healthy: status?.healthy ?? false,
+    };
+  });
+  const isProviderAvailable = (id: string): boolean =>
+    allProviders.find((p) => p.id === id)?.available ?? false;
+  const [selectError, setSelectError] = useState<string | null>(null);
+
+  const handleProviderChange = (nextId: string): void => {
+    if (!isProviderAvailable(nextId)) {
+      const name = allProviders.find((p) => p.id === nextId)?.name ?? nextId;
+      setSelectError(`${name} needs to be set up first.`);
+      pushToast({
+        title: `${name} is not set up`,
+        message: `Go to Settings → Cloud Storage to set up ${name} before uploading to it.`,
+        level: 'error',
+      });
+      return;
+    }
+    setSelectError(null);
+    setSelectedProvider(nextId);
+  };
 
   const pickAndAdd = useMutation({
     mutationFn: async () => {
@@ -141,21 +179,30 @@ export function UploadsPage() {
           <div className="w-56">
             <Select
               label="Upload to"
-              options={availableProviders.map((p) => ({
+              options={allProviders.map((p) => ({
                 value: p.id,
-                label: p.name,
+                label: p.available ? p.name : `${p.name} (needs setup)`,
               }))}
               value={selectedProvider}
-              onChange={(e) => setSelectedProvider(e.target.value)}
+              error={selectError ?? undefined}
+              onChange={(e) => handleProviderChange(e.target.value)}
             />
           </div>
-          {providers !== undefined && providers.length > 0 && (
+          {allProviders.length > 0 && (
             <div className="flex items-center gap-2 pb-1">
-              {providers.map((p) => (
-                <Badge key={p.id} variant={p.healthy ? 'success' : 'muted'}>
-                  {p.name}: {p.healthy ? 'online' : 'offline'}
-                </Badge>
-              ))}
+              {allProviders.map((p) => {
+                const variant = p.available && p.healthy ? 'success' : 'error';
+                const label = !p.available
+                  ? `${p.name}: needs setup`
+                  : p.healthy
+                    ? `${p.name}: online`
+                    : `${p.name}: offline`;
+                return (
+                  <Badge key={p.id} variant={variant}>
+                    {label}
+                  </Badge>
+                );
+              })}
             </div>
           )}
         </div>
@@ -213,23 +260,23 @@ export function UploadsPage() {
                 </div>
                 <Badge variant={STATUS_COLORS[item.status] ?? 'muted'}>{item.status}</Badge>
                 <div className="flex shrink-0 items-center gap-1">
-                  {item.status === 'uploading' && (
-                    <Button variant="ghost" size="icon" aria-label="Pause" onClick={() => window.desktop.uploads.pause(item.id)}>
+                  {(item.status === 'uploading' || item.status === 'queued') && (
+                    <Button variant="ghost" size="icon" aria-label="Pause" onClick={() => window.desktop.uploads.pause(item.id).finally(refreshUploads)}>
                       <Pause size={14} />
                     </Button>
                   )}
                   {item.status === 'paused' && (
-                    <Button variant="ghost" size="icon" aria-label="Resume" onClick={() => window.desktop.uploads.resume(item.id)}>
+                    <Button variant="ghost" size="icon" aria-label="Resume" onClick={() => window.desktop.uploads.resume(item.id).finally(refreshUploads)}>
                       <Play size={14} />
                     </Button>
                   )}
                   {(item.status === 'failed' || item.status === 'cancelled') && (
-                    <Button variant="ghost" size="icon" aria-label="Retry" onClick={() => window.desktop.uploads.retry(item.id)}>
+                    <Button variant="ghost" size="icon" aria-label="Retry" onClick={() => window.desktop.uploads.retry(item.id).finally(refreshUploads)}>
                       <RefreshCw size={14} />
                     </Button>
                   )}
                   {(item.status === 'queued' || item.status === 'uploading' || item.status === 'paused') && (
-                    <Button variant="ghost" size="icon" aria-label="Cancel" onClick={() => window.desktop.uploads.cancel(item.id)}>
+                    <Button variant="ghost" size="icon" aria-label="Cancel" onClick={() => window.desktop.uploads.cancel(item.id).finally(refreshUploads)}>
                       <XCircle size={14} />
                     </Button>
                   )}
@@ -246,7 +293,7 @@ export function UploadsPage() {
                       <ExternalLink size={14} />
                     </Button>
                   )}
-                  <Button variant="ghost" size="icon" aria-label="Remove" onClick={() => window.desktop.uploads.remove(item.id)}>
+                  <Button variant="ghost" size="icon" aria-label="Remove" onClick={() => window.desktop.uploads.remove(item.id).finally(refreshUploads)}>
                     <Trash2 size={14} />
                   </Button>
                 </div>

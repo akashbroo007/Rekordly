@@ -24,6 +24,13 @@ export interface ProcessMonitorOptions {
   getActivePids: () => Array<{ pid: number; type: 'yt-dlp' | 'ffmpeg' | 'chromium' }>;
   /** Polling interval in ms. */
   pollIntervalMs?: number;
+  /**
+   * plan §10: minimum gap between real polls while `isMassLoad()` is true
+   * (mass capture ≈ 10s — tasklist spawns must not steal 10–20% CPU).
+   */
+  massPollIntervalMs?: number;
+  /** True when the recorder is under mass-capture load. */
+  isMassLoad?: () => boolean;
 }
 
 /**
@@ -34,6 +41,9 @@ export class ProcessMonitorService {
   private readonly logger: Logger;
   private readonly getActivePids: ProcessMonitorOptions['getActivePids'];
   private readonly pollIntervalMs: number;
+  private readonly massPollIntervalMs: number;
+  private readonly isMassLoad: ProcessMonitorOptions['isMassLoad'];
+  private lastPollAt = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private cachedStats: ProcessStats = {
     totalCpuPercent: 0,
@@ -46,6 +56,8 @@ export class ProcessMonitorService {
     this.logger = options.logger;
     this.getActivePids = options.getActivePids;
     this.pollIntervalMs = options.pollIntervalMs ?? 2000;
+    this.massPollIntervalMs = options.massPollIntervalMs ?? 10_000;
+    this.isMassLoad = options.isMassLoad;
   }
 
   start(): void {
@@ -71,6 +83,13 @@ export class ProcessMonitorService {
   }
 
   private async poll(): Promise<void> {
+    // plan §10: under mass load the base cadence only re-checks the gate —
+    // real tasklist spawns happen at most every massPollIntervalMs.
+    const now = Date.now();
+    if (this.isMassLoad?.() === true && now - this.lastPollAt < this.massPollIntervalMs) {
+      return;
+    }
+    this.lastPollAt = now;
     const activePids = this.getActivePids();
     if (activePids.length === 0) {
       this.cachedStats = {

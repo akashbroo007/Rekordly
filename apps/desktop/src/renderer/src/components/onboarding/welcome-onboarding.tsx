@@ -1,8 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Cpu, HardDrive, MemoryStick, Radio } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { Button } from '@rekordly/ui';
 import { SpotlightTour, type SpotlightStep } from './spotlight-tour';
+
+// ponytail: neutralizes the TitleBar's native drag strip (still active under
+// a fullscreen overlay even when visually covered) so top-of-window clicks
+// land in the DOM instead of being swallowed as window-drag events.
+const NO_DRAG_REGION = { WebkitAppRegion: 'no-drag' } as CSSProperties;
 
 interface WelcomeOnboardingProps {
   /** Persists onboardingCompleted=true (called when the tour ends or is skipped). */
@@ -128,7 +133,7 @@ export function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps) {
 
   if (phase === 'welcome') {
     return (
-      <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-6">
+      <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-6" style={NO_DRAG_REGION}>
         <div className="w-full max-w-md rounded-xl border border-border bg-panel p-8 text-center shadow-2xl">
           <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-primary/10">
             <Radio className="text-primary" size={28} />
@@ -151,7 +156,7 @@ export function WelcomeOnboarding({ onComplete }: WelcomeOnboardingProps) {
 
   if (phase === 'hardware') {
     return (
-      <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-6">
+      <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-6" style={NO_DRAG_REGION}>
         <div className="w-full max-w-md rounded-xl border border-border bg-panel p-6 shadow-2xl">
           <h2 className="text-lg font-semibold text-foreground">Checking your PC…</h2>
           <p className="mt-1 text-sm text-foreground-secondary">

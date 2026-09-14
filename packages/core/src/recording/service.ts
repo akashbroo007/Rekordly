@@ -9,6 +9,7 @@ import {
   rename,
   rm,
   stat,
+  statfs,
   writeFile,
 } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
@@ -20,9 +21,17 @@ import type {
   RecordingSettings,
   FileVerificationResult,
 } from '@rekordly/shared';
-import type { RecordingRepo, RecordingJobRecord } from '@rekordly/database';
+import type { RecordingRepo, RecordingJobRecord, RecordingRecord } from '@rekordly/database';
 import type { NotificationService } from '../services/notification-service';
-import { YtDlpService, isPidAlive, findRecordingProcessPids } from './yt-dlp';
+import type { Entitlements } from '../services/entitlements';
+import type { GateNotifier } from '../services/gate-notifier';
+import { YtDlpService, isPidAliveAsync, listRecorderProcessesAsync, parseQualityHeight } from './yt-dlp';
+import type { YtDlpProgress } from './yt-dlp';
+import { isDirectHlsUrl, requiresLiveTranscode } from './backend';
+import { WorkQueue } from './post-queue';
+import { classifyCaptureFailure, computeBackoffMs } from './failures';
+import type { WorkerState } from './backend';
+import { WorkerStateMachine } from './worker-state';
 import { FfmpegService } from './ffmpeg';
 import { ensureMp4Container } from './container';
 import { FileVerifier } from './verifier';
@@ -35,6 +44,34 @@ async function fileExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Non-blocking wait used for jittered re-resolve backoff (plan §4). */
+async function sleep(ms: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, Math.max(0, ms));
+    timer.unref?.();
+  });
+}
+
+/**
+ * ponytail: below this duration a "clean" capture end is junk, not a
+ * recording — the buffered HLS window of a network blip (see the instant-end
+ * retry in the capture loop). Streams that genuinely end this fast are
+ * better surfaced as retried-then-failed than as useless 1s "completed"
+ * entries. Injectable so fixture-backed tests with tiny media can opt out.
+ */
+const DEFAULT_MIN_MEANINGFUL_CAPTURE_SECONDS = 15;
+
+/** plan §10: progress snapshots are identical — no DB write needed. */
+function sameProgress(a: YtDlpProgress | null, b: YtDlpProgress): boolean {
+  return (
+    a !== null &&
+    a.bytesDownloaded === b.bytesDownloaded &&
+    a.speed === b.speed &&
+    a.eta === b.eta &&
+    a.percent === b.percent
+  );
 }
 
 export interface RecordingServiceOptions {
@@ -53,6 +90,56 @@ export interface RecordingServiceOptions {
    * true, concurrent recordings are capped to 1 and thumbnails are skipped.
    */
   isLowResourceMode?: () => boolean;
+  /**
+   * plan §10: progress flush cadence. Overridable for tests; production uses
+   * PROGRESS_FLUSH_MS so 30 streams cost ≤ ~15 DB writes/s combined.
+   */
+  progressFlushMs?: number;
+  /**
+   * plan §9: minimum free bytes required on the output drive before a queued
+   * start launches. Reuses the existing Settings → Recording floor
+   * (`autoRecordMinFreeDiskGb`); absent/≤0 disables the check (graceful).
+   */
+  getMinFreeBytes?: () => number;
+  /** plan §9: minimum gap between capture launches (thundering-herd guard). */
+  startGapMs?: number;
+  /** Cooldown before a parked queued start is reconsidered (default 5s). */
+  admissionRetryMs?: number;
+  /**
+   * ponytail: CRF used by the background quality-derivative transcode (the
+   * "(480p)" files). Read live per transcode so the Settings knob applies
+   * without a restart; default 23 = previous fixed behavior.
+   */
+  getDerivativeCrf?: () => number;
+  /**
+   * Pro tier gate: live entitlements read per scheduling decision. When the
+   * tier's concurrency limit is lower than the user setting, the effective
+   * cap is the minimum of the two (free tier clamps to 2).
+   */
+  getEntitlements?: () => Entitlements;
+  /**
+   * Pro tier gate notifications: persistent bell entry + OS notification on
+   * every gate hit (cooldown-managed inside GateNotifier).
+   */
+  getGateNotifier?: () => GateNotifier | undefined;
+  /**
+   * ponytail: instant-end floor (see the capture loop). 0 disables the
+   * check — fixture-backed tests with tiny media opt out; production uses
+   * the default (15s).
+   */
+  minMeaningfulCaptureSeconds?: number;
+}
+
+/** Explicit per-scheduler resource cost (plan §6) — estimates stay optional. */
+export interface RecordingResourceUsage {
+  activeStreams: number;
+  activeProcesses: number;
+  /** Observed downstream bytes/s summed over capturing workers (copy ≈ disk). */
+  estimatedNetworkBps?: number;
+  estimatedDiskBps?: number;
+  /** Owned by the Phase G transcode pool — always 0 until then. */
+  activeTranscodes: number;
+  queuedTranscodes: number;
 }
 
 export interface RecordingServiceEvents {
@@ -107,9 +194,65 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
   private settings: RecordingSettings;
   private readonly resolveStream?: RecordingServiceOptions['resolveStream'];
   private readonly isLowResourceMode?: () => boolean;
+  private readonly getEntitlements?: () => Entitlements;
+  private readonly getGateNotifier?: () => GateNotifier | undefined;
   private readonly activeRecordings = new Map<string, AbortController>();
   /** Jobs currently being finalized because the live stream ended. */
   private readonly finalizingJobs = new Set<string>();
+  /**
+   * ponytail: jobs the user paused while their capture pipeline is between
+   * downloader generations (reconnect backoff, retry sleep). The row says
+   * 'paused' already; this flag stops the pipeline from launching another
+   * download generation behind it (pause must actually stop the capture).
+   */
+  private readonly pausedJobs = new Set<string>();
+  /** In-memory worker lifecycle per job (plan §5) — the DB row stays authoritative. */
+  private readonly workerStates = new Map<string, WorkerStateMachine>();
+  /**
+   * plan §10: per-job progress accumulator. FFmpeg/yt-dlp emit progress per
+   * log line; only the latest snapshot per flush window reaches SQLite
+   * (≤0.5 writes/s/stream at 30 streams instead of ~30/s).
+   */
+  private readonly progressAcc = new Map<
+    string,
+    { latest: YtDlpProgress; lastFlush: number; lastWritten: YtDlpProgress | null }
+  >();
+  private readonly progressFlushMs: number;
+  private readonly getMinFreeBytes?: () => number;
+  private readonly getDerivativeCrf?: () => number;
+  private readonly startGapMs: number;
+  private readonly admissionRetryMs: number;
+  /**
+   * plan §13: background post-processing (verify/repair/remux/thumbnail/
+   * metadata) drains at concurrency 1; explicit downgrade transcodes drain
+   * at concurrency 2. The live path only enqueues — it never awaits these.
+   */
+  readonly postQueue: WorkQueue;
+  readonly transcodeQueue: WorkQueue;
+  /**
+   * plan §9: staggered-start queue. Bursts (e.g. 30 auto-records firing at
+   * once) launch at most one capture per START_GAP_MS instead of spawning
+   * every child in the same tick.
+   */
+  private readonly startQueue: Array<{
+    jobId: string;
+    stream: StreamObject;
+    options: StartRecordingOptions;
+  }> = [];
+  private startPumpActive = false;
+  private lastStartAt = 0;
+  /** Instant-end floor (see the capture loop); 0 disables the check. */
+  private readonly minCaptureSeconds: number;
+
+  /** Default minimum gap between capture launches (plan §9). */
+  static readonly START_GAP_MS = 2000;
+  /** Max wait for a paused pipeline to finish parking before resume gives up. */
+  static readonly RESUME_PARK_WAIT_MS = 10_000;
+  /** Cooldown before a parked queued start is reconsidered. */
+  static readonly ADMISSION_RETRY_MS = 5000;
+
+  /** Default flush cadence for recording progress → SQLite. */
+  static readonly PROGRESS_FLUSH_MS = 2000;
 
   constructor(options: RecordingServiceOptions) {
     super();
@@ -121,16 +264,44 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
     this.verifier = new FileVerifier();
     this.resolveStream = options.resolveStream;
     this.isLowResourceMode = options.isLowResourceMode;
+    this.getEntitlements = options.getEntitlements;
+    this.getGateNotifier = options.getGateNotifier;
+    this.progressFlushMs = options.progressFlushMs ?? RecordingService.PROGRESS_FLUSH_MS;
+    this.getMinFreeBytes = options.getMinFreeBytes;
+    this.getDerivativeCrf = options.getDerivativeCrf;
+    this.minCaptureSeconds =
+      options.minMeaningfulCaptureSeconds ?? DEFAULT_MIN_MEANINGFUL_CAPTURE_SECONDS;
+    this.startGapMs = options.startGapMs ?? RecordingService.START_GAP_MS;
+    this.admissionRetryMs = options.admissionRetryMs ?? RecordingService.ADMISSION_RETRY_MS;
+    this.postQueue = new WorkQueue(1, this.logger);
+    this.transcodeQueue = new WorkQueue(2, this.logger);
     this.settings = { ...DEFAULT_SETTINGS, outputDir: options.defaultOutputDir };
 
-    // ponytail: progress events carry the jobId — update only that job
+    // ponytail: progress events carry the jobId — the accumulator flushes at
+    // most one SQLite write per job per PROGRESS_FLUSH_MS window, skipping
+    // windows whose snapshot is identical to the last write (plan §10).
     this.ytDlp.on('progress', (jobId, progress) => {
-      this.repo.updateJob(jobId, {
-        bytesDownloaded: progress.bytesDownloaded,
-        speed: progress.speed,
-        eta: progress.eta,
-        percent: progress.percent,
-      });
+      const now = Date.now();
+      let entry = this.progressAcc.get(jobId);
+      if (entry === undefined) {
+        entry = { latest: progress, lastFlush: 0, lastWritten: null };
+        this.progressAcc.set(jobId, entry);
+      } else {
+        entry.latest = progress;
+      }
+      if (
+        now - entry.lastFlush >= this.progressFlushMs &&
+        !sameProgress(entry.lastWritten, progress)
+      ) {
+        entry.lastFlush = now;
+        entry.lastWritten = { ...progress };
+        this.repo.updateJob(jobId, {
+          bytesDownloaded: progress.bytesDownloaded,
+          speed: progress.speed,
+          eta: progress.eta,
+          percent: progress.percent,
+        });
+      }
     });
 
     // ponytail: persist the downloader's OS pid so the job can be re-adopted
@@ -143,19 +314,167 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
 
   // --- Lifecycle ------------------------------------------------------------
 
-  /** Effective concurrency cap: Low-Resource Mode forces a single slot. */
+  /**
+   * Effective concurrency cap: Low-Resource Mode forces a single slot; the
+   * Pro-tier entitlement clamps the user setting on the free tier.
+   */
   private get effectiveMaxConcurrent(): number {
-    return this.isLowResourceMode?.() === true ? 1 : this.settings.maxConcurrent;
+    const entitlementCap = this.getEntitlements?.().maxConcurrent;
+    const base =
+      entitlementCap !== undefined
+        ? Math.min(this.settings.maxConcurrent, entitlementCap)
+        : this.settings.maxConcurrent;
+    return this.isLowResourceMode?.() === true ? Math.min(base, 1) : base;
+  }
+
+  /**
+   * Pro tier: when the tier (not the user setting / low-resource mode) is
+   * the binding constraint, the refusal message doubles as the upgrade CTA
+   * and the hit is recorded as a persistent gate notification.
+   */
+  private maxConcurrentError(): AppError {
+    const entitlementCap = this.getEntitlements?.().maxConcurrent;
+    const tierLimited =
+      entitlementCap !== undefined &&
+      Number.isFinite(entitlementCap) &&
+      entitlementCap < this.settings.maxConcurrent &&
+      this.isLowResourceMode?.() !== true;
+    if (tierLimited) {
+      this.getGateNotifier?.()?.concurrencyLimitReached(entitlementCap);
+    }
+    return new AppError({
+      code: 'MAX_CONCURRENT_RECORDINGS',
+      message: tierLimited
+        ? `You're already recording ${entitlementCap} streams — that's the free-tier maximum. Upgrade to Pro for unlimited recordings.`
+        : `Maximum concurrent recordings (${this.effectiveMaxConcurrent}) reached`,
+      recoverable: true,
+    });
+  }
+
+  /**
+   * Drive the in-memory worker state machine. Bookkeeping must never break
+   * the pipeline, so illegal transitions are logged and skipped — the DB
+   * row remains the source of truth for recovery.
+   */
+  private setWorkerState(jobId: string, to: WorkerState): void {
+    let machine = this.workerStates.get(jobId);
+    if (machine === undefined) {
+      machine = new WorkerStateMachine();
+      this.workerStates.set(jobId, machine);
+    }
+    try {
+      machine.transition(to);
+    } catch (error) {
+      this.logger.warn({ jobId, to, from: machine.state, error }, 'worker state transition skipped');
+    }
+  }
+
+  /** In-memory worker lifecycle state (plan §5); undefined once removed. */
+  getWorkerState(jobId: string): WorkerState | undefined {
+    return this.workerStates.get(jobId)?.state;
+  }
+
+  /**
+   * plan §6/§9: lightweight resource accounting from in-memory state only
+   * (no DB reads, no speed tests). Bitrate estimates come from observed
+   * worker throughput and stay `undefined` until the first progress lands,
+   * so unknown estimates degrade gracefully (constraint §0.1.4).
+   */
+  getResourceUsage(): RecordingResourceUsage {
+    let activeStreams = 0;
+    let estimatedNetworkBps = 0;
+    let observed = false;
+    for (const [jobId, machine] of this.workerStates) {
+      const state = machine.state;
+      if (
+        state === 'RESOLVING' ||
+        state === 'STARTING' ||
+        state === 'RECORDING' ||
+        state === 'RECONNECTING' ||
+        state === 'RE_RESOLVING'
+      ) {
+        activeStreams++;
+        const latest = this.progressAcc.get(jobId)?.latest;
+        if (latest !== undefined) {
+          // ponytail: progress `speed` mixes B/s (yt-dlp) and bps
+          // (ffmpeg-relay) sources — treat the sum as an approximation for
+          // admission only, never as billing-grade telemetry.
+          estimatedNetworkBps += latest.speed;
+          observed = true;
+        }
+      }
+    }
+    return {
+      activeStreams,
+      activeProcesses: this.ytDlp.getActivePids().length,
+      ...(observed
+        ? { estimatedNetworkBps, estimatedDiskBps: estimatedNetworkBps }
+        : {}),
+      activeTranscodes: this.transcodeQueue.activeCount,
+      queuedTranscodes: this.transcodeQueue.size,
+    };
+  }
+
+  /** Queue a pipeline launch behind the staggered-start pump (plan §9). */
+  private enqueueStart(jobId: string, stream: StreamObject, options: StartRecordingOptions): void {
+    this.startQueue.push({ jobId, stream, options });
+    void this.pumpStartQueue();
+  }
+
+  private async pumpStartQueue(): Promise<void> {
+    if (this.startPumpActive) return;
+    this.startPumpActive = true;
+    try {
+      while (this.startQueue.length > 0) {
+        const gapWait = this.startGapMs - (Date.now() - this.lastStartAt);
+        if (gapWait > 0) await sleep(gapWait);
+        const next = this.startQueue[0]!;
+        const row = this.repo.getJob(next.jobId);
+        if (row === undefined || (row.status !== 'preparing' && row.status !== 'queued')) {
+          // Cancelled/removed while queued — drop without launching.
+          this.startQueue.shift();
+          continue;
+        }
+        if (!(await this.admissionOpen())) {
+          // plan §13: pressure parks the start at the tail (still QUEUED),
+          // never fails it and never throttles the live workers.
+          this.startQueue.push(this.startQueue.shift()!);
+          await sleep(this.admissionRetryMs);
+          continue;
+        }
+        this.startQueue.shift();
+        this.lastStartAt = Date.now();
+        this.processRecording(next.jobId, next.stream, next.options).catch((error) => {
+          this.logger.error({ jobId: next.jobId, error }, 'recording pipeline failed');
+        });
+      }
+    } finally {
+      this.startPumpActive = false;
+    }
+  }
+
+  /** Launch-time admission: hard ceiling + output-drive room (plan §9). */
+  private async admissionOpen(): Promise<boolean> {
+    if (this.repo.listJobs('recording').length >= this.effectiveMaxConcurrent) return false;
+    return this.diskRoomForStart();
+  }
+
+  private async diskRoomForStart(): Promise<boolean> {
+    const minFree = this.getMinFreeBytes?.() ?? 0;
+    if (minFree <= 0) return true;
+    try {
+      const stats = await statfs(this.settings.outputDir);
+      return stats.bavail * stats.bsize >= minFree;
+    } catch {
+      // A failed probe must not block capture (graceful degradation).
+      return true;
+    }
   }
 
   async startRecording(stream: StreamObject, options: StartRecordingOptions = {}): Promise<string> {
     const activeCount = this.repo.listJobs('recording').length;
     if (activeCount >= this.effectiveMaxConcurrent) {
-      throw new AppError({
-        code: 'MAX_CONCURRENT_RECORDINGS',
-        message: `Maximum concurrent recordings (${this.effectiveMaxConcurrent}) reached`,
-        recoverable: true,
-      });
+      throw this.maxConcurrentError();
     }
 
     const jobId = randomUUID();
@@ -197,14 +516,19 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
       data: { jobId },
     });
 
-    // Start the recording pipeline asynchronously
-    this.processRecording(jobId, stream, options).catch((error) => {
-      this.logger.error({ jobId, error }, 'recording pipeline failed');
-    });
+    // Start the recording pipeline via the staggered-start pump (plan §9) —
+    // the job row stays 'preparing' until its launch slot arrives.
+    this.enqueueStart(jobId, stream, options);
 
     return jobId;
   }
 
+  /**
+   * Pause a live recording: stop the underlying downloader process and park
+   * the job in 'paused' — whatever was captured stays on disk as a part file
+   * and resumeRecording continues into a new part (same flow as resuming a
+   * cancelled recording).
+   */
   async pauseRecording(jobId: string): Promise<void> {
     const job = this.repo.getJob(jobId);
     if (job === undefined) {
@@ -218,12 +542,29 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
       });
     }
 
-    this.repo.updateJob(jobId, { status: 'paused' });
+    this.pausedJobs.add(jobId);
+    this.repo.updateJob(jobId, { status: 'paused', speed: 0, eta: 0 });
     this.emitEvent({
       type: 'recording-paused',
       jobId,
       timestamp: new Date().toISOString(),
     });
+
+    // Stop the actual capture (same graceful stop the finalize path uses) —
+    // only flipping the row left the process recording behind a 'paused'
+    // label. The stopped downloader resolves the pipeline below, which
+    // detects the paused intent and keeps the partial on disk.
+    const stopped = this.ytDlp.stopDownload(jobId);
+    // Adopted orphaned recordings have no ChildProcess handle in this
+    // session — kill the whole tree by the persisted pid instead.
+    if (!stopped && job.pid !== null && job.pid !== undefined) {
+      await this.ytDlp.stopPidTreeAsync(job.pid);
+    }
+    if (!stopped) {
+      // No live process to stop (e.g. mid-reconnect) — unblock the waiting
+      // pipeline directly; it re-checks pausedJobs before any restart.
+      this.activeRecordings.get(jobId)?.abort();
+    }
   }
 
   async resumeRecording(jobId: string): Promise<void> {
@@ -233,91 +574,31 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
     }
 
     if (job.status === 'paused') {
-      this.repo.updateJob(jobId, { status: 'recording' });
-      this.emitEvent({
-        type: 'recording-resumed',
-        jobId,
-        timestamp: new Date().toISOString(),
-      });
+      // ponytail: pausing parks the previous pipeline (stops the downloader,
+      // promotes its partial) — resume must wait for that unwind to finish
+      // or the two sessions race on the same output files.
+      const deadline = Date.now() + RecordingService.RESUME_PARK_WAIT_MS;
+      while (this.activeRecordings.has(jobId) && Date.now() < deadline) {
+        await sleep(100);
+      }
+      if (this.activeRecordings.has(jobId)) {
+        throw new AppError({
+          code: 'INVALID_STATE',
+          message: 'The recording is still stopping — try resuming again in a moment.',
+          recoverable: true,
+        });
+      }
+      // Only now is it safe to clear the pause intent: while it was set, the
+      // winding-down pipeline kept the job parked instead of failing it.
+      this.pausedJobs.delete(jobId);
+      await this.continueIntoNewPart(job);
       return;
     }
 
     // ponytail: resuming a cancelled recording continues the capture into a
     // numbered part file — only possible while the broadcast is still live.
     if (job.status === 'cancelled') {
-      const partialPath = job.filePath;
-      if (
-        typeof partialPath !== 'string' ||
-        partialPath === '' ||
-        !(await fileExists(partialPath))
-      ) {
-        throw new AppError({
-          code: 'INVALID_STATE',
-          message: 'No partial file to resume — use Retry to start a fresh recording.',
-          recoverable: true,
-        });
-      }
-
-      const activeCount = this.repo.listJobs('recording').length;
-      if (activeCount >= this.effectiveMaxConcurrent) {
-        throw new AppError({
-          code: 'MAX_CONCURRENT_RECORDINGS',
-          message: `Maximum concurrent recordings (${this.effectiveMaxConcurrent}) reached`,
-          recoverable: true,
-        });
-      }
-
-      // Liveness check + fresh stream URL (the old one has expired by now).
-      // resolveStream returning null / throwing means the broadcast ended.
-      let stream: StreamObject | null = null;
-      if (this.resolveStream !== undefined) {
-        try {
-          stream = await this.resolveStream(job);
-        } catch (error) {
-          this.logger.warn({ jobId, error }, 'stream re-resolution failed during resume');
-        }
-      }
-      if (stream === null) {
-        throw new AppError({
-          code: 'STREAM_OFFLINE',
-          message: 'Broadcast is no longer live — cannot resume this recording.',
-          recoverable: true,
-        });
-      }
-
-      // Preserve the partial as part 1 of the eventually merged file.
-      const part1 = partialPath.replace(/\.mp4$/i, '.part1.mp4');
-      await rename(partialPath, part1);
-
-      this.repo.updateJob(jobId, {
-        status: 'queued',
-        error: null,
-        streamUrl: stream.streamUrl,
-        bytesDownloaded: 0,
-        speed: 0,
-        eta: 0,
-        percent: 0,
-        finishedAt: null,
-      });
-      this.emitEvent({
-        type: 'recording-queued',
-        jobId,
-        timestamp: new Date().toISOString(),
-      });
-
-      this.notifications.send({
-        level: 'info',
-        title: 'Recording resumed',
-        message: `Continuing recording "${job.title}"`,
-        data: { jobId },
-      });
-
-      this.processRecording(jobId, { ...stream, title: job.title }, {
-        quality: job.quality ?? undefined,
-        resumeFrom: partialPath,
-      }).catch((error) => {
-        this.logger.error({ jobId, error }, 'recording resume pipeline failed');
-      });
+      await this.continueIntoNewPart(job);
       return;
     }
 
@@ -326,6 +607,107 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
       message: `Cannot resume recording in state: ${job.status}`,
       recoverable: true,
     });
+  }
+
+  /**
+   * ponytail: continue a paused/cancelled recording into a numbered part
+   * file of the original capture — only possible while the broadcast is
+   * still live. Resolves a fresh stream URL (the old one has expired),
+   * preserves the partial as part 1, and relaunches the pipeline with
+   * `resumeFrom` so the parts are merged back into one file on completion.
+   */
+  private async continueIntoNewPart(
+    job: RecordingJobRecord,
+  ): Promise<void> {
+    const jobId = job.id;
+    // ponytail: re-read the row — pausing may have updated filePath (parked
+    // partial) after this function's snapshot was taken.
+    const current = this.repo.getJob(jobId);
+    if (current !== undefined) job = current;
+    const partialPath = job.filePath;
+    if (
+      typeof partialPath !== 'string' ||
+      partialPath === '' ||
+      !(await fileExists(partialPath))
+    ) {
+      throw new AppError({
+        code: 'INVALID_STATE',
+        message: 'No partial file to resume — use Retry to start a fresh recording.',
+        recoverable: true,
+      });
+    }
+
+    const activeCount = this.repo.listJobs('recording').length;
+    if (activeCount >= this.effectiveMaxConcurrent) {
+      throw this.maxConcurrentError();
+    }
+
+    // Liveness check + fresh stream URL (the old one has expired by now).
+    // resolveStream returning null / throwing means the broadcast ended.
+    let stream: StreamObject | null = null;
+    if (this.resolveStream !== undefined) {
+      try {
+        stream = await this.resolveStream(job);
+      } catch (error) {
+        this.logger.warn({ jobId, error }, 'stream re-resolution failed during resume');
+      }
+    }
+    if (stream === null) {
+      throw new AppError({
+        code: 'STREAM_OFFLINE',
+        message: 'Broadcast is no longer live — cannot resume this recording.',
+        recoverable: true,
+      });
+    }
+
+    // Preserve the partial as part 1 of the eventually merged file.
+    // ponytail: a session resumed from an earlier pause/cancel writes to
+    // `.partN.mp4` siblings — that partial is ALREADY a part of the original
+    // capture, so keep it in place and resume from the original final path
+    // (renaming it here used to produce an unmergeable `.part2.part1.mp4`).
+    const partMatch = /^(.+)\.part\d+\.mp4$/i.exec(partialPath);
+    const resumeBase = partMatch !== null ? partMatch[1]! : partialPath;
+    if (partMatch === null) {
+      const part1 = partialPath.replace(/\.mp4$/i, '.part1.mp4');
+      await rename(partialPath, part1);
+    }
+
+    this.repo.updateJob(jobId, {
+      status: 'queued',
+      error: null,
+      streamUrl: stream.streamUrl,
+      bytesDownloaded: 0,
+      speed: 0,
+      eta: 0,
+      percent: 0,
+      finishedAt: null,
+    });
+    this.emitEvent({
+      type: 'recording-queued',
+      jobId,
+      timestamp: new Date().toISOString(),
+    });
+    this.emitEvent({
+      type: 'recording-resumed',
+      jobId,
+      timestamp: new Date().toISOString(),
+    });
+
+    this.notifications.send({
+      level: 'info',
+      title: 'Recording resumed',
+      message: `Continuing recording "${job.title}"`,
+      data: { jobId },
+    });
+
+    this.enqueueStart(
+      jobId,
+      { ...stream, title: job.title },
+      {
+        quality: job.quality ?? undefined,
+        resumeFrom: resumeBase,
+      },
+    );
   }
 
   async cancelRecording(jobId: string): Promise<void> {
@@ -339,11 +721,14 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
       controller.abort();
       this.activeRecordings.delete(jobId);
     }
+    // ponytail: a pending resume handoff must not relaunch behind a cancel.
+    this.pausedJobs.delete(jobId);
 
     this.ytDlp.cancelDownload(jobId);
     // ponytail: adopted orphaned recordings have no ChildProcess handle in
     // this session — kill the whole tree by the persisted pid instead.
     if (job.pid !== null && job.pid !== undefined) this.ytDlp.stopPidTree(job.pid);
+    this.setWorkerState(jobId, 'STOPPING');
     this.repo.updateJob(jobId, { status: 'cancelled', finishedAt: new Date().toISOString() });
 
     this.emitEvent({
@@ -378,6 +763,9 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
         recoverable: true,
       });
     }
+    this.workerStates.delete(jobId);
+    this.progressAcc.delete(jobId);
+    this.pausedJobs.delete(jobId);
     this.repo.removeJob(jobId);
     this.logger.info({ jobId }, 'recording job removed');
   }
@@ -389,6 +777,9 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
       ...this.repo.listJobs('cancelled'),
     ];
     for (const job of failed) {
+      this.workerStates.delete(job.id);
+      this.progressAcc.delete(job.id);
+      this.pausedJobs.delete(job.id);
       this.repo.removeJob(job.id);
     }
     if (failed.length > 0) {
@@ -412,11 +803,7 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
 
     const activeCount = this.repo.listJobs('recording').length;
     if (activeCount >= this.effectiveMaxConcurrent) {
-      throw new AppError({
-        code: 'MAX_CONCURRENT_RECORDINGS',
-        message: `Maximum concurrent recordings (${this.effectiveMaxConcurrent}) reached`,
-        recoverable: true,
-      });
+      throw this.maxConcurrentError();
     }
 
     // ponytail: rebuild the Standard Stream Object from the stored job so the
@@ -456,11 +843,9 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
       data: { jobId },
     });
 
-    // Re-launch the recording pipeline asynchronously
-    this.processRecording(jobId, stream, {
+    // Re-launch the recording pipeline via the staggered-start pump (plan §9).
+    this.enqueueStart(jobId, stream, {
       quality: job.quality ?? undefined,
-    }).catch((error) => {
-      this.logger.error({ jobId, error }, 'recording retry pipeline failed');
     });
   }
 
@@ -490,6 +875,7 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
     if (this.finalizingJobs.has(jobId)) return;
 
     this.finalizingJobs.add(jobId);
+    this.setWorkerState(jobId, 'STOPPING');
     this.repo.updateJob(jobId, { status: 'stopping' });
 
     this.emitEvent({
@@ -523,49 +909,104 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
    * is missing or dead get one command-line-scan fallback, then the old
    * behavior applies: marked failed so no zombie recording cards linger.
    * Returns the number of adopted recordings.
+   *
+   * plan §11: fully async — liveness probes run concurrently and all
+   * command-line fallbacks share ONE bulk process snapshot, so 30 orphans
+   * cost ~1 powershell call instead of 30 blocking scans.
    */
-  recoverStaleJobs(): number {
+  async recoverStaleJobs(): Promise<number> {
     const TERMINAL = ['failed', 'completed', 'cancelled'];
     const RECORDER_NAMES = ['ffmpeg.exe', 'yt-dlp.exe'];
-    const stale = this.getJobs().filter((job) => !TERMINAL.includes(job.status));
+    let stale: RecordingJobRecord[];
+    try {
+      stale = this.getJobs().filter((job) => !TERMINAL.includes(job.status));
+    } catch (error) {
+      // ponytail: a torn jobs table after a force-kill must not throw out of
+      // boot (which left the app headless holding the single-instance lock).
+      this.logger.warn({ error }, 'stale recording recovery skipped — jobs unreadable');
+      return 0;
+    }
     const now = new Date().toISOString();
+
+    const liveByJob = new Map<string, boolean>();
+    await Promise.all(
+      stale.map(async (job) => {
+        const live =
+          job.pid !== null &&
+          job.pid !== undefined &&
+          (await isPidAliveAsync(job.pid, RECORDER_NAMES));
+        liveByJob.set(job.id, live);
+      }),
+    );
+
+    // ponytail: the pid write may never have landed before the app closed —
+    // fall back to matching output-path fragments against a single snapshot
+    // (a failure here degrades to "mark failed", never throws out of boot).
+    const needsFallback = stale.some(
+      (job) =>
+        liveByJob.get(job.id) !== true &&
+        job.filePath !== null &&
+        job.filePath !== undefined &&
+        job.filePath !== '',
+    );
+    const snapshots = needsFallback ? await listRecorderProcessesAsync() : [];
+    const matchSnapshot = (fragment: string): number | null => {
+      const normalized = fragment.replace(/['*?]/g, ' ');
+      return snapshots.find((s) => s.commandLine.includes(normalized))?.pid ?? null;
+    };
+
     let adopted = 0;
-    for (const job of stale) {
-      const pidLive =
-        job.pid !== null && job.pid !== undefined && isPidAlive(job.pid, RECORDER_NAMES);
-      // ponytail: fallback — the pid write may never have landed before the
-      // app closed. Scan running recorder processes by output-path fragment.
-      const scanned =
-        pidLive
-          ? []
-          : job.filePath !== null && job.filePath !== undefined && job.filePath !== ''
-            ? findRecordingProcessPids(job.filePath)
-            : [];
-      const pid = pidLive ? job.pid! : (scanned[0] ?? null);
-      if (pid !== null) {
-        this.repo.updateJob(job.id, { status: 'recording', error: null, pid });
-        void this.watchOrphanedJob(job.id, { stable: 0, idle: 0, lastSize: -1 });
-        this.emitEvent({ type: 'recording-started', jobId: job.id, timestamp: now });
-        this.notifications.send({
-          level: 'info',
-          title: 'Recording re-attached',
-          message: `${job.title} kept recording while the app was closed — it is still being captured.`,
-          data: { jobId: job.id },
-        });
-        this.logger.info(
-          { jobId: job.id, pid, viaCommandLineScan: !pidLive },
-          'adopted orphaned recording process',
-        );
-        adopted++;
-      } else {
-        this.repo.updateJob(job.id, {
-          status: 'failed',
-          error: 'App restarted while the recording was active',
-          finishedAt: now,
-        });
+    const RECOVERABLE = ['queued', 'preparing', 'recording', 'stopping', 'processing'];
+    for (const job of stale.filter((j) => RECOVERABLE.includes(j.status))) {
+      try {
+        const pidLive = liveByJob.get(job.id) === true;
+        const pid =
+          pidLive
+            ? job.pid!
+            : job.filePath !== null && job.filePath !== undefined && job.filePath !== ''
+              ? matchSnapshot(job.filePath)
+              : null;
+        if (pid !== null) {
+          this.workerStates.set(job.id, new WorkerStateMachine('RECORDING'));
+          this.repo.updateJob(job.id, { status: 'recording', error: null, pid });
+          void this.watchOrphanedJob(job.id, { stable: 0, idle: 0, lastSize: -1 });
+          this.emitEvent({ type: 'recording-started', jobId: job.id, timestamp: now });
+          this.notifications.send({
+            level: 'info',
+            title: 'Recording re-attached',
+            message: `${job.title} kept recording while the app was closed — it is still being captured.`,
+            data: { jobId: job.id },
+          });
+          this.logger.info(
+            { jobId: job.id, pid, viaCommandLineScan: !pidLive },
+            'adopted orphaned recording process',
+          );
+          adopted++;
+        } else {
+          this.repo.updateJob(job.id, {
+            status: 'failed',
+            error: 'App restarted while the recording was active',
+            finishedAt: now,
+          });
+        }
+      } catch (error) {
+        // ponytail: one torn row must not abort recovery of the rest — mark
+        // best-effort failed and continue so boot always reaches a window.
+        try {
+          this.repo.updateJob(job.id, {
+            status: 'failed',
+            error: 'App restarted while the recording was active',
+            finishedAt: now,
+          });
+        } catch {
+          /* row unreadable — nothing to reconcile */
+        }
+        this.logger.warn({ jobId: job.id, error }, 'stale recording job skipped');
       }
     }
-    const failedCount = stale.length - adopted;
+    // ponytail: parked 'paused' rows are excluded above — they survive the
+    // restart resumable, so they must not inflate the failed count.
+    const failedCount = stale.filter((j) => RECOVERABLE.includes(j.status)).length - adopted;
     if (adopted > 0) this.logger.info({ adopted }, 're-attached orphaned recordings');
     if (failedCount > 0) {
       this.logger.warn({ count: failedCount }, 'marked stale recording jobs as failed');
@@ -605,13 +1046,13 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
       }
     }
 
-    if (isPidAlive(job.pid, ['ffmpeg.exe', 'yt-dlp.exe'])) {
+    if (await isPidAliveAsync(job.pid, ['ffmpeg.exe', 'yt-dlp.exe'])) {
       state.idle =
         size === state.lastSize && state.lastSize >= 0 ? state.idle + 1 : 0;
       state.lastSize = size;
       if (state.idle >= MAX_IDLE_POLLS) {
         this.logger.warn({ jobId, pid: job.pid }, 'orphaned recording stalled — stopping it');
-        this.ytDlp.stopPidTree(job.pid);
+        await this.ytDlp.stopPidTreeAsync(job.pid);
       }
       setTimeout(() => void this.watchOrphanedJob(jobId, state), POLL_MS).unref?.();
       return;
@@ -649,6 +1090,7 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
         });
       }
       this.repo.updateJob(jobId, { status: 'processing' });
+      this.setWorkerState(jobId, 'FINALIZING');
       const resolved = await this.resolveDownloadedFile(job.filePath);
       if (resolved === null) {
         throw new AppError({
@@ -657,8 +1099,6 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
           recoverable: true,
         });
       }
-      const normalized = await this.normalizeContainer(jobId, resolved);
-      await this.repairPartialFile(normalized);
       const stream: StreamObject = {
         creatorId: job.creatorId ?? '',
         creatorName: job.title.split('_')[0] || job.creatorId || job.platformId,
@@ -667,9 +1107,17 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
         streamUrl: job.streamUrl,
         thumbnail: job.thumbnail ?? undefined,
       };
-      await this.saveToLibrary(jobId, stream, normalized, basename(normalized), 'completed');
+      // plan §13: entry + completed row now; normalize/repair/enrichment drain
+      // in the background queue like the live pipeline.
+      const { recordingId } = await this.createLibraryEntry(
+        jobId,
+        stream,
+        resolved,
+        basename(resolved),
+        'completed',
+      );
       const now = new Date().toISOString();
-      this.repo.updateJob(jobId, { status: 'completed', finishedAt: now, pid: null });
+      this.repo.updateJob(jobId, { status: 'completed', verified: false, finishedAt: now, pid: null });
       this.emitEvent({ type: 'recording-completed', jobId, timestamp: now });
       this.notifications.send({
         level: 'info',
@@ -677,8 +1125,19 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
         message: `${job.title} finished while the app was closed and was saved to your Library.`,
         data: { jobId },
       });
+      this.postQueue.enqueue({
+        key: `${jobId}-finalize-orphan`,
+        run: () =>
+          this.finalizeFileBackground({
+            jobId,
+            recordingId,
+            filePath: resolved,
+            wasFinalized: true,
+          }),
+      });
     } catch (error) {
       const now = new Date().toISOString();
+      this.setWorkerState(jobId, 'FAILED');
       this.repo.updateJob(jobId, {
         status: 'failed',
         error: 'Orphaned recording could not be finalized',
@@ -710,8 +1169,31 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
     stream: StreamObject,
     options: StartRecordingOptions = {},
   ): Promise<void> {
+    // Pro tier gate: clamp the per-recording duration to the tier cap. A
+    // user-requested longer duration (or none) is shortened on the free
+    // tier; Pro (Infinity) leaves options untouched.
+    const tierCapMinutes = this.getEntitlements?.().maxRecordingMinutes;
+    if (
+      tierCapMinutes !== undefined &&
+      Number.isFinite(tierCapMinutes) &&
+      (options.durationMinutes === undefined ||
+        options.durationMinutes <= 0 ||
+        options.durationMinutes > tierCapMinutes)
+    ) {
+      options = {
+        ...options,
+        durationMinutes: tierCapMinutes,
+        // ponytail: the free-tier cap must END the recording, not chain a
+        // new segment — segmentMinutes is suppressed so the cap-reached
+        // completion is final.
+        segmentMinutes: undefined,
+      };
+    }
+
     const controller = new AbortController();
     this.activeRecordings.set(jobId, controller);
+    // plan §5: each pipeline run owns a fresh worker lifecycle starting QUEUED.
+    this.workerStates.set(jobId, new WorkerStateMachine());
 
     // ponytail: track the output path at the closure level so the catch block
     // can save partial files even when the job row has no filePath yet.
@@ -755,6 +1237,22 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
           options.durationMinutes * 60 * 1000 + 15_000,
         );
         watchdog.unref?.();
+
+        // Pro tier: warn the user 2 minutes before the free-tier cap ends
+        // the recording, so the stop never comes as a surprise.
+        const warningMs = (options.durationMinutes - 2) * 60 * 1000;
+        if (warningMs > 0) {
+          const capWarning = setTimeout(() => {
+            this.emitEvent({
+              type: 'recording-cap-warning',
+              jobId,
+              data: { minutesLeft: 2 },
+              timestamp: new Date().toISOString(),
+            });
+            this.getGateNotifier?.()?.capWarning(jobId, stream.title, 2);
+          }, warningMs);
+          capWarning.unref?.();
+        }
       }
 
       // ponytail: segment-splitting watchdog — mirrors the duration watchdog
@@ -773,45 +1271,226 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
       // ponytail: the stream may have ended while we were preparing — skip the download
       if (this.finalizingJobs.has(jobId)) {
         this.finalizingJobs.delete(jobId);
+        this.setWorkerState(jobId, 'STOPPING');
         this.repo.updateJob(jobId, { status: 'cancelled', finishedAt: new Date().toISOString() });
         return;
       }
 
-      // Download with yt-dlp
-      const downloadResult = await this.ytDlp.download(
-        jobId,
-        stream.streamUrl,
-        outputPath,
-        {
-          quality: options.quality ?? this.settings.defaultQuality,
-          headers: stream.headers,
-          cookies: stream.cookies?.map((c) => ({ name: c.name, value: c.value })),
-          resume: true,
-          // ponytail: segmentMinutes (splitting) takes precedence over the
-          // stop-after cap — the UI treats them as mutually exclusive.
-          durationSeconds:
-            options.segmentMinutes !== undefined && options.segmentMinutes > 0
-              ? options.segmentMinutes * 60
-              : options.durationMinutes !== undefined && options.durationMinutes > 0
-                ? options.durationMinutes * 60
-                : undefined,
-        },
-      );
+      this.setWorkerState(jobId, 'RESOLVING');
+      this.setWorkerState(jobId, 'STARTING');
+      this.setWorkerState(jobId, 'RECORDING');
+
+      // Download with yt-dlp. URL expiry (class B failure) is retried in-loop
+      // with a FRESH stream URL: each generation is preserved as an explicit
+      // `.partN.mp4` (plan §0.1.3 continuity — restarts are visible parts,
+      // never silent gaps) and merged exactly like the resume flow on success.
+      // Fresh sessions only: resume sessions already own the part namespace
+      // via `resumeFrom`, so a failure there keeps the existing failed path.
+      let downloadResult: Awaited<ReturnType<YtDlpService['download']>>;
+      const reResolvedSegments: string[] = [];
+      let captureStream = stream;
+      const downloadOptions = {
+        quality: options.quality ?? this.settings.defaultQuality,
+        headers: stream.headers,
+        cookies: stream.cookies?.map((c) => ({ name: c.name, value: c.value })),
+        // ponytail: route child fetches through the host proxy when the
+        // plugin flagged the stream (creators.useProxy).
+        proxyUrl: stream.proxyUrl,
+        resume: true,
+        // ponytail: segmentMinutes (splitting) takes precedence over the
+        // stop-after cap — the UI treats them as mutually exclusive.
+        durationSeconds:
+          options.segmentMinutes !== undefined && options.segmentMinutes > 0
+            ? options.segmentMinutes * 60
+            : options.durationMinutes !== undefined && options.durationMinutes > 0
+              ? options.durationMinutes * 60
+              : undefined,
+      };
+      for (let reResolveCount = 0; ; reResolveCount++) {
+        // ponytail: pause landed between generations — never spawn another
+        // capture behind a 'paused' row. Throwing here sends the pipeline to
+        // the pause-aware unwind below (same as a stopped downloader).
+        if (this.pausedJobs.has(jobId)) {
+          throw new AppError({
+            code: 'RECORDING_PAUSED',
+            message: 'Recording paused by user',
+            recoverable: true,
+          });
+        }
+        try {
+          downloadResult = await this.ytDlp.download(
+            jobId,
+            captureStream.streamUrl,
+            outputPath,
+            {
+              ...downloadOptions,
+              headers: captureStream.headers,
+              cookies: captureStream.cookies?.map((c) => ({ name: c.name, value: c.value })),
+              proxyUrl: captureStream.proxyUrl,
+            },
+          );
+          // ponytail: an instant "clean" end is NOT a completed recording.
+          // When the HLS edge drops ffmpeg's TLS handshake the playlist
+          // reload fails and ffmpeg's demuxer treats it as a natural stream
+          // end, exiting code 0 with only the buffered window (~1s) in the
+          // file — verified against MyFreeCams' video edges (final file:
+          // Duration 00:00:01.19, "Recording completed successfully").
+          // Probing the capture turns that junk into the same bounded
+          // transient-retry path any other blip takes: the partial is
+          // preserved as a part below and a fresh capture restarts.
+          if (downloadResult.stopped === false && this.minCaptureSeconds > 0) {
+            const capturedSeconds = await this.capturedDurationSeconds(outputPath);
+            if (capturedSeconds > 0 && capturedSeconds < this.minCaptureSeconds) {
+              throw new AppError({
+                code: 'CAPTURE_INSTANT_END',
+                message: `Capture stopped after only ${capturedSeconds.toFixed(1)}s — network blip, retrying`,
+                recoverable: true,
+              });
+            }
+          }
+          break;
+        } catch (error) {
+          if (controller.signal.aborted || this.finalizingJobs.has(jobId)) throw error;
+          const failureClass = classifyCaptureFailure({
+            code: error instanceof AppError ? error.code : undefined,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          // plan §4: URL_EXPIRED re-resolves to a fresh URL; TRANSIENT (ffmpeg
+          // reconnects exhausted, crash, blip) restarts capture on the SAME
+          // url — both bounded, both preserve explicit parts. Genuine endings
+          // and local fatals surface unchanged. Fresh sessions only: resume
+          // sessions own the part namespace via `resumeFrom`.
+          const retryable =
+            (failureClass === 'URL_EXPIRED' || failureClass === 'TRANSIENT') &&
+            options.resumeFrom === undefined &&
+            reResolveCount < this.settings.retryCount;
+          const needsFreshUrl = failureClass === 'URL_EXPIRED';
+          if (!retryable) throw error;
+          if (this.pausedJobs.has(jobId)) throw error;
+          if (needsFreshUrl && this.resolveStream === undefined) throw error;
+          this.setWorkerState(jobId, needsFreshUrl ? 'RE_RESOLVING' : 'RECONNECTING');
+          await sleep(computeBackoffMs(reResolveCount, this.settings.retryDelay));
+          if (controller.signal.aborted || this.finalizingJobs.has(jobId)) throw error;
+          const job = this.repo.getJob(jobId);
+          if (job === undefined) throw error;
+          // ponytail: the user paused while we slept out the reconnect
+          // backoff — do not launch another generation behind a 'paused' row.
+          // The original (stop-flagged) error unwinds the pipeline so the
+          // partial is kept and the job stays resumable.
+          if (this.pausedJobs.has(jobId)) throw error;
+          if (needsFreshUrl) {
+            const resolver = this.resolveStream;
+            if (resolver === undefined) throw error;
+            let fresh: StreamObject | null = null;
+            try {
+              fresh = await resolver(job);
+            } catch (resolveError) {
+              this.logger.warn({ jobId, error: resolveError }, 'stream re-resolution failed — keeping original failure');
+            }
+            // ponytail: null/throw means genuinely offline — surface the ORIGINAL
+            // capture error so the existing failed+salvage path runs unchanged.
+            if (fresh === null) throw error;
+            captureStream = fresh;
+            this.repo.updateJob(jobId, { streamUrl: fresh.streamUrl });
+          } else {
+            this.logger.info(
+              { jobId, failureClass, attempt: reResolveCount + 1 },
+              'transient capture failure — restarting capture on the same URL',
+            );
+          }
+          // Preserve whatever this generation captured before continuing.
+          // plan §17 integrity: probe readability first — a SIGKILL-truncated
+          // fragment (moov-less) is unplayable AND poisons the later concat
+          // merge, so it is discarded instead of preserved as a part. Readable
+          // partials (clean error exits, yt-dlp .part TS files) are kept.
+          const partial = await this.resolveDownloadedFile(outputPath);
+          if (
+            partial !== null &&
+            !/\.part\d+\.mp4$/i.test(partial) &&
+            !reResolvedSegments.includes(partial)
+          ) {
+            const format = await this.ffmpeg.getContainerFormat(partial);
+            if (format === null) {
+              this.logger.warn(
+                { jobId, partial },
+                'pre-retry segment is unreadable — discarding instead of preserving',
+              );
+            } else {
+              const dest = await this.nextPartPath(outputPath);
+              try {
+                await rename(partial, dest);
+                reResolvedSegments.push(dest);
+              } catch (renameError) {
+                this.logger.warn({ jobId, partial, dest, error: renameError }, 'failed to preserve pre-retry segment');
+              }
+            }
+          }
+          if (needsFreshUrl) {
+            this.setWorkerState(jobId, 'STARTING');
+            this.setWorkerState(jobId, 'RECORDING');
+          } else {
+            this.setWorkerState(jobId, 'RECORDING');
+          }
+          this.repo.updateJob(jobId, {
+            attempts: job.attempts + 1,
+            bytesDownloaded: 0,
+            speed: 0,
+            eta: 0,
+            percent: 0,
+          });
+          this.logger.info(
+            { jobId, reResolveCount: reResolveCount + 1, preservedParts: reResolvedSegments.length },
+            needsFreshUrl
+              ? 'stream URL expired mid-recording — re-resolved and continuing in a new part'
+              : 'capture restarted in a new part after a transient failure',
+          );
+        }
+      }
+
+      // ponytail: a user pause stops the downloader mid-generation — park
+      // the pipeline WITHOUT touching the row (it already says 'paused')
+      // and WITHOUT finalizing the partial into a Library entry (which
+      // would flip the row to 'cancelled' and break resume). The partial
+      // file stays exactly where the resume flow expects it.
+      if (this.pausedJobs.has(jobId)) {
+        this.setWorkerState(jobId, 'STOPPING');
+        await this.parkPausedSession(jobId, downloadResult.filePath, options);
+        return;
+      }
 
       if (controller.signal.aborted) {
-        // ponytail: user cancelled — the partial file is truncated (no moov
-        // atom on Windows TerminateProcess). Remux-repair it so the file is
-        // still playable, then keep it in the Library as a partial entry
-        // (with thumbnail) so users never lose what was captured.
+        this.setWorkerState(jobId, 'STOPPING');
+        // ponytail: user cancelled — keep whatever was captured as a partial
+        // library entry (users never lose what was recorded). Remux-repair,
+        // thumbnail, and metadata drain in the background queue (plan §13).
         let cancelPath = downloadResult.filePath;
         if (options.resumeFrom !== undefined) {
           cancelPath = await this.mergeParts(options.resumeFrom);
         }
         cancelPath = (await this.resolveDownloadedFile(cancelPath)) ?? cancelPath;
         if (await fileExists(cancelPath)) {
-          cancelPath = await this.normalizeContainer(jobId, cancelPath);
-          await this.repairPartialFile(cancelPath);
-          await this.saveToLibrary(jobId, stream, cancelPath, basename(cancelPath), 'cancelled');
+          try {
+            const { recordingId: cancelledId } = await this.createLibraryEntry(
+              jobId,
+              stream,
+              cancelPath,
+              basename(cancelPath),
+              'cancelled',
+            );
+            const repairPath = cancelPath;
+            this.postQueue.enqueue({
+              key: `${jobId}-finalize-cancelled`,
+              run: () =>
+                this.finalizeFileBackground({
+                  jobId,
+                  recordingId: cancelledId,
+                  filePath: repairPath,
+                  wasFinalized: true,
+                }),
+            });
+          } catch (error) {
+            this.logger.warn({ jobId, error }, 'cancelled recording library entry failed');
+          }
         } else {
           this.logger.warn({ jobId }, 'cancelled recording produced no file — nothing to keep');
         }
@@ -823,6 +1502,8 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
       const wasFinalized = downloadResult.stopped || this.finalizingJobs.delete(jobId);
 
       // Update status to processing
+      if (wasFinalized) this.setWorkerState(jobId, 'STOPPING');
+      this.setWorkerState(jobId, 'FINALIZING');
       this.repo.updateJob(jobId, { status: 'processing', pid: null });
 
       // ponytail: a resumed session merges its parts back into the original
@@ -830,6 +1511,30 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
       let targetPath = downloadResult.filePath;
       if (options.resumeFrom !== undefined) {
         targetPath = await this.mergeParts(options.resumeFrom);
+      } else if (reResolvedSegments.length > 0) {
+        // ponytail: stage the final generation as the last part, then merge
+        // everything exactly like the resume flow (plan §0.1.3 continuity).
+        const current = await this.resolveDownloadedFile(outputPath);
+        if (current !== null && current === outputPath) {
+          const lastPart = await this.nextPartPath(outputPath);
+          try {
+            await rename(outputPath, lastPart);
+          } catch (error) {
+            this.logger.warn({ jobId, outputPath, lastPart, error }, 'failed to stage final re-resolved segment');
+          }
+        } else if (
+          current !== null &&
+          !/\.part\d+\.mp4$/i.test(current) &&
+          !reResolvedSegments.includes(current)
+        ) {
+          const dest = await this.nextPartPath(outputPath);
+          try {
+            await rename(current, dest);
+          } catch (error) {
+            this.logger.warn({ jobId, current, dest, error }, 'failed to stage final re-resolved temp segment');
+          }
+        }
+        targetPath = await this.mergeParts(outputPath);
       }
 
       // ponytail: a killed download (duration cap / stream end) often leaves
@@ -856,61 +1561,29 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
         }
       }
 
-      // ponytail: a promoted yt-dlp temp file is often a raw MPEG-TS stream
-      // wearing an '.mp4' name. VLC plays it, but Chromium's <video> element
-      // (the in-app player) cannot demux it — remux any non-mp4 container
-      // into a proper faststart mp4 before verification/library.
-      targetPath = await this.normalizeContainer(jobId, targetPath);
-
-      // Verify the recording
-      let verificationPassed = true;
-      if (this.settings.verifyEnabled) {
-        this.emitEvent({
-          type: 'verification-started',
-          jobId,
-          timestamp: new Date().toISOString(),
-        });
-
-        let verification = await this.verifier.verify(targetPath);
-
-        // ponytail: a stream-ended recording is truncated by design — the mp4
-        // moov atom may be missing. Try a remux repair before giving up.
-        if (!verification.integrity && wasFinalized) {
-          verification = await this.repairPartialFile(targetPath);
-        }
-
-        verificationPassed = verification.integrity;
-        if (!verification.integrity && !wasFinalized) {
-          throw new AppError({
-            code: 'VERIFICATION_FAILED',
-            message: `File verification failed: ${verification.errors.join(', ')}`,
-            recoverable: true,
-          });
-        }
-
-        this.emitEvent({
-          type: 'verification-completed',
-          jobId,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // Create or refresh the Library record (reused across resumes)
+      // plan §13: the library entry and completed row land NOW (stat + upsert
+      // only — no ffmpeg); normalize/verify/repair/thumbnail/metadata drain
+      // in the background queue so 30 finishes never burst 30× ffmpeg.
+      // plan §8: a downgraded capture stores source quality — label the entry
+      // truthfully ('best'); the 720p derivative gets its own entry below.
+      const effectiveQuality = options.quality ?? this.settings.defaultQuality;
+      const needsDerivative =
+        requiresLiveTranscode(effectiveQuality) && isDirectHlsUrl(captureStream.streamUrl);
       const now = new Date().toISOString();
-      const { recordingId, thumbnailPath } = await this.saveToLibrary(
+      const { recordingId } = await this.createLibraryEntry(
         jobId,
         stream,
         targetPath,
         basename(targetPath),
         'completed',
+        needsDerivative ? 'best' : undefined,
       );
 
       // Update job status
       this.repo.updateJob(jobId, {
         status: 'completed',
-        verified: verificationPassed,
+        verified: false,
         filePath: targetPath,
-        thumbnailPath,
         finishedAt: now,
       });
 
@@ -926,6 +1599,30 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
         title: 'Recording completed',
         message: `Recording "${stream.title}" completed successfully`,
         data: { jobId, recordingId },
+      });
+
+      this.postQueue.enqueue({
+        key: `${jobId}-finalize`,
+        run: async () => {
+          await this.finalizeFileBackground({
+            jobId,
+            recordingId,
+            filePath: targetPath,
+            wasFinalized,
+          });
+          // plan §8: an explicit downgrade is served AFTER finalization by
+          // the transcode pool — the live capture above stayed source-quality.
+          // yt-dlp fallback captures are already source-capped, so only the
+          // direct-copy path needs a derivative.
+          if (needsDerivative) {
+            this.enqueueDerivativeTranscode({
+              jobId,
+              filePath: targetPath,
+              stream,
+              quality: effectiveQuality,
+            });
+          }
+        },
       });
 
       // ponytail: segment chaining — when this completion was a duration-cap
@@ -952,8 +1649,47 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
           timestamp: new Date().toISOString(),
         });
       }
+
+      // Pro tier: when the tier duration cap (not a user stop-after or a
+      // segment split) ended the recording, tell the UI so it can show the
+      // upgrade CTA. The file above is already finalized and playable.
+      const tierCapMinutes = this.getEntitlements?.().maxRecordingMinutes;
+      const capEndedByTier =
+        tierCapMinutes !== undefined &&
+        Number.isFinite(tierCapMinutes) &&
+        downloadResult.durationCapReached &&
+        !chainable &&
+        options.resumeFrom === undefined;
+      if (capEndedByTier) {
+        this.emitEvent({
+          type: 'recording-cap-reached',
+          jobId,
+          recordingId,
+          data: { minutes: tierCapMinutes },
+          timestamp: new Date().toISOString(),
+        });
+        this.getGateNotifier?.()?.capReached(
+          jobId,
+          stream.title,
+          tierCapMinutes,
+        );
+      }
     } catch (error) {
+      // ponytail: a user pause stops the downloader and its pending download
+      // promise rejects here. The row already says 'paused' — keep it that
+      // way (the pre-fix behavior failed the job instead), and keep the
+      // partial resumable instead of salvaging it as a failed Library entry.
+      // Checked BEFORE the FAILED transition: FAILED is terminal in the
+      // worker state machine, so a paused job must never pass through it.
+      if (this.pausedJobs.has(jobId)) {
+        this.setWorkerState(jobId, 'STOPPING');
+        this.logger.info({ jobId }, 'recording paused by user — partial kept for resume');
+        await this.parkPausedSession(jobId, outputPath, options);
+        return;
+      }
+
       const errorMsg = error instanceof Error ? error.message : String(error);
+      this.setWorkerState(jobId, 'FAILED');
 
       this.repo.updateJob(jobId, {
         status: 'failed',
@@ -962,19 +1698,15 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
       });
 
       // ponytail: even on failure, a partial file may exist on disk (killed
-      // download, verification failure, etc.). Save it to the Library with a
-      // 'failed' status and a thumbnail so the user never loses captured data.
-      try {
-        if (outputPath) {
-          const resolved = await this.resolveDownloadedFile(outputPath);
-          if (resolved !== null) {
-            const normalized = await this.normalizeContainer(jobId, resolved);
-            await this.repairPartialFile(normalized);
-            await this.saveToLibrary(jobId, stream, normalized, basename(normalized), 'failed');
-          }
-        }
-      } catch (saveError) {
-        this.logger.warn({ jobId, error: saveError }, 'failed to save partial recording to library');
+      // download, verification failure, etc.). Salvage it to the Library in
+      // the background queue (plan §13) — failure reporting never waits.
+      if (outputPath) {
+        const salvagePath = outputPath;
+        const salvageStream = stream;
+        this.postQueue.enqueue({
+          key: `${jobId}-salvage`,
+          run: () => this.salvageFailedRecording(jobId, salvageStream, salvagePath),
+        });
       }
 
       this.emitEvent({
@@ -994,6 +1726,7 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
       this.logger.error({ jobId, error }, 'recording failed');
     } finally {
       this.activeRecordings.delete(jobId);
+      this.progressAcc.delete(jobId);
     }
   }
 
@@ -1037,6 +1770,24 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
   }
 
   /**
+   * Actual media seconds written by a capture attempt (0 when nothing was
+   * written or the file cannot be probed). Powers the instant-end detection
+   * in the capture loop — a "clean" ffmpeg exit that produced less than the
+   * meaningful floor is a network blip, not a completed recording.
+   */
+  private async capturedDurationSeconds(filePath: string): Promise<number> {
+    try {
+      const actual = await this.resolveDownloadedFile(filePath);
+      if (actual === null) return 0;
+      if ((await stat(actual)).size === 0) return 0;
+      const metadata = await this.ffmpeg.getMetadata(actual);
+      return Number.isFinite(metadata.duration) ? metadata.duration : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
    * Attempt to make a truncated (stream-ended) recording playable by
    * remuxing it into a fresh mp4 container. Returns the verification of the
    * repaired file; on failure the original file is left untouched.
@@ -1066,6 +1817,43 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
     }
   }
 
+  /**
+   * ponytail: park a paused capture — promote whatever the downloader
+   * actually wrote (temp siblings included) to the expected output path so
+   * the resume flow finds it. The job row keeps its 'paused' status; the
+   * partial is NOT finalized into the Library (that would end the session).
+   */
+  private async parkPausedSession(
+    jobId: string,
+    targetPath: string,
+    options: StartRecordingOptions,
+  ): Promise<void> {
+    // A pause between generations (mid-reconnect) has no output path yet —
+    // nothing was captured in this session, so there is nothing to park.
+    if (targetPath === '') return;
+    try {
+      const written = await this.resolveDownloadedFile(targetPath);
+      if (written === null) {
+        this.logger.warn({ jobId }, 'paused recording produced no data — nothing to keep');
+        return;
+      }
+      if (written !== targetPath) {
+        await rm(targetPath, { force: true });
+        await rename(written, targetPath);
+      }
+      // A resumed session's output is already a `.partN.mp4` sibling of the
+      // original file — leave it exactly where the next resume expects it.
+      if (options.resumeFrom === undefined) {
+        this.repo.updateJob(jobId, { filePath: targetPath });
+      }
+      this.logger.info({ jobId, filePath: targetPath }, 'paused recording parked for resume');
+    } catch (error) {
+      // Best-effort parking must never mask the pause itself — the row is
+      // already 'paused' and the user can still cancel/retry the job.
+      this.logger.warn({ jobId, error }, 'failed to park paused recording partial');
+    }
+  }
+
   /** Next `.partN.mp4` sibling for a resumed session's output file. */
   private async nextPartPath(finalPath: string): Promise<string> {
     const dir = dirname(finalPath);
@@ -1090,7 +1878,7 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
   private async mergeParts(finalPath: string): Promise<string> {
     const dir = dirname(finalPath);
     const base = basename(finalPath).replace(/\.mp4$/i, '');
-    let parts: string[] = [];
+    let parts: string[];
     try {
       parts = (await readdir(dir))
         .filter((n) => n.startsWith(`${base}.part`) && n.endsWith('.mp4'))
@@ -1126,17 +1914,82 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
   }
 
   /**
-   * Generate thumbnail + metadata and upsert the Library row for a finished
-   * (or cancelled-partial) recording. Reuses the existing row on resumes so
+   * plan §13: create the Library row the moment capture finishes — stat +
+   * upsert only, no ffmpeg. Thumbnail/metadata/verification enrich the row
+   * later from the background queue. Reuses the existing row on resumes so
    * there is exactly one Library entry per job.
    */
-  private async saveToLibrary(
+  private async createLibraryEntry(
     jobId: string,
     stream: StreamObject,
     filePath: string,
     fileName: string,
     status: 'completed' | 'cancelled' | 'failed',
-  ): Promise<{ recordingId: string; thumbnailPath?: string }> {
+    qualityOverride?: string,
+  ): Promise<{ recordingId: string }> {
+    // ponytail: guard — a missing file previously crashed with a raw ENOENT
+    // stat error instead of a clear, recoverable failure.
+    if (!(await fileExists(filePath))) {
+      throw new AppError({
+        code: 'RECORDING_FILE_MISSING',
+        message: `Recording file was not written: ${filePath}`,
+        recoverable: true,
+      });
+    }
+
+    const now = new Date().toISOString();
+    const stat_ = await stat(filePath);
+    const jobRecord = this.repo.getJob(jobId);
+    const fields = {
+      // ponytail: Library rows must inherit the job's creatorId (a DB uuid)
+      // — a hardcoded null made per-creator stats read 0 even with recordings.
+      creatorId: jobRecord?.creatorId ?? null,
+      jobId,
+      // ponytail: use the job's generated title ('{creator}_{date}_{time}',
+      // same as the file on disk) — the raw stream title ('Your favorite
+      // French streamer…') told the user nothing about WHO was recorded.
+      title: jobRecord?.title ?? stream.title,
+      platformId: stream.platformId,
+      fileName,
+      filePath,
+      thumbnailPath: undefined,
+      status,
+      quality: qualityOverride ?? jobRecord?.quality ?? this.settings.defaultQuality,
+      resolution: undefined,
+      sizeBytes: stat_.size,
+      durationSeconds: undefined,
+      videoCodec: undefined,
+      audioCodec: undefined,
+      bitrate: undefined,
+      fps: undefined,
+      isFavorite: false,
+      startedAt: jobRecord?.startedAt,
+      endedAt: now,
+      updatedAt: now,
+    };
+
+    // ponytail: resumed sessions refresh the existing row instead of
+    // creating a duplicate Library entry.
+    const existing = this.repo.listRecordings().find((r) => r.jobId === jobId);
+    if (existing !== undefined) {
+      this.repo.updateRecording(existing.id, fields);
+      return { recordingId: existing.id };
+    }
+
+    const recordingId = randomUUID();
+    this.repo.createRecording({ ...fields, id: recordingId, createdAt: now });
+    return { recordingId };
+  }
+
+  /**
+   * plan §13: thumbnail + metadata enrichment for an existing Library row.
+   * Runs exclusively in the background queue — the live path never awaits it.
+   */
+  private async enrichLibraryEntry(
+    jobId: string,
+    recordingId: string,
+    filePath: string,
+  ): Promise<{ thumbnailPath?: string }> {
     // Generate thumbnail (skipped in Low-Resource Mode to save disk/CPU)
     let thumbnailPath: string | undefined;
     if (this.settings.thumbnailEnabled && this.isLowResourceMode?.() !== true) {
@@ -1163,55 +2016,210 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
       }
     }
 
-    // ponytail: guard — a missing file previously crashed with a raw ENOENT
-    // stat error instead of a clear, recoverable failure.
-    if (!(await fileExists(filePath))) {
-      throw new AppError({
-        code: 'RECORDING_FILE_MISSING',
-        message: `Recording file was not written: ${filePath}`,
-        recoverable: true,
-      });
-    }
-
-    const now = new Date().toISOString();
-    const stat_ = await stat(filePath);
-    const fields = {
-      creatorId: null,
-      jobId,
-      // ponytail: use the job's generated title ('{creator}_{date}_{time}',
-      // same as the file on disk) — the raw stream title ('Your favorite
-      // French streamer…') told the user nothing about WHO was recorded.
-      title: this.repo.getJob(jobId)?.title ?? stream.title,
-      platformId: stream.platformId,
-      fileName,
-      filePath,
+    this.repo.updateRecording(recordingId, {
       thumbnailPath,
-      status,
-      quality: this.repo.getJob(jobId)?.quality ?? this.settings.defaultQuality,
       resolution: (metadata as { resolution?: string }).resolution,
-      sizeBytes: stat_.size,
       durationSeconds: (metadata as { duration?: number }).duration,
       videoCodec: (metadata as { videoCodec?: string }).videoCodec,
       audioCodec: (metadata as { audioCodec?: string }).audioCodec,
       bitrate: (metadata as { bitrate?: number }).bitrate,
       fps: (metadata as { fps?: number }).fps,
-      isFavorite: false,
-      startedAt: this.repo.getJob(jobId)?.startedAt,
-      endedAt: now,
-      updatedAt: now,
-    };
+    });
+    return { thumbnailPath };
+  }
 
-    // ponytail: resumed sessions refresh the existing row instead of
-    // creating a duplicate Library entry.
-    const existing = this.repo.listRecordings().find((r) => r.jobId === jobId);
-    if (existing !== undefined) {
-      this.repo.updateRecording(existing.id, fields);
-      return { recordingId: existing.id, thumbnailPath };
+  /**
+   * plan §13: background file finalization — normalize container, verify
+   * (+repair truncated stream-ended files), then enrich the Library row.
+   * Best-effort: the job already completed, so failures only log and leave
+   * the entry (and its `verified: false` flag) as-is.
+   */
+  private async finalizeFileBackground(input: {
+    jobId: string;
+    recordingId: string;
+    filePath: string;
+    wasFinalized: boolean;
+  }): Promise<void> {
+    const { jobId, recordingId, wasFinalized } = input;
+    let targetPath = input.filePath;
+    try {
+      this.emitEvent({
+        type: 'verification-started',
+        jobId,
+        timestamp: new Date().toISOString(),
+      });
+
+      // ponytail: a promoted yt-dlp temp file is often a raw MPEG-TS stream
+      // wearing an '.mp4' name. VLC plays it, but Chromium's <video> element
+      // (the in-app player) cannot demux it — remux any non-mp4 container
+      // into a proper faststart mp4 before verification/library.
+      targetPath = await this.normalizeContainer(jobId, targetPath);
+
+      if (this.settings.verifyEnabled) {
+        let verification = await this.verifier.verify(targetPath);
+        // ponytail: a stream-ended recording is truncated by design — the mp4
+        // moov atom may be missing. Try a remux repair before giving up.
+        if (!verification.integrity && wasFinalized) {
+          verification = await this.repairPartialFile(targetPath);
+        }
+        this.repo.updateJob(jobId, { verified: verification.integrity, filePath: targetPath });
+        if (!verification.integrity) {
+          this.logger.warn(
+            { jobId, errors: verification.errors },
+            'background verification failed — completed entry kept as unverified',
+          );
+        }
+      } else {
+        this.repo.updateJob(jobId, { verified: true, filePath: targetPath });
+      }
+
+      const { thumbnailPath } = await this.enrichLibraryEntry(jobId, recordingId, targetPath);
+      if (thumbnailPath !== undefined) {
+        this.repo.updateJob(jobId, { thumbnailPath });
+      }
+
+      this.emitEvent({
+        type: 'verification-completed',
+        jobId,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      this.logger.warn({ jobId, error }, 'background file finalization failed — entry kept as-is');
     }
+  }
 
-    const recordingId = randomUUID();
-    this.repo.createRecording({ ...fields, id: recordingId, createdAt: now });
-    return { recordingId, thumbnailPath };
+  /**
+   * plan §8: quality derivative for explicit downgrades.
+   * Drains in the transcode pool (concurrency 2). The user explicitly picked
+   * this quality, so on SUCCESS the derivative REPLACES the source: the
+   * source-quality file and its Library entry are removed (its thumbnail is
+   * reused when the derivative has none) — otherwise every selected-quality
+   * recording would appear twice in the Library. A transcode failure keeps
+   * the source untouched.
+   */
+  private enqueueDerivativeTranscode(input: {
+    jobId: string;
+    filePath: string;
+    stream: StreamObject;
+    quality: string;
+  }): void {
+    const height = parseQualityHeight(input.quality);
+    if (height === null) return;
+    this.transcodeQueue.enqueue({
+      key: `${input.jobId}-transcode-${input.quality}`,
+      run: () => this.transcodeDerivative({ ...input, height }),
+    });
+  }
+
+  private async transcodeDerivative(input: {
+    jobId: string;
+    filePath: string;
+    stream: StreamObject;
+    quality: string;
+    height: number;
+  }): Promise<void> {
+    const dir = dirname(input.filePath);
+    const base = basename(input.filePath).replace(/\.mp4$/i, '');
+    const outPath = join(dir, `${base}_${input.quality}.mp4`);
+    try {
+      await this.ffmpeg.transcode(input.filePath, outPath, {
+        height: input.height,
+        crf: this.getDerivativeCrf?.() ?? 23,
+      });
+      const now = new Date().toISOString();
+      const job = this.repo.getJob(input.jobId);
+      const derivativeId = randomUUID();
+      this.repo.createRecording({
+        id: derivativeId,
+        // ponytail: inherit the job's creatorId so per-creator stats keep
+        // counting derivatives (the source entry they replace had it too).
+        creatorId: job?.creatorId ?? null,
+        jobId: input.jobId,
+        title: `${job?.title ?? input.stream.title} (${input.quality})`,
+        platformId: input.stream.platformId,
+        fileName: basename(outPath),
+        filePath: outPath,
+        thumbnailPath: undefined,
+        status: 'completed',
+        quality: input.quality,
+        resolution: undefined,
+        sizeBytes: (await stat(outPath)).size,
+        durationSeconds: undefined,
+        videoCodec: undefined,
+        audioCodec: undefined,
+        bitrate: undefined,
+        fps: undefined,
+        isFavorite: false,
+        startedAt: job?.startedAt,
+        endedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+      const { thumbnailPath } = await this.enrichLibraryEntry(input.jobId, derivativeId, outPath);
+
+      // ponytail: the selected quality REPLACES the source capture. Only the
+      // source row produced by THIS job's capture (matched by file path) is
+      // dropped — other entries (editor outputs, earlier derivatives) and the
+      // just-created derivative stay untouched.
+      const sourceEntry = this.repo.listRecordings().find(
+        (r) => r.jobId === input.jobId && r.filePath === input.filePath,
+      );
+      if (sourceEntry !== undefined) {
+        const inherited: Partial<RecordingRecord> = {};
+        if (sourceEntry.isFavorite) inherited.isFavorite = true;
+        if (sourceEntry.notes) inherited.notes = sourceEntry.notes;
+        if (Object.keys(inherited).length > 0) {
+          this.repo.updateRecording(derivativeId, inherited);
+        }
+        if (thumbnailPath === undefined && sourceEntry.thumbnailPath) {
+          // ponytail: reuse the source thumbnail when the derivative did not
+          // get one (thumbnail generation disabled / low-resource mode).
+          const reused = join(dir, `${basename(outPath)}.thumb.jpg`);
+          try {
+            await rename(sourceEntry.thumbnailPath, reused);
+            this.repo.updateRecording(derivativeId, { thumbnailPath: reused });
+          } catch {
+            /* best-effort thumbnail reuse */
+          }
+        }
+        this.repo.removeRecording(sourceEntry.id);
+        await rm(input.filePath, { force: true });
+        await rm(`${input.filePath}.thumb.jpg`, { force: true });
+      }
+    } catch (error) {
+      this.logger.warn(
+        { jobId: input.jobId, error },
+        'background quality transcode failed — source-quality file kept',
+      );
+    }
+  }
+
+  /**
+   * plan §13: best-effort salvage of a failed capture's partial file into a
+   * 'failed' Library entry. Runs in the background queue — failure reporting
+   * never waits for it.
+   */
+  private async salvageFailedRecording(
+    jobId: string,
+    stream: StreamObject,
+    outputPath: string,
+  ): Promise<void> {
+    try {
+      const resolved = await this.resolveDownloadedFile(outputPath);
+      if (resolved === null) return;
+      const normalized = await this.normalizeContainer(jobId, resolved);
+      await this.repairPartialFile(normalized);
+      const { recordingId } = await this.createLibraryEntry(
+        jobId,
+        stream,
+        normalized,
+        basename(normalized),
+        'failed',
+      );
+      await this.enrichLibraryEntry(jobId, recordingId, normalized);
+    } catch (saveError) {
+      this.logger.warn({ jobId, error: saveError }, 'failed to save partial recording to library');
+    }
   }
 
   private generateTitle(stream: StreamObject): string {

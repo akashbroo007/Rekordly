@@ -21,6 +21,16 @@ export const RECORDING_EVENTS = [
    * segment after re-running its guardrails (pause switch, disk, liveness).
    */
   'recording-segment-finished',
+  /**
+   * Pro tier: the free-tier duration cap is about to hit. Carries
+   * `data: { jobId, minutesLeft }` so the UI can show a warning toast.
+   */
+  'recording-cap-warning',
+  /**
+   * Pro tier: a recording was stopped by the free-tier duration cap. The
+   * file is finalized and playable; the UI shows the upgrade CTA.
+   */
+  'recording-cap-reached',
 ] as const;
 
 export type RecordingEventType = (typeof RECORDING_EVENTS)[number];

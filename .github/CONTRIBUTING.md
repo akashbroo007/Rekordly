@@ -76,4 +76,4 @@ Please follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+By contributing, you agree that your contributions will be licensed under the PolyForm Noncommercial License 1.0.0, and you grant Rekordly the right to include, relicense, and commercially license your contributions as part of Rekordly.

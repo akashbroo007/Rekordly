@@ -77,6 +77,27 @@ export function createMainWindow(
     });
   }
 
+  // ponytail: if the renderer never becomes ready (corrupt bundle, GPU crash,
+  // killed mid-write update), ready-to-show never fires and the window stays
+  // hidden forever — the app looks "running in Task Manager but won't open".
+  // Force it visible so the user always gets a window (even a blank one)
+  // instead of a headless background process.
+  win.webContents.on('did-fail-load', (_event, code, desc) => {
+    logger.error({ code, desc }, 'renderer failed to load — showing window anyway');
+    if (!win.isDestroyed() && options.startHidden !== true && !win.isVisible()) {
+      win.show();
+    }
+  });
+  const showFallback = setTimeout(() => {
+    if (!win.isDestroyed() && options.startHidden !== true && !win.isVisible()) {
+      logger.warn('renderer not ready after 15s — showing window anyway');
+      win.show();
+    }
+  }, 15_000);
+  showFallback.unref?.();
+  win.once('ready-to-show', () => clearTimeout(showFallback));
+  win.on('closed', () => clearTimeout(showFallback));
+
   win.on('closed', () => {
     logger.info('main window closed');
   });

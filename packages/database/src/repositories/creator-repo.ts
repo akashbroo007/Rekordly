@@ -1,5 +1,5 @@
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { and, eq, like, or } from 'drizzle-orm';
+import { and, eq, inArray, like, or } from 'drizzle-orm';
 import { collectionRecordings, collections, creatorTags, creators, tags } from '../schema';
 import { parseJson, toJson } from './json';
 
@@ -16,6 +16,8 @@ export interface CreatorRecord {
   autoRecord: boolean;
   /** Quality for this creator's auto-recordings ('best' | '1080p' | …). */
   autoRecordQuality: string;
+  /** ponytail: per-creator secure-proxy opt-in (see schema). */
+  useProxy: boolean;
   notes?: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
@@ -32,6 +34,7 @@ export interface CreatorRepo {
   search(query: string): CreatorRecord[];
   setFavorite(id: string, favorite: boolean): void;
   setAutoRecord(id: string, enabled: boolean): void;
+  setUseProxy(id: string, enabled: boolean): void;
   createTag(name: string, color?: string): void;
   renameTag(id: string, name: string): void;
   listTags(): typeof tags.$inferSelect[];
@@ -39,6 +42,12 @@ export interface CreatorRepo {
   addTagToCreator(creatorId: string, tagId: string): void;
   removeTagFromCreator(creatorId: string, tagId: string): void;
   listCreatorTags(creatorId: string): typeof tags.$inferSelect[];
+  /** All creator→tag assignments in one query, keyed by creatorId. */
+  listAllTagAssignments(): Record<string, (typeof tags.$inferSelect)[]>;
+  bulkSetFavorite(ids: string[], favorite: boolean): void;
+  bulkSetAutoRecord(ids: string[], enabled: boolean): void;
+  bulkRemove(ids: string[]): void;
+  bulkAddTag(ids: string[], tagId: string): void;
   createCollection(name: string, description?: string): void;
   listCollections(): typeof collections.$inferSelect[];
   removeCollection(id: string): void;
@@ -113,6 +122,10 @@ export function createCreatorRepo(orm: BetterSQLite3Database): CreatorRepo {
       orm.update(creators).set({ autoRecord: enabled, updatedAt: now() }).where(eq(creators.id, id)).run();
     },
 
+    setUseProxy(id: string, enabled: boolean): void {
+      orm.update(creators).set({ useProxy: enabled, updatedAt: now() }).where(eq(creators.id, id)).run();
+    },
+
     createTag(name: string, color?: string): void {
       orm
         .insert(tags)
@@ -152,6 +165,48 @@ export function createCreatorRepo(orm: BetterSQLite3Database): CreatorRepo {
         .where(eq(creatorTags.creatorId, creatorId))
         .all();
       return rows.map((row) => row.tag);
+    },
+
+    listAllTagAssignments(): Record<string, (typeof tags.$inferSelect)[]> {
+      const rows = orm
+        .select({ creatorId: creatorTags.creatorId, tag: tags })
+        .from(creatorTags)
+        .innerJoin(tags, eq(creatorTags.tagId, tags.id))
+        .all();
+      const map: Record<string, (typeof tags.$inferSelect)[]> = {};
+      for (const row of rows) {
+        (map[row.creatorId] ??= []).push(row.tag);
+      }
+      return map;
+    },
+
+    bulkSetFavorite(ids: string[], favorite: boolean): void {
+      if (ids.length === 0) return;
+      orm
+        .update(creators)
+        .set({ isFavorite: favorite, updatedAt: now() })
+        .where(inArray(creators.id, ids))
+        .run();
+    },
+
+    bulkSetAutoRecord(ids: string[], enabled: boolean): void {
+      if (ids.length === 0) return;
+      orm
+        .update(creators)
+        .set({ autoRecord: enabled, updatedAt: now() })
+        .where(inArray(creators.id, ids))
+        .run();
+    },
+
+    bulkRemove(ids: string[]): void {
+      if (ids.length === 0) return;
+      orm.delete(creators).where(inArray(creators.id, ids)).run();
+    },
+
+    bulkAddTag(ids: string[], tagId: string): void {
+      if (ids.length === 0) return;
+      const values = ids.map((creatorId) => ({ creatorId, tagId }));
+      orm.insert(creatorTags).values(values).onConflictDoNothing().run();
     },
 
     createCollection(name: string, description?: string): void {

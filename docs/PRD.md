@@ -18,7 +18,7 @@ Rekordly
 
 ## Product Type
 
-Open Source
+Source Available
 
 Plugin-first
 
@@ -32,7 +32,7 @@ Built with Electron + React + TypeScript.
 
 # 2. Vision
 
-Create the best open-source desktop application for monitoring and recording livestreams.
+Create the best source-available desktop application for monitoring and recording livestreams.
 
 The application should be:
 
@@ -124,7 +124,7 @@ Power users.
 
 ## Secondary
 
-Open source contributors.
+Community contributors.
 
 Plugin developers.
 
@@ -583,7 +583,7 @@ UI feels modern.
 
 Performance remains smooth.
 
-The project attracts open-source contributors.
+The project attracts community contributors.
 
 ---
 
@@ -613,7 +613,7 @@ AI assistants
 
 ---
 
-# 16. Open Source Philosophy
+# 16. Source Available Philosophy
 
 The project should remain
 
@@ -661,6 +661,6 @@ No feature is complete until all checklist items are satisfied.
 
 # Final Statement
 
-Rekordly should become the open-source standard for modular livestream monitoring and recording.
+Rekordly should become the source-available standard for modular livestream monitoring and recording.
 
 Every architectural decision should prioritize simplicity, extensibility, and long-term maintainability over short-term convenience.

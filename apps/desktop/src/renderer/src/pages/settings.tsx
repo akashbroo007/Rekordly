@@ -14,15 +14,19 @@ import {
   Gauge,
   Code,
   AlertTriangle,
+  BadgeCheck,
   FolderOpen,
   RefreshCw,
   ShieldCheck,
   FileText,
   Globe,
   Cloud,
+  Trash2,
+  Bug,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Button, EmptyState, Input, PageContainer, SectionHeader, Select, Skeleton, Switch } from '@rekordly/ui';
+import { Button, Dialog, DialogContent, EmptyState, Input, PageContainer, SectionHeader, Select, Skeleton, Switch } from '@rekordly/ui';
+import { formatBytes } from '@rekordly/shared/format';
 import type { AppSettings, LogLevel, RecordingSettingsDto } from '@rekordly/shared/contracts';
 import { useToastStore } from '../stores/toast-store';
 import { useThemeStore } from '../stores/theme-store';
@@ -30,9 +34,30 @@ import { PrivacyPolicyContent } from '../components/settings/privacy-policy';
 import { TermsOfServiceContent } from '../components/settings/terms-of-service';
 import { SupportedSitesContent } from '../components/settings/supported-sites';
 import { CloudStorageSettings } from '../components/settings/cloud-storage-settings';
+import { LicenseSettings } from '../components/settings/license-settings';
+import { BugReportSettings } from '../components/settings/bug-report';
 
 
 const LOG_LEVELS: readonly LogLevel[] = ['debug', 'info', 'warn', 'error', 'fatal'];
+
+interface VerificationResult {
+  id: string;
+  ok: boolean;
+}
+
+// ponytail: providers that hold user credentials are verified automatically
+// when settings are saved — no separate "Test Connection" button.
+const CREDENTIAL_PROVIDER_IDS = ['mixdrop', 'google-drive'] as const;
+const CREDENTIAL_PROVIDER_NAMES: Record<string, string> = {
+  mixdrop: 'MixDrop',
+  'google-drive': 'Google Drive',
+};
+
+const providerCreds = (
+  settings: AppSettings | undefined,
+  id: string,
+): Record<string, unknown> | undefined =>
+  (settings?.uploadProviders as unknown as Record<string, Record<string, unknown> | undefined> | undefined)?.[id];
 
 type SettingsTab =
   | 'general'
@@ -44,6 +69,8 @@ type SettingsTab =
   | 'notifications'
   | 'performance'
   | 'developer'
+  | 'bug-report'
+  | 'license'
   | 'privacy'
   | 'terms'
   | 'sites';
@@ -58,6 +85,8 @@ const SETTINGS_TABS: { id: SettingsTab; label: string; icon: typeof Settings }[]
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'performance', label: 'Performance', icon: Gauge },
   { id: 'developer', label: 'Developer', icon: Code },
+  { id: 'bug-report', label: 'Bug Report', icon: Bug },
+  { id: 'license', label: 'License', icon: BadgeCheck },
   { id: 'privacy', label: 'Privacy Policy', icon: ShieldCheck },
   { id: 'terms', label: 'Terms of Service', icon: FileText },
   { id: 'sites', label: 'Supported Sites', icon: Globe },
@@ -115,7 +144,7 @@ export function SettingsPage() {
   }
 
   return (
-    <PageContainer className="flex flex-col gap-6 lg:flex-row">
+    <PageContainer className="flex flex-col gap-6 pb-0 lg:flex-row">
       {/* Sidebar tabs */}
       <nav className="w-full shrink-0 lg:w-48" aria-label="Settings sections">
         <div className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible lg:border-r lg:border-border lg:pr-3">
@@ -142,7 +171,7 @@ export function SettingsPage() {
       </nav>
 
       {/* Content */}
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 lg:overflow-y-auto">
         <SettingsForm
           draft={draft}
           dirty={dirty}
@@ -180,19 +209,50 @@ function SettingsForm({
 
   const save = useMutation({
     mutationFn: async (next: AppSettings) => {
+      const previous = queryClient.getQueryData<AppSettings>(['settings']);
       await window.desktop.settings.set(next);
       // ponytail: recording settings live in the RecordingService, not the
       // app settings store — save them in the same click.
       if (recDraft !== null) {
         const saved = await window.desktop.recording.setSettings(recDraft);
         void queryClient.invalidateQueries({ queryKey: ['recording-settings'] });
-        return { settings: next, recording: saved };
+        return { settings: next, recording: saved, verification: [] as VerificationResult[] };
       }
-      return { settings: next, recording: null };
+      // ponytail: credential providers are verified automatically on save —
+      // registration happens in the main process during settings.set above,
+      // so the check always reflects the just-saved values (the old explicit
+      // "Test Connection" button tested stale, unsaved credentials).
+      const changed = CREDENTIAL_PROVIDER_IDS.filter((id) => {
+        const before = providerCreds(previous, id);
+        const after = providerCreds(next, id);
+        return JSON.stringify(before) !== JSON.stringify(after);
+      });
+      const verification: VerificationResult[] = [];
+      for (const id of changed) {
+        verification.push({ id, ok: await window.desktop.uploads.testProvider(id) });
+      }
+      void queryClient.invalidateQueries({ queryKey: ['upload-providers'] });
+      return { settings: next, recording: null, verification };
     },
-    onSuccess: () => {
+    onSuccess: ({ verification }) => {
       pushToast({ level: 'info', title: 'Settings saved', message: 'Your preferences were updated.' });
       void queryClient.invalidateQueries({ queryKey: ['settings'] });
+      for (const { id, ok } of verification) {
+        const name = CREDENTIAL_PROVIDER_NAMES[id] ?? id;
+        pushToast(
+          ok
+            ? {
+                level: 'info',
+                title: `${name} connected`,
+                message: 'Credentials verified — the provider is ready to use.',
+              }
+            : {
+                level: 'error',
+                title: `Could not verify ${name}`,
+                message: 'Check your credentials and your internet connection, then try saving again.',
+              },
+        );
+      }
     },
     onError: (error: unknown) => {
       pushToast({
@@ -473,6 +533,31 @@ function SettingsForm({
             value={recDraft?.namingTemplate ?? '{creator}_{platform}_{date}_{title}'}
             onChange={(event) => patchRec({ namingTemplate: event.target.value })}
           />
+
+          {/* ponytail: Advanced — storage/quality trade-off for the background
+              transcode that produces "(480p)"-style files when a specific
+              quality is selected. 'balanced' keeps the previous behavior. */}
+          <div className="rounded-sm border border-border bg-surface p-4">
+            <p className="text-sm font-medium text-foreground">Advanced</p>
+            <p className="mt-1 text-xs text-foreground-muted">
+              For users watching disk space. Applies when a recording is saved at a specific quality (e.g. 480p).
+            </p>
+            <div className="mt-3">
+              <Select
+                label="File size vs. quality"
+                hint="How much the saved file is compressed. 'Smaller files' can cut storage use roughly in half with a small quality drop; 'Best quality' keeps the most detail at a larger size. Applies to the next recording."
+                options={[
+                  { value: 'quality', label: 'Best quality (larger files)' },
+                  { value: 'balanced', label: 'Balanced (recommended)' },
+                  { value: 'size', label: 'Smaller files (low storage)' },
+                ]}
+                value={draft.recordingCompression}
+                onChange={(event) =>
+                  patch({ recordingCompression: event.target.value as AppSettings['recordingCompression'] })
+                }
+              />
+            </div>
+          </div>
         </div>
       )}
 
@@ -509,12 +594,7 @@ function SettingsForm({
             onChange={() => {}}
           />
 
-          <div className="rounded-sm border border-border bg-surface p-4">
-            <p className="text-sm font-medium text-foreground">Cache Management</p>
-            <p className="mt-1 text-xs text-foreground-muted">
-              Temporary files are automatically cleaned up when the cache limit is reached.
-            </p>
-          </div>
+          <CacheCleanupSection />
         </div>
       )}
 
@@ -746,8 +826,12 @@ function SettingsForm({
 
       {activeTab === 'sites' && <SupportedSitesContent />}
 
+      {activeTab === 'bug-report' && <BugReportSettings />}
+
+      {activeTab === 'license' && <LicenseSettings />}
+
       {/* Save bar */}
-      <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-border bg-canvas/95 py-4 backdrop-blur">
+      <div className="sticky bottom-0 z-10 mt-2 flex shrink-0 items-center justify-between gap-2 border-t border-border bg-canvas py-3">
         <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-foreground-muted">
           {dirty ? 'Unsaved changes' : 'All changes saved'}
           {dirty && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-warning align-middle" aria-hidden="true" />}
@@ -757,6 +841,90 @@ function SettingsForm({
           Save changes
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** ponytail: actionable cache cleanup for the Downloads tab — surfaces the
+ * live cache+temp size and a confirm-guarded "Remove Cache" action backed by
+ * window.desktop.storage.cleanup, which previously had no UI at all. */
+function CacheCleanupSection() {
+  const pushToast = useToastStore((state) => state.push);
+  const queryClient = useQueryClient();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const { data: storageStats } = useQuery({
+    queryKey: ['storage-stats'],
+    queryFn: () => window.desktop.storage.getStats(),
+    refetchInterval: 30000,
+  });
+
+  const cacheBytes = (storageStats?.cacheSizeBytes ?? 0) + (storageStats?.tempSizeBytes ?? 0);
+
+  const clearCache = useMutation({
+    mutationFn: () => window.desktop.storage.cleanup({ cache: true, temp: true }),
+    onSuccess: () => {
+      pushToast({
+        level: 'info',
+        title: 'Cache removed',
+        message: `Freed ${formatBytes(cacheBytes)} of temporary files.`,
+      });
+      setConfirmOpen(false);
+      void queryClient.invalidateQueries({ queryKey: ['storage-stats'] });
+    },
+    onError: (err: unknown) => {
+      pushToast({
+        level: 'error',
+        title: 'Could not remove cache',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      });
+    },
+  });
+
+  return (
+    <div className="rounded-sm border border-border bg-surface p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground">Cache Management</p>
+          <p className="mt-1 text-xs text-foreground-muted">
+            Temporary download and thumbnail files are cleaned up automatically when the cache limit is
+            reached. Recordings are never affected.
+          </p>
+          <p className="mt-2 text-xs tabular-nums text-foreground-secondary">
+            Current cache: <span className="font-medium text-foreground">{formatBytes(cacheBytes)}</span>
+          </p>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="shrink-0"
+          disabled={cacheBytes === 0}
+          onClick={() => setConfirmOpen(true)}
+        >
+          <Trash2 size={14} />
+          Remove Cache
+        </Button>
+      </div>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent
+          title="Remove Cache"
+          description={`Delete ${formatBytes(cacheBytes)} of cached and temporary files?`}
+        >
+          <p className="text-sm text-foreground-muted">
+            This removes temporary download parts, thumbnails and preview images. Your recordings and
+            downloads are not touched. The app will re-download these files as needed.
+          </p>
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" loading={clearCache.isPending} onClick={() => clearCache.mutate()}>
+              Remove Cache
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

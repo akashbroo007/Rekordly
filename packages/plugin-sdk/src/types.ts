@@ -35,6 +35,14 @@ export interface LiveStatus {
   startedAt?: string;
   /** Present when live so the host can offer immediate recording. */
   streamUrl?: string;
+  /**
+   * ponytail: True when the check could not reach the platform at all
+   * (transport failure / site unreachable) — the answer is NEITHER live
+   * NOR ended. The host must not treat this as "creator went offline"
+   * (that event finalizes active recordings) and should simply retry.
+   * Omit for definitive answers (state data, playlist 404).
+   */
+  unknown?: boolean;
 }
 
 export interface CreatorMetadata {

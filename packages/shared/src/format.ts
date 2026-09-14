@@ -29,3 +29,26 @@ export function formatPercent(value: number): string {
   }
   return `${Math.round(value)}%`;
 }
+
+/**
+ * ponytail: was duplicated in dashboard.tsx and downloads.tsx — both the
+ * live-recording rows and the download queue need the same speed formatting.
+ */
+export function formatSpeed(bytesPerSecond: number): string {
+  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return '0 B/s';
+  if (bytesPerSecond < 1024) return `${Math.round(bytesPerSecond)} B/s`;
+  if (bytesPerSecond < 1024 * 1024) return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`;
+  if (bytesPerSecond < 1024 * 1024 * 1024) return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`;
+  return `${(bytesPerSecond / (1024 * 1024 * 1024)).toFixed(2)} GB/s`;
+}
+
+/** ponytail: ETA is stored in SECONDS (straight from yt-dlp's "ETA 00:32"). */
+export function formatEta(etaSeconds: number): string {
+  if (!Number.isFinite(etaSeconds) || etaSeconds <= 0) return '';
+  if (etaSeconds < 60) return `${Math.round(etaSeconds)}s`;
+  const minutes = Math.floor(etaSeconds / 60);
+  const seconds = Math.round(etaSeconds % 60);
+  if (minutes < 60) return `${minutes}m ${seconds}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
+}

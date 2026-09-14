@@ -41,6 +41,8 @@ export const APP_SETTINGS_SCHEMA = z.object({
   toastDurationMs: z.number().int().min(1000).max(60_000),
   /** Maximum number of simultaneous generic downloads. */
   maxConcurrentDownloads: z.number().int().min(1).max(10),
+  /** Maximum number of simultaneous cloud uploads. */
+  maxConcurrentUploads: z.number().int().min(1).max(5),
   /** Global download speed cap in bytes/s. 0 = unlimited. */
   downloadBandwidthLimit: z.number().int().min(0),
   /** Root folder for generic downloads; each website gets its own subfolder. */
@@ -49,6 +51,25 @@ export const APP_SETTINGS_SCHEMA = z.object({
   lowResourceMode: z.boolean(),
   /** Whether the first-launch welcome + guided tour has been completed. */
   onboardingCompleted: z.boolean(),
+  /**
+   * ponytail: latched once the user enables the secure proxy for any creator
+   * (creators.use_proxy). Drives the conditional "Secure Proxy" nav item —
+   * purely a visibility flag, never a routing decision. Defaults at parse
+   * time so stored settings from older versions don't fail validation
+   * (a failed safeParse would reset the user's whole settings set).
+   */
+  secureProxyUsed: z.boolean().default(false),
+  /**
+   * ponytail: compression preset for quality-selected recordings (the
+   * background "(480p)" transcode). CRF mapping lives in the recording
+   * wiring — higher compression = smaller files, slightly lower quality.
+   */
+  recordingCompression: z.enum(['quality', 'balanced', 'size']),
+  /**
+   * Raw signed license token (LicenseService format). null = free tier.
+   * Not user-editable through the settings UI — set only via license:activate.
+   */
+  licenseKey: z.string().nullable().default(null),
   /** Upload provider configuration (credentials, defaults). */
   uploadProviders: z
     .object({
@@ -86,6 +107,38 @@ export const APP_SETTINGS_SCHEMA = z.object({
 
 export type AppSettings = z.infer<typeof APP_SETTINGS_SCHEMA>;
 
+type UploadProvidersConfig = AppSettings['uploadProviders'];
+const UPLOAD_PROVIDER_KEYS = ['gofile', 'mixdrop', 'google-drive', 'catbox'] as const;
+
+/**
+ * ponytail: per-provider merge for uploadProviders — incoming (draft) values
+ * win when defined; fields the incoming config omits (e.g. a refresh token
+ * minted by the OAuth flow after the draft snapshot was taken) are preserved.
+ * Clearing a credential still works because an empty string IS defined.
+ */
+function mergeUploadProviders(
+  base: UploadProvidersConfig,
+  incoming: UploadProvidersConfig,
+): UploadProvidersConfig {
+  const merged: UploadProvidersConfig = { ...incoming };
+  for (const key of UPLOAD_PROVIDER_KEYS) {
+    const baseConfig = base[key] as Record<string, unknown> | undefined;
+    const incomingConfig = merged[key] as Record<string, unknown> | undefined;
+    if (baseConfig === undefined) continue;
+    if (incomingConfig === undefined) {
+      (merged as Record<string, unknown>)[key] = baseConfig;
+      continue;
+    }
+    (merged as Record<string, unknown>)[key] = {
+      ...baseConfig,
+      ...Object.fromEntries(
+        Object.entries(incomingConfig).filter(([, value]) => value !== undefined),
+      ),
+    };
+  }
+  return merged;
+}
+
 export interface SettingsServiceDeps {
   config: ConfigManager;
   logger: Logger;
@@ -120,10 +173,14 @@ export class SettingsService {
       notifyWarnings: true,
       toastDurationMs: 6000,
       maxConcurrentDownloads: 3,
+      maxConcurrentUploads: 1,
       downloadBandwidthLimit: 0,
       downloadsDir: this.deps.defaultDownloadsDir,
       lowResourceMode: false,
       onboardingCompleted: false,
+      secureProxyUsed: false,
+      recordingCompression: 'balanced',
+      licenseKey: null,
       uploadProviders: { defaultProvider: 'gofile' },
     };
     const result = APP_SETTINGS_SCHEMA.safeParse(this.deps.config.getAll());
@@ -134,7 +191,20 @@ export class SettingsService {
   }
 
   set(patch: Partial<AppSettings>): AppSettings {
-    const next = this.validateOrThrow({ ...this.getAll(), ...patch });
+    const current = this.getAll();
+    // ponytail: uploadProviders is edited through a settings DRAFT that may
+    // predate a freshly-minted OAuth refresh token (Google Drive connect).
+    // Replacing the object wholesale used to silently WIPE the refresh token
+    // the moment the user clicked Save — merge provider configs instead so
+    // fields a draft doesn't know about are preserved.
+    const mergedPatch: Partial<AppSettings> = { ...patch };
+    if (patch.uploadProviders !== undefined) {
+      mergedPatch.uploadProviders = mergeUploadProviders(
+        current.uploadProviders,
+        patch.uploadProviders,
+      );
+    }
+    const next = this.validateOrThrow({ ...current, ...mergedPatch });
     for (const [key, value] of Object.entries(next)) {
       this.deps.config.setUser(key, value);
     }
@@ -178,7 +248,12 @@ export class SettingsService {
   }
 
   exportToJson(): string {
-    return JSON.stringify(this.getAll(), null, 2);
+    const settings = this.getAll();
+    // ponytail: the license token is a signed credential — strip it from
+    // human-readable exports so sharing a settings file never leaks it.
+    const { licenseKey: _omitted, ...exportable } = settings;
+    void _omitted;
+    return JSON.stringify(exportable, null, 2);
   }
 
   importFromJson(json: string): AppSettings {

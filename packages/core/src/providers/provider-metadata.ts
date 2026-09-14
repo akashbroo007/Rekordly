@@ -106,7 +106,8 @@ export const PROVIDER_METADATA: Record<string, ProviderMeta> = {
       '4. Go to Credentials > Create Credentials > OAuth 2.0 Client ID',
       '5. Application type: Desktop app',
       '6. Copy the Client ID and Client Secret',
-      '7. Paste them below and click Connect',
+      '7. IMPORTANT: While the app is unverified, open "APIs & Services" > "OAuth consent screen" > "Audience" and add YOUR Google account under "Test users" — otherwise Google blocks sign-in with "Access blocked: not completed verification"',
+      '8. Paste the Client ID and Client Secret here, then click "Connect Google Account" — your browser opens to approve access',
     ],
   },
 

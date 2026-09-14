@@ -1,0 +1,232 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-canvas: #000000;
+  --color-panel: #0a0a0a;
+  --color-surface: #101010;
+  --color-elevated: #171717;
+  --color-primary: #ffffff;
+
+  --color-foreground: #ffffff;
+  --color-foreground-secondary: #a3a3a3;
+  --color-foreground-muted: #737373;
+
+  --color-border-soft: rgba(255, 255, 255, 0.08);
+  --color-border-medium: rgba(255, 255, 255, 0.14);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  --animate-fade-up: fade-up 0.7s cubic-bezier(0.21, 1.02, 0.73, 1) both;
+  --animate-blink: blink 1.2s ease-in-out infinite;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-foreground antialiased;
+  }
+
+  ::selection {
+    background-color: rgba(255, 255, 255, 0.2);
+  }
+
+  /* Slim, dark scrollbars that blend into the black background */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.14);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.24);
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+@layer components {
+  /* Shared prose styling for docs + legal markdown */
+  .markdown {
+    @apply text-base leading-7 text-foreground-secondary;
+  }
+
+  .markdown > *:first-child {
+    @apply mt-0;
+  }
+
+  .markdown h1 {
+    @apply mt-10 mb-5 text-3xl font-bold tracking-tight text-white;
+  }
+
+  .markdown h2 {
+    @apply mt-10 mb-4 border-b border-white/10 pb-2 text-xl font-semibold text-white;
+    scroll-margin-top: 6rem;
+  }
+
+  .markdown h3 {
+    @apply mt-8 mb-3 text-lg font-semibold text-white;
+    scroll-margin-top: 6rem;
+  }
+
+  .markdown p {
+    @apply my-4;
+  }
+
+  .markdown a {
+    @apply text-white underline decoration-white/30 underline-offset-4 transition-colors hover:decoration-white;
+  }
+
+  .markdown strong {
+    @apply font-semibold text-white;
+  }
+
+  .markdown ul {
+    @apply my-4 list-disc space-y-2 pl-6;
+  }
+
+  .markdown ol {
+    @apply my-4 list-decimal space-y-2 pl-6;
+  }
+
+  .markdown li::marker {
+    @apply text-foreground-muted;
+  }
+
+  .markdown blockquote {
+    @apply my-6 border-l-2 border-white/25 pl-4 text-foreground-secondary italic;
+  }
+
+  .markdown code {
+    @apply rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[0.85em] text-white;
+  }
+
+  .markdown pre {
+    @apply my-6 overflow-x-auto rounded-xl border border-white/10 bg-white/[0.03] p-4 leading-relaxed;
+  }
+
+  .markdown pre code {
+    @apply border-0 bg-transparent p-0 text-[0.85em] leading-6 text-foreground-secondary;
+  }
+
+  .markdown table {
+    @apply my-6 w-full border-collapse text-left text-sm;
+  }
+
+  .markdown th {
+    @apply border-b border-white/15 px-4 py-2.5 font-semibold text-white;
+  }
+
+  .markdown td {
+    @apply border-b border-white/5 px-4 py-2.5;
+  }
+
+  .markdown hr {
+    @apply my-8 border-white/10;
+  }
+
+  .markdown img {
+    @apply my-6 rounded-xl border border-white/10;
+  }
+}
+
+/* highlight.js token colors — monochrome-friendly theme */
+.hljs-comment,
+.hljs-quote {
+  color: #6b6b6b;
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-type {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: #d4d4d4;
+}
+
+.hljs-number,
+.hljs-built_in,
+.hljs-symbol,
+.hljs-bullet {
+  color: #e5e5e5;
+}
+
+.hljs-title,
+.hljs-title.class_,
+.hljs-title.function_,
+.hljs-section,
+.hljs-name {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable {
+  color: #c4c4c4;
+}
+
+.hljs-meta,
+.hljs-deletion {
+  color: #8a8a8a;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 700;
+}

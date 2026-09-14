@@ -21,7 +21,7 @@ Architecture:
 Plugin-first Desktop Application
 
 License:
-MIT
+PolyForm Noncommercial 1.0.0 (free for noncommercial use; commercial use requires a license from Rekordly — hello@rekordly.in)
 
 Language:
 English
@@ -38,7 +38,7 @@ The application should be:
 - Easy to contribute to
 - Easy to maintain
 - Easy to understand
-- Open Source Friendly
+- Source Available (contribution friendly)
 
 Avoid unnecessary enterprise complexity.
 
@@ -135,7 +135,7 @@ Reason
 
 Consistent
 
-Open Source
+Community-driven
 
 Beautiful
 
@@ -672,6 +672,8 @@ plugins/
     stripchat/
 
     chaturbate/
+
+    camsoda/
 
     twitch/
 

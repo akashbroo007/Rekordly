@@ -130,10 +130,22 @@ export class DownloadManager extends EventEmitter<DownloadManagerEvents> {
     if (this.ticker !== null) return;
     // ponytail: transfers die with the process — anything still marked
     // 'downloading' at boot is stale and goes back to the queue.
-    const stale = this.repo.listActive();
-    for (const item of stale) {
-      this.repo.update(item.id, { status: 'queued' });
-      this.logger.info({ downloadId: item.id }, 'recovered stale downloading item');
+    // ponytail: a force-kill mid-download can leave a torn row behind — a
+    // single bad row must not throw out of start() and block app boot
+    // (which used to leave the app headless holding the single-instance
+    // lock: "running in Task Manager but won't open").
+    try {
+      const stale = this.repo.listActive();
+      for (const item of stale) {
+        try {
+          this.repo.update(item.id, { status: 'queued' });
+          this.logger.info({ downloadId: item.id }, 'recovered stale downloading item');
+        } catch (error) {
+          this.logger.warn({ downloadId: item.id, error }, 'failed to recover stale download — skipping');
+        }
+      }
+    } catch (error) {
+      this.logger.warn({ error }, 'stale download recovery failed — scheduler starting anyway');
     }
     this.ticker = setInterval(this.tick, TICK_MS);
     this.logger.info('download scheduler started');
@@ -156,11 +168,26 @@ export class DownloadManager extends EventEmitter<DownloadManagerEvents> {
   }
 
   private tick = (): void => {
-    const { maxConcurrentDownloads } = this.deps.getLimits();
+    let limits: { maxConcurrentDownloads: number; downloadBandwidthLimit: number };
+    try {
+      limits = this.deps.getLimits();
+    } catch {
+      return; // settings unreadable (torn DB) — retry on the next tick
+    }
+    let queued: DownloadQueueRecord[];
+    try {
+      queued = this.repo
+        .listQueued()
+        .filter((item) => !this.startingIds.has(item.id));
+    } catch {
+      return; // DB hiccup — retry on the next tick, never crash the interval
+    }
+    const { maxConcurrentDownloads } = limits;
     let guard = 0;
     while (this.transfers.size + this.startingIds.size < maxConcurrentDownloads && guard < 20) {
       guard += 1;
-      const next = this.nextQueued();
+      queued.sort((a, b) => a.priority - b.priority || a.createdAt.localeCompare(b.createdAt));
+      const next = queued.shift();
       if (next === undefined) break;
       this.startingIds.add(next.id);
       void this.runItem(next).finally(() => {
@@ -168,12 +195,6 @@ export class DownloadManager extends EventEmitter<DownloadManagerEvents> {
       });
     }
   };
-
-  private nextQueued(): DownloadQueueRecord | undefined {
-    const queued = this.repo.listQueued().filter((item) => !this.startingIds.has(item.id));
-    queued.sort((a, b) => a.priority - b.priority || a.createdAt.localeCompare(b.createdAt));
-    return queued[0];
-  }
 
   // --- Queue operations ------------------------------------------------------
 

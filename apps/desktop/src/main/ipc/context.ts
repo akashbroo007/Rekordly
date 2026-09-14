@@ -6,6 +6,8 @@ import type {
   NotificationService,
   PluginManager,
   SettingsService,
+  LicenseService,
+  GateNotifier,
   MonitoringService,
   RecordingService,
   DownloadManager,
@@ -15,6 +17,7 @@ import type {
   HardwareService,
   ProcessMonitorService,
   NetworkMonitorService,
+  TorService,
 } from '@rekordly/core';
 
 export interface IpcContext {
@@ -22,6 +25,8 @@ export interface IpcContext {
   getWindow: () => BrowserWindow | null;
   dirs: AppDirs;
   settings: SettingsService;
+  license: LicenseService;
+  gateNotifier: GateNotifier;
   notifications: NotificationService;
   plugins: PluginManager;
   monitoring: MonitoringService;
@@ -33,6 +38,8 @@ export interface IpcContext {
   hardware: HardwareService;
   processMonitor?: ProcessMonitorService;
   networkMonitor?: NetworkMonitorService;
+  /** Embedded secure proxy (Tor) — status/retry/probe surface. */
+  proxy?: TorService;
   logRepo: LogRepo;
   creatorRepo: CreatorRepo;
   recordingRepo: RecordingRepo;

@@ -10,6 +10,7 @@ import type {
   PluginEventMap,
   PluginLifecycleState,
   PluginManifest,
+  PluginNetworkApi,
   PluginSettingValues,
   PluginStatus,
   SettingDef,
@@ -43,6 +44,12 @@ export interface PluginManagerOptions {
   repo: PluginRepo;
   logger: Logger;
   notifications: NotificationService;
+  /**
+   * ponytail: optional host-owned outbound proxy (TorService) — when present,
+   * plugin contexts expose `network` so plugins can route HTTP through it for
+   * creators the user flagged (`creators.useProxy`).
+   */
+  proxyNetwork?: PluginNetworkApi;
 }
 
 /**
@@ -145,6 +152,7 @@ export class PluginManager {
       dataDir,
       manifestDir: managed.discovered.dir,
       settings: createPluginSettingsApi(this.options.repo, managed.record.id),
+      network: this.options.proxyNetwork,
     };
 
     await withTimeout(instance.initialize(context), LIFECYCLE_TIMEOUT_MS, `initialize ${managed.record.id}`);

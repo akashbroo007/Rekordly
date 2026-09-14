@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Example plugin that validates the Rekordly plugin architecture with mock creators, live status and streams. No real platform is contacted.",
   "author": "Rekordly",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "homepage": "https://github.com/Rekordly/Rekordly",
   "entry": "dist/index.js",
   "minAppVersion": "0.1.0",

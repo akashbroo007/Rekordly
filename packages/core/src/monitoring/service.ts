@@ -24,6 +24,14 @@ export interface MonitoringServiceOptions {
   maxConcurrent?: number;
 }
 
+/**
+ * ponytail: how soon a degraded (unreachable-site) check is retried. Short
+ * enough to catch the site coming back quickly, long enough to not hammer
+ * it; much shorter than a full interval so auto-record detection resumes
+ * promptly after a network blip.
+ */
+const UNKNOWN_CHECK_RETRY_MS = 60_000;
+
 export interface MonitoringServiceEvents {
   event: [event: MonitoringEvent];
 }
@@ -276,6 +284,40 @@ export class MonitoringService extends EventEmitter<MonitoringServiceEvents> {
 
       const result = await liveDetection.getLiveStatus(job.creatorId);
       const durationMs = Date.now() - startTime;
+
+      // ponytail: a DEGRADED check (site unreachable, transport failure) is
+      // neither live nor ended — the plugin says so via `unknown`. Treating
+      // it as offline emitted `creator-offline`, which the app wiring
+      // translates into `stopForCreator` — healthy recordings were
+      // finalized mid-capture by a network blip (verified: a 15-min-capped
+      // BongaCams recording finalized after ~5min with 21s of media while
+      // the site was unreachable). Keep the previous definitive state, do
+      // not count a failure, and retry sooner than a full interval.
+      if (result.unknown === true) {
+        const current = this.queue.get(job.id);
+        if (current !== undefined) {
+          const retryMs = Math.min(current.intervalMs, UNKNOWN_CHECK_RETRY_MS);
+          current.lastCheckAt = Date.now();
+          current.nextCheckAt = Date.now() + retryMs;
+          current.updatedAt = new Date().toISOString();
+          // ponytail: the scheduler's tick marked the job 'checking'
+          // transiently; restore 'queued' — that state is due again after
+          // the retry deadline ('checking' itself is not in due() and would
+          // leave the job a zombie).
+          this.queue.updateState(current.id, 'queued');
+          this.repo.update(current.id, {
+            nextCheckAt: current.nextCheckAt,
+            lastCheckAt: current.lastCheckAt,
+            state: 'queued',
+          });
+          this.logger.info(
+            { creatorId: job.creatorId, durationMs, retryMs },
+            'monitoring check degraded (site unreachable) — state kept, retrying soon',
+          );
+        }
+        this.emitStats();
+        return;
+      }
 
       const checkResult: MonitoringCheckResult = {
         isLive: result.isLive,

@@ -1,7 +1,7 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { Cloud, Check, X, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Cloud, Check, X, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { useState } from 'react';
-import { Button, Input, Badge } from '@rekordly/ui';
+import { Button, Input, Badge, Select } from '@rekordly/ui';
 import type { AppSettings, UploadProviderMetaDto } from '@rekordly/shared/contracts';
 import { useToastStore } from '../../stores/toast-store';
 
@@ -13,6 +13,7 @@ export function CloudStorageSettings({
   patch: (partial: Partial<AppSettings>) => void;
 }) {
   const pushToast = useToastStore((state) => state.push);
+  const queryClient = useQueryClient();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { data: providers } = useQuery({
@@ -25,15 +26,48 @@ export function CloudStorageSettings({
     queryFn: () => window.desktop.uploads.providersMeta(),
   });
 
-  const testProvider = useMutation({
-    mutationFn: (id: string) => window.desktop.uploads.testProvider(id),
-    onSuccess: (result, id) => {
+  // ponytail: Google Drive needs the OAuth loop to mint the refresh token —
+  // the browser flow runs in the main process and persists all credentials
+  // (including the refresh token) on success.
+  const connectGoogleDrive = useMutation({
+    mutationFn: (creds: { clientId: string; clientSecret: string }) =>
+      window.desktop.uploads.connectGoogleDrive(creds.clientId, creds.clientSecret),
+    onSuccess: (result, creds) => {
+      void queryClient.invalidateQueries({ queryKey: ['upload-providers'] });
+      void queryClient.invalidateQueries({ queryKey: ['settings'] });
+      if (result.ok) {
+        // keep the draft in lockstep with the saved settings — otherwise the
+        // next "Save changes" would wipe the refresh token the flow stored.
+        const current = draft.uploadProviders;
+        patch({
+          uploadProviders: {
+            ...current,
+            'google-drive': {
+              ...current['google-drive'],
+              enabled: true,
+              clientId: creds.clientId,
+              clientSecret: creds.clientSecret,
+            },
+          } as typeof current,
+        });
+        pushToast({
+          level: 'info',
+          title: 'Google Drive connected',
+          message: 'Account linked — Google Drive is ready to use.',
+        });
+      } else {
+        pushToast({
+          level: 'error',
+          title: 'Could not connect Google Drive',
+          message: result.error ?? 'Check your Client ID and Client Secret, then try again.',
+        });
+      }
+    },
+    onError: (error: unknown) => {
       pushToast({
-        level: result ? 'info' : 'error',
-        title: result ? 'Connection successful' : 'Connection failed',
-        message: result
-          ? `${id} is reachable and authenticated.`
-          : `Could not connect to ${id}. Check your credentials.`,
+        level: 'error',
+        title: 'Could not connect Google Drive',
+        message: error instanceof Error ? error.message : 'Unknown error',
       });
     },
   });
@@ -66,6 +100,19 @@ export function CloudStorageSettings({
         work out of the box; others require API credentials.
       </p>
 
+      <div className="w-64">
+        <Select
+          label="Concurrent uploads"
+          options={[1, 2, 3, 4, 5].map((n) => ({
+            value: String(n),
+            label: n === 1 ? '1 upload at a time' : `${n} uploads at a time`,
+          }))}
+          value={String(draft.maxConcurrentUploads ?? 1)}
+          onChange={(e) => patch({ maxConcurrentUploads: Number(e.target.value) })}
+          hint="How many files upload simultaneously. Low-Resource Mode keeps this at 1."
+        />
+      </div>
+
       {meta?.map((m) => {
         const status = providerStatus.get(m.id);
         const isDefault = uploadProviders.defaultProvider === m.id;
@@ -81,9 +128,25 @@ export function CloudStorageSettings({
             isEnabled={isEnabled}
             config={providerConfig}
             onConfigChange={(updates) => updateProvider(m.id, updates)}
-            onTest={() => testProvider.mutate(m.id)}
+            onConnectGoogleDrive={
+              m.id === 'google-drive'
+                ? () => {
+                    const clientId = String(providerConfig['clientId'] ?? '').trim();
+                    const clientSecret = String(providerConfig['clientSecret'] ?? '').trim();
+                    if (clientId.length === 0 || clientSecret.length === 0) {
+                      pushToast({
+                        level: 'error',
+                        title: 'Missing Google Drive credentials',
+                        message: 'Paste your OAuth Client ID and Client Secret first.',
+                      });
+                      return;
+                    }
+                    connectGoogleDrive.mutate({ clientId, clientSecret });
+                  }
+                : undefined
+            }
+            connectPending={m.id === 'google-drive' && connectGoogleDrive.isPending}
             onSetDefault={() => patch({ uploadProviders: { ...uploadProviders, defaultProvider: m.id } })}
-            testPending={testProvider.isPending}
             formatMaxSize={formatMaxSize}
             expanded={expandedId === m.id}
             onToggle={() => setExpandedId(expandedId === m.id ? null : m.id)}
@@ -101,9 +164,9 @@ function ProviderCard({
   isEnabled,
   config,
   onConfigChange,
-  onTest,
+  onConnectGoogleDrive,
+  connectPending,
   onSetDefault,
-  testPending,
   formatMaxSize,
   expanded,
   onToggle,
@@ -114,16 +177,25 @@ function ProviderCard({
   isEnabled: boolean;
   config: Record<string, unknown>;
   onConfigChange: (updates: Record<string, unknown>) => void;
-  onTest: () => void;
+  onConnectGoogleDrive?: () => void;
+  connectPending: boolean;
   onSetDefault: () => void;
-  testPending: boolean;
   formatMaxSize: (bytes: number | null) => string;
   expanded: boolean;
   onToggle: () => void;
 }) {
 
+  // ponytail: distinguish "credentials pasted but Google account not linked
+  // yet" from "nothing configured at all" — the old single "Not registered"
+  // state made a completed credential setup look broken.
+  const credsPasted =
+    String(config['clientId'] ?? '').length > 0 && String(config['clientSecret'] ?? '').length > 0;
+  const unregistered = !status && (meta.id !== 'google-drive' || !credsPasted);
+
   const statusColor = !status
-    ? 'muted'
+    ? unregistered
+      ? 'error'
+      : 'warning'
     : status.authenticated && status.healthy
       ? 'success'
       : status.authenticated
@@ -131,7 +203,9 @@ function ProviderCard({
         : 'error';
 
   const statusText = !status
-    ? 'Not registered'
+    ? unregistered
+      ? 'Not registered'
+      : 'Needs sign-in'
     : status.authenticated && status.healthy
       ? 'Online'
       : status.authenticated
@@ -156,6 +230,11 @@ function ProviderCard({
               </Badge>
             </div>
             <p className="mt-0.5 text-xs text-foreground-muted">{meta.description}</p>
+            {!status && meta.id === 'google-drive' && credsPasted && (
+              <p className="mt-1 text-[11px] text-warning">
+                Credentials saved — click "Connect Google Account" to link your Google account.
+              </p>
+            )}
           </div>
         </div>
         <button
@@ -272,18 +351,32 @@ function ProviderCard({
                 Set as Default
               </Button>
             )}
-            {meta.requiresApiKey && (
+            {meta.id === 'google-drive' && (
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={onTest}
-                disabled={testPending}
+                onClick={onConnectGoogleDrive}
+                disabled={connectPending}
               >
-                {testPending ? <Loader2 size={14} className="animate-spin" /> : null}
-                Test Connection
+                {connectPending ? <Loader2 size={14} className="animate-spin" /> : null}
+                Connect Google Account
               </Button>
             )}
           </div>
+          {meta.id === 'google-drive' && (
+            <p className="mt-2 text-[11px] text-foreground-muted">
+              After pasting the Client ID and Client Secret, click Connect Google Account — a browser
+              window opens to approve access (scope: per-file Drive access only). The connection is
+              verified automatically once you return.
+            </p>
+          )}
+          {meta.id === 'google-drive' && (
+            <p className="mt-1 text-[11px] text-warning">
+              Unverified app? Google only lets approved testers sign in while the consent screen is in
+              Testing mode — add your Google account under "APIs & Services → OAuth consent screen →
+              Audience → Test users" in Google Cloud Console, then connect again.
+            </p>
+          )}
         </div>
       )}
     </div>

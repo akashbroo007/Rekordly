@@ -1,0 +1,21 @@
+{
+  "id": "myfreecams",
+  "name": "MyFreeCams",
+  "version": "0.1.0",
+  "description": "Monitor and record livestreams from MyFreeCams.",
+  "author": "Rekordly",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "homepage": "https://github.com/Rekordly/Rekordly",
+  "entry": "dist/index.js",
+  "minAppVersion": "0.1.0",
+  "capabilities": [
+    "auth",
+    "creator-search",
+    "live-detection",
+    "stream-extraction",
+    "settings",
+    "health-check",
+    "metadata"
+  ],
+  "permissions": ["network", "cookies", "recording"]
+}

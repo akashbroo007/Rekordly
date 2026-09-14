@@ -2,6 +2,7 @@
   "name": "@rekordly/plugin-sdk",
   "version": "0.1.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -12,10 +13,14 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "@rekordly/shared": "workspace:*",
     "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.0"
   }
 }

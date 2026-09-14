@@ -1,7 +1,8 @@
 
+import { existsSync, renameSync } from 'node:fs';
 import { statfs } from 'node:fs/promises';
 import { join } from 'node:path';
-import { app, BrowserWindow, nativeTheme, Notification as ElectronNotification } from 'electron';
+import { app, BrowserWindow, dialog, nativeTheme, Notification as ElectronNotification } from 'electron';
 import {
   createDatabase,
   createLogRepo,
@@ -21,6 +22,10 @@ import {
   NotificationService,
   PluginManager,
   SettingsService,
+  LicenseService,
+  createEntitlementsSource,
+  getEntitlements,
+  GateNotifier,
   MonitoringService,
   RecordingService,
   StorageService,
@@ -34,6 +39,7 @@ import {
   HardwareService,
   ProcessMonitorService,
   NetworkMonitorService,
+  TorService,
   buildAppDirs,
   ensureAppDirs,
   type CoreEvents,
@@ -49,6 +55,124 @@ import { TrayController } from './tray';
 
 let mainWindow: BrowserWindow | null = null;
 let quitting = false;
+/**
+ * ponytail: set when a second launch arrives before bootstrap finished
+ * creating the window — the window is shown immediately once it exists
+ * instead of dropping the request (which looked like "won't open").
+ */
+let pendingFocusRequest = false;
+/** Logger available to early helpers (window recreate on second-instance). */
+let earlyLogger: { info: (...a: never[]) => void; warn: (...a: never[]) => void; error: (...a: never[]) => void } | null = null;
+let trayController: TrayController | null = null;
+/** Settings snapshot needed to re-attach the close-to-tray behavior on recreate. */
+let closeToTrayEnabled = true;
+/** before-quit is registered once per process (bootstrap runs once). */
+let quitHandlerRegistered = false;
+
+function isWindowUsable(win: BrowserWindow | null): win is BrowserWindow {
+  return win !== null && !win.isDestroyed();
+}
+
+/**
+ * ponytail: bring the main window forward no matter how it was hidden.
+ * focus() alone cannot un-hide a window hidden via close-to-tray (hide()),
+ * and restore() alone cannot un-hide it either — without show() here a
+ * relaunch while the app sits in the tray does nothing visible, leaving
+ * the app "running in the background but not able to open".
+ */
+function focusMainWindow(): void {
+  if (!isWindowUsable(mainWindow)) {
+    pendingFocusRequest = true;
+    return;
+  }
+  try {
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    if (!mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+    mainWindow.focus();
+    mainWindow.moveTop();
+  } catch (err) {
+    earlyLogger?.warn?.({ err } as never, 'focusMainWindow failed' as never);
+  }
+}
+
+/**
+ * ponytail: attach the close-to-tray behavior to the current main window.
+ * Extracted so both the normal boot path and the fatal-error fallback (or a
+ * second-instance recreate) share the same behavior — closing hides instead
+ * of quitting when enabled, and the reference is cleared on destroy so a
+ * later relaunch recreates instead of focusing a dead handle.
+ */
+function attachWindowCloseBehavior(userDataPath: string, getCloseToTray: () => boolean): void {
+  const win = mainWindow;
+  if (!isWindowUsable(win)) return;
+  closeToTrayEnabled = getCloseToTray();
+  win.on('close', (event) => {
+    if (isWindowUsable(mainWindow)) {
+      try {
+        saveWindowState(userDataPath, mainWindow);
+      } catch {
+        /* a corrupt userData path must never block close */
+      }
+    }
+    // ponytail: with close-to-tray enabled, closing the window hides it and
+    // keeps monitoring/recording running in the background.
+    if (!quitting && getCloseToTray()) {
+      event.preventDefault();
+      win.hide();
+    }
+  });
+  win.on('closed', () => {
+    if (mainWindow === win) {
+      mainWindow = null;
+    }
+  });
+}
+
+/**
+ * ponytail: open SQLite with corruption recovery. A force-kill mid-download
+ * can leave Rekordly.db torn (WAL mid-transaction); without this the next
+ * migrate() throws, bootstrap dies before creating any window, and the app
+ * sits headless holding the single-instance lock — every later launch quits
+ * instantly ("running in Task Manager but won't open"). On corruption
+ * signatures the torn file is backed up next to the original and a fresh DB
+ * is created so the app always reaches a visible window; media files on disk
+ * are never touched.
+ */
+function openDatabaseWithRecovery(dbPath: string): ReturnType<typeof createDatabase> {
+  try {
+    const handle = createDatabase(dbPath);
+    handle.migrate();
+    return handle;
+  } catch (err) {
+    const message = err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err);
+    const corrupt = /malform|corrupt|not a database|disk image|database is locked|SQLITE_CORRUPT|SQLITE_NOTADB/i.test(message);
+    if (!corrupt) throw err;
+    // eslint-disable-next-line no-console
+    console.error('Database appears corrupt, backing up and recreating:', message);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupPath = `${dbPath}.corrupt-${stamp}.bak`;
+    try {
+      if (existsSync(dbPath)) renameSync(dbPath, backupPath);
+      for (const suffix of ['-wal', '-shm', '-journal']) {
+        try {
+          if (existsSync(`${dbPath}${suffix}`)) renameSync(`${dbPath}${suffix}`, `${backupPath}${suffix}`);
+        } catch {
+          /* best-effort sidecar cleanup */
+        }
+      }
+    } catch (backupErr) {
+      // eslint-disable-next-line no-console
+      console.error('Database backup failed:', backupErr);
+    }
+    const fresh = createDatabase(dbPath);
+    fresh.migrate();
+    return fresh;
+  }
+}
 
 /**
  * ponytail: counting semaphore limiting how many auto-record stream
@@ -94,15 +218,84 @@ if (!app.requestSingleInstanceLock()) {
   app.setAppUserModelId('com.rekordly.app');
 
   app.on('second-instance', () => {
-    if (mainWindow !== null) {
-      if (mainWindow.isMinimized()) {
-        mainWindow.restore();
-      }
-      mainWindow.focus();
-    }
+    focusMainWindow();
   });
 
-  void bootstrap();
+  void bootstrap().catch((err) => {
+    // ponytail: bootstrap must never leave the app running headless holding
+    // the single-instance lock (every later launch would quit instantly and
+    // the user sees "running in Task Manager but won't open"). As a last
+    // resort, surface the error instead of hanging in the background.
+    // eslint-disable-next-line no-console
+    console.error('Fatal bootstrap error:', err);
+    void app.whenReady().then(() => {
+      if (!isWindowUsable(mainWindow)) {
+        try {
+          const userDataPath = app.getPath('userData');
+          const fallbackState = loadWindowState(userDataPath);
+          mainWindow = createMainWindow(fallbackState, (earlyLogger ?? console) as never);
+          attachWindowCloseBehavior(userDataPath, () => closeToTrayEnabled);
+          if (trayController === null) {
+            trayController = new TrayController({ getWindow: () => mainWindow, logger: (earlyLogger ?? console) as never });
+            trayController.create();
+          }
+          // ponytail: bootstrap died before registering its own app-level
+          // handlers — register minimal ones so the fallback window can still
+          // quit cleanly and a later dock/tray activate still shows it.
+          // Otherwise closing this window leaves a headless lock holder again.
+          app.on('window-all-closed', () => {
+            if (process.platform !== 'darwin') app.quit();
+          });
+          app.on('activate', () => focusMainWindow());
+          if (!quitHandlerRegistered) {
+            quitHandlerRegistered = true;
+            app.on('before-quit', () => {
+              quitting = true;
+              try {
+                trayController?.destroy();
+              } catch {
+                /* already gone */
+              }
+            });
+          }
+          focusMainWindow();
+        } catch {
+          /* window creation itself failed — nothing more we can show */
+        }
+      } else {
+        focusMainWindow();
+      }
+      const showError = (): void => {
+        const detail = err instanceof Error ? err.message.slice(0, 1000) : String(err).slice(0, 1000);
+        const show = (): Promise<{ response: number }> =>
+          isWindowUsable(mainWindow)
+            ? dialog.showMessageBox(mainWindow, {
+                type: 'error',
+                title: 'Rekordly failed to start',
+                message: 'Rekordly could not finish starting. Your recordings and downloads on disk are untouched.',
+                detail,
+                buttons: ['Quit', 'Continue anyway'],
+                defaultId: 1,
+              })
+            : dialog.showMessageBox({
+                type: 'error',
+                title: 'Rekordly failed to start',
+                message: 'Rekordly could not finish starting. Your recordings and downloads on disk are untouched.',
+                detail,
+                buttons: ['Quit'],
+              });
+        void show()
+          .then(({ response }) => {
+            if (response === 0) {
+              quitting = true;
+              app.quit();
+            }
+          })
+          .catch(() => undefined);
+      };
+      showError();
+    });
+  });
 }
 
 async function bootstrap(): Promise<void> {
@@ -114,8 +307,7 @@ async function bootstrap(): Promise<void> {
   const dirs = buildAppDirs(userDataPath, mediaDirs.recordings);
   ensureAppDirs(dirs);
 
-  const database = createDatabase(dirs.dbPath);
-  database.migrate();
+  const database = openDatabaseWithRecovery(dirs.dbPath);
 
   const settingsRepo = createSettingsRepo(database.orm);
 
@@ -127,6 +319,7 @@ async function bootstrap(): Promise<void> {
     level: initialLogLevel,
     console: true,
   });
+  earlyLogger = logger as never;
   logger.info({ dirs, logLevel: initialLogLevel }, 'application starting');
   logger.info({ dbPath: dirs.dbPath }, 'database initialized');
 
@@ -145,8 +338,49 @@ async function bootstrap(): Promise<void> {
     defaultRecordingsDir: mediaDirs.recordings,
     defaultDownloadsDir: mediaDirs.downloads,
   });
+
+  // Pro tier: offline Ed25519 license verification. The private signing key
+  // never ships with the app; the public key is embedded in LicenseService.
+  const license = new LicenseService({ settings, logger });
+  const entitlementsSource = createEntitlementsSource(license);
   const bus = new EventBus<CoreEvents>();
   const notifications = new NotificationService({ logRepo, logger, bus });
+  // Gate hits become persistent bell entries + OS notifications (cooldowns
+  // inside GateNotifier keep repeat hits from nagging).
+  const gateNotifier = new GateNotifier({ notifications, logger });
+
+  // ponytail: embedded secure proxy (Tor). Reachability of a cam site is a
+  // USER-network property (ISP/DNS blocks are regional), so routing is a
+  // per-creator opt-in (`creators.use_proxy`, Add/Edit dialog) — the service
+  // starts lazily only when a flagged creator is checked/recorded and never
+  // touches traffic for anyone else. Download of the runtime happens once,
+  // on first use (zero user configuration).
+  const tor = new TorService({
+    rootDir: join(userDataPath, 'tor'),
+    logger,
+    isProxied: (identifier) => {
+      const [pluginId, externalId] = identifier.split(':');
+      if (pluginId === undefined || externalId === undefined) return false;
+      try {
+        return creatorRepo.getByExternal(pluginId, externalId)?.useProxy === true;
+      } catch {
+        return false;
+      }
+    },
+  });
+  tor.onStatusChanged((status) => {
+    if (status.state === 'error') {
+      notifications.send({
+        level: 'error',
+        title: 'Secure proxy failed',
+        message: status.message ?? 'The secure proxy could not be started.',
+      });
+    }
+    sendToRenderer(IPC_CHANNELS.proxyEvent, {
+      state: status.state,
+      message: status.message,
+    });
+  });
 
   const pluginManager = new PluginManager({
     searchDirs: [dirs.pluginsDir, ...devPluginDirs(), ...bundledPluginDirs()],
@@ -156,6 +390,7 @@ async function bootstrap(): Promise<void> {
     repo: pluginRepo,
     logger,
     notifications,
+    proxyNetwork: tor,
   });
 
   // ponytail: OS-level autostart follows the launchAtStartup setting
@@ -178,8 +413,12 @@ async function bootstrap(): Promise<void> {
   });
 
   const sendToRenderer = (channel: string, payload: unknown): void => {
-    if (mainWindow !== null && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(channel, payload);
+    if (isWindowUsable(mainWindow)) {
+      try {
+        mainWindow.webContents.send(channel, payload);
+      } catch {
+        /* renderer gone — event dropped */
+      }
     }
   };
 
@@ -201,6 +440,22 @@ async function bootstrap(): Promise<void> {
       new ElectronNotification({ title: record.title, body: record.message }).show();
     }
   });
+
+  // Pro tier: trial lifecycle alerts — fire once per state change (boot and
+  // every activation/deactivation), never per gate hit.
+  const notifyTrialLifecycle = (): void => {
+    const status = license.getStatus();
+    gateNotifier.resetLatches();
+    if (status.tier === 'trial' && status.trialDaysLeft !== undefined) {
+      if (status.trialDaysLeft <= 1) {
+        gateNotifier.trialExpiring(status.trialDaysLeft);
+      }
+    } else if (status.expired) {
+      gateNotifier.trialExpired();
+    }
+  };
+  notifyTrialLifecycle();
+  license.onChanged(notifyTrialLifecycle);
 
   for (const type of [
     'loaded',
@@ -224,7 +479,14 @@ async function bootstrap(): Promise<void> {
     });
   }
 
-  await pluginManager.initialize();
+  // ponytail: a single bad plugin row / missing folder must never block boot
+  // (window creation happens much later — a throw here used to leave the app
+  // headless holding the single-instance lock).
+  try {
+    await pluginManager.initialize();
+  } catch (err) {
+    logger.error({ err }, 'plugin initialization failed — continuing without plugins');
+  }
 
   const monitoring = new MonitoringService({
     repo: monitoringRepo,
@@ -249,6 +511,31 @@ async function bootstrap(): Promise<void> {
     // ponytail: Low-Resource Mode caps concurrent recordings to a single
     // slot and skips thumbnail generation (read live on every decision).
     isLowResourceMode: () => settings.getAll().lowResourceMode,
+    // Pro tier gates: live entitlements clamp concurrency and per-recording
+    // duration on the free tier (read live on every decision).
+    getEntitlements: () => getEntitlements(entitlementsSource.getLicenseStatus()),
+    getGateNotifier: () => gateNotifier,
+    // ponytail: launch-time disk guard for the staggered-start pump (plan §9)
+    // — reuses the existing Settings → Recording floor, so queued starts park
+    // instead of filling the drive.
+    getMinFreeBytes: () => {
+      const gb = settings.getAll().autoRecordMinFreeDiskGb;
+      return gb > 0 ? gb * 1024 ** 3 : 0;
+    },
+    // ponytail: Settings → Recording → Advanced compression knob for the
+    // "(480p)" derivative transcodes. Read live per transcode so changing
+    // the setting applies to the next recording without a restart.
+    // quality → best fidelity; size → roughly half the bitrate at 480p.
+    getDerivativeCrf: () => {
+      switch (settings.getAll().recordingCompression) {
+        case 'quality':
+          return 22;
+        case 'size':
+          return 27;
+        default:
+          return 23;
+      }
+    },
     resolveStream: async (job) => {
       const managed = pluginManager.get(job.platformId);
       const detection = managed?.instance?.capabilities.liveDetection;
@@ -281,7 +568,14 @@ async function bootstrap(): Promise<void> {
   // while the app was closed are re-adopted and finalized when they finish
   // (autonomous recorder); the rest are marked failed so no zombie
   // recording cards linger after boot.
-  recording.recoverStaleJobs();
+  // ponytail: never let a torn row / dead-pid scan block boot — a force-kill
+  // mid-recording is exactly when this runs, and a throw here used to leave
+  // the app headless ("running in Task Manager but won't open").
+  try {
+    await recording.recoverStaleJobs();
+  } catch (err) {
+    logger.error({ err }, 'stale recording recovery failed — continuing with jobs as-is');
+  }
 
   const downloads = new DownloadManager({
     repo: downloadRepo,
@@ -307,7 +601,16 @@ async function bootstrap(): Promise<void> {
     repo: uploadRepo,
     notifications,
     logger,
-    maxConcurrentUploads: 1,
+    // ponytail: concurrency is user-configurable (Settings → Cloud Storage);
+    // Low-Resource Mode forces one upload at a time, same as downloads.
+    getLimits: () => {
+      const prefs = settings.getAll();
+      return {
+        maxConcurrentUploads: prefs.lowResourceMode
+          ? 1
+          : prefs.maxConcurrentUploads,
+      };
+    },
   });
 
   const uploadProviderSettings = settings.getAll().uploadProviders;
@@ -322,36 +625,59 @@ async function bootstrap(): Promise<void> {
     getUserhash: () => uploadProviderSettings.catbox?.userhash,
   }));
 
-  if (uploadProviderSettings.mixdrop?.enabled && uploadProviderSettings.mixdrop.email && uploadProviderSettings.mixdrop.apiKey) {
-    uploads.registerProvider(new MixDropProvider({
-      logger,
-      getEmail: () => settings.getAll().uploadProviders.mixdrop?.email,
-      getKey: () => settings.getAll().uploadProviders.mixdrop?.apiKey,
-    }));
-  }
+  // ponytail: credential providers (MixDrop, Google Drive) must react to
+  // settings saves — previously they were registered once at startup, so
+  // credentials entered in Settings had no effect until the app restarted.
+  const syncCredentialProviders = (): void => {
+    const prefs = settings.getAll().uploadProviders;
+    const mixdropReady =
+      prefs.mixdrop?.enabled !== false && !!prefs.mixdrop?.email && !!prefs.mixdrop?.apiKey;
+    const driveReady =
+      prefs['google-drive']?.enabled !== false &&
+      !!prefs['google-drive']?.clientId &&
+      !!prefs['google-drive']?.clientSecret &&
+      !!prefs['google-drive']?.refreshToken;
 
-  if (uploadProviderSettings['google-drive']?.enabled && uploadProviderSettings['google-drive'].clientId && uploadProviderSettings['google-drive'].clientSecret && uploadProviderSettings['google-drive'].refreshToken) {
-    uploads.registerProvider(new GoogleDriveProvider({
-      logger,
-      getClientId: () => settings.getAll().uploadProviders['google-drive']?.clientId,
-      getClientSecret: () => settings.getAll().uploadProviders['google-drive']?.clientSecret,
-      getRefreshToken: () => settings.getAll().uploadProviders['google-drive']?.refreshToken,
-      setRefreshToken: (token: string) => {
-        const current = settings.getAll().uploadProviders;
-        settings.set({
-          uploadProviders: {
-            ...current,
-            'google-drive': {
-              enabled: current['google-drive']?.enabled ?? true,
-              clientId: current['google-drive']?.clientId,
-              clientSecret: current['google-drive']?.clientSecret,
-              refreshToken: token,
+    if (mixdropReady && !uploads.getProviders().some((p) => p.id === 'mixdrop')) {
+      uploads.registerProvider(new MixDropProvider({
+        logger,
+        getEmail: () => settings.getAll().uploadProviders.mixdrop?.email,
+        getKey: () => settings.getAll().uploadProviders.mixdrop?.apiKey,
+      }));
+    } else if (!mixdropReady) {
+      uploads.unregisterProvider('mixdrop');
+    }
+
+    if (driveReady && !uploads.getProviders().some((p) => p.id === 'google-drive')) {
+      uploads.registerProvider(new GoogleDriveProvider({
+        logger,
+        getClientId: () => settings.getAll().uploadProviders['google-drive']?.clientId,
+        getClientSecret: () => settings.getAll().uploadProviders['google-drive']?.clientSecret,
+        getRefreshToken: () => settings.getAll().uploadProviders['google-drive']?.refreshToken,
+        setRefreshToken: (token: string) => {
+          const current = settings.getAll().uploadProviders;
+          settings.set({
+            uploadProviders: {
+              ...current,
+              'google-drive': {
+                enabled: current['google-drive']?.enabled ?? true,
+                clientId: current['google-drive']?.clientId,
+                clientSecret: current['google-drive']?.clientSecret,
+                refreshToken: token,
+              },
             },
-          },
-        });
-      },
-    }));
-  }
+          });
+        },
+      }));
+    } else if (!driveReady) {
+      uploads.unregisterProvider('google-drive');
+    }
+  };
+  syncCredentialProviders();
+  settings.onChanged(() => syncCredentialProviders());
+  // ponytail: a changed upload concurrency limit (or Low-Resource toggle)
+  // must wake the queue so waiting uploads start under the new limit.
+  settings.onChanged(() => uploads.notifyLimitsChanged());
 
   const storage = new StorageService({
     repo: recordingRepo,
@@ -366,12 +692,20 @@ async function bootstrap(): Promise<void> {
 
   const hardware = new HardwareService({ logger, probeDir: dirs.recordingsDir });
 
+  // ponytail: mass-capture gate (plan §10) — at 5+ live recordings both
+  // resource monitors drop to a ~10s cadence so tasklist/powershell spawns
+  // stop stealing CPU from the capture workers themselves.
+  const isMassRecordingLoad = (): boolean =>
+    recording.getJobs().filter((job) => job.status === 'recording').length >= 5;
+
   // ponytail: process monitor polls child process (yt-dlp/ffmpeg) PIDs for
   // CPU/memory usage, giving the UI visibility into recording resource impact.
   const processMonitor = new ProcessMonitorService({
     logger,
     getActivePids: () => recording.getActiveChildPids(),
     pollIntervalMs: 2000,
+    massPollIntervalMs: 10_000,
+    isMassLoad: isMassRecordingLoad,
   });
 
   // ponytail: network monitor polls network interface counters to calculate
@@ -379,21 +713,48 @@ async function bootstrap(): Promise<void> {
   const networkMonitor = new NetworkMonitorService({
     logger,
     pollIntervalMs: 1500,
+    massPollIntervalMs: 10_000,
+    isMassLoad: isMassRecordingLoad,
   });
 
-  const tray = new TrayController({ getWindow: () => mainWindow, logger });
+  trayController = new TrayController({ getWindow: () => mainWindow, logger });
+  const tray = trayController;
 
   // Start monitoring on app ready
-  await monitoring.start();
+  // ponytail: stale rows from a force-killed session must not block boot —
+  // a throw here used to prevent window creation entirely (headless lock holder).
+  try {
+    await monitoring.start();
+  } catch (err) {
+    logger.error({ err }, 'monitoring failed to start — continuing without live checks');
+  }
 
   // Start resource monitors
-  processMonitor.start();
-  networkMonitor.start();
+  try {
+    processMonitor.start();
+  } catch (err) {
+    logger.error({ err }, 'process monitor failed to start');
+  }
+  try {
+    networkMonitor.start();
+  } catch (err) {
+    logger.error({ err }, 'network monitor failed to start');
+  }
 
   // Start the generic download engine and forward its events to the renderer.
-  downloads.start();
+  // ponytail: transfers die with the process — anything still 'downloading'
+  // is re-queued inside start(); a torn row there must not block the window.
+  try {
+    downloads.start();
+  } catch (err) {
+    logger.error({ err }, 'download scheduler failed to start — downloads paused until restart');
+  }
   // Start the cloud upload worker (Gofile and any registered providers).
-  uploads.start();
+  try {
+    uploads.start();
+  } catch (err) {
+    logger.error({ err }, 'upload worker failed to start');
+  }
   uploads.on('upload-queued', ({ uploadId, timestamp }) => {
     sendToRenderer(IPC_CHANNELS.uploadsEvent, { type: 'upload-queued', uploadId, timestamp });
   });
@@ -411,6 +772,9 @@ async function bootstrap(): Promise<void> {
   });
   uploads.on('upload-cancelled', ({ uploadId, timestamp }) => {
     sendToRenderer(IPC_CHANNELS.uploadsEvent, { type: 'upload-cancelled', uploadId, timestamp });
+  });
+  uploads.on('upload-removed', ({ uploadId, timestamp }) => {
+    sendToRenderer(IPC_CHANNELS.uploadsEvent, { type: 'upload-removed', uploadId, timestamp });
   });
   uploads.on('upload-paused', ({ uploadId, timestamp }) => {
     sendToRenderer(IPC_CHANNELS.uploadsEvent, { type: 'upload-paused', uploadId, timestamp });
@@ -661,9 +1025,13 @@ async function bootstrap(): Promise<void> {
 
   // Keep the tray tooltip in sync with live/recording activity
   const updateTrayStatus = (): void => {
-    const recordingCount = recording.getJobs().filter((job) => job.status === 'recording').length;
-    const { liveCreators } = monitoring.getDashboard();
-    tray.setStatus(`${liveCreators} live · ${recordingCount} recording${recordingCount === 1 ? '' : 's'}`);
+    try {
+      const recordingCount = recording.getJobs().filter((job) => job.status === 'recording').length;
+      const { liveCreators } = monitoring.getDashboard();
+      tray.setStatus(`${liveCreators} live · ${recordingCount} recording${recordingCount === 1 ? '' : 's'}`);
+    } catch {
+      /* dashboard reads must never crash the main process */
+    }
   };
   monitoring.on('event', () => {
     updateTrayStatus();
@@ -677,6 +1045,8 @@ async function bootstrap(): Promise<void> {
     getWindow: () => mainWindow,
     dirs,
     settings,
+    license,
+    gateNotifier,
     notifications,
     plugins: pluginManager,
     monitoring,
@@ -688,6 +1058,7 @@ async function bootstrap(): Promise<void> {
     hardware,
     processMonitor,
     networkMonitor,
+    proxy: tor,
     logRepo,
     creatorRepo,
     recordingRepo,
@@ -709,40 +1080,85 @@ async function bootstrap(): Promise<void> {
   mainWindow = createMainWindow(loadWindowState(userDataPath), logger, {
     startHidden: settings.getAll().startMinimized || process.argv.includes('--hidden'),
   });
-  mainWindow.on('close', (event) => {
-    if (mainWindow !== null) {
-      saveWindowState(userDataPath, mainWindow);
-    }
-    // ponytail: with close-to-tray enabled, closing the window hides it and
-    // keeps monitoring/recording running in the background.
-    if (!quitting && settings.getAll().closeToTray) {
-      event.preventDefault();
-      mainWindow?.hide();
+  attachWindowCloseBehavior(userDataPath, () => {
+    try {
+      return settings.getAll().closeToTray;
+    } catch {
+      return closeToTrayEnabled;
     }
   });
 
   tray.create();
 
+  // ponytail: a relaunch that arrived while bootstrap was still running set
+  // pendingFocusRequest — honor it now so the app always opens visibly.
+  // An explicit user launch also overrides startMinimized/--hidden.
+  if (pendingFocusRequest) {
+    pendingFocusRequest = false;
+    focusMainWindow();
+  }
+
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
+      // ponytail: with close-to-tray the close event is prevented (window is
+      // hidden, not closed), so this only fires on a real quit — quitting
+      // here is correct and releases the single-instance lock.
       app.quit();
     }
   });
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+    if (!isWindowUsable(mainWindow)) {
       mainWindow = createMainWindow(loadWindowState(userDataPath), logger);
+      attachWindowCloseBehavior(userDataPath, () => {
+        try {
+          return settings.getAll().closeToTray;
+        } catch {
+          return closeToTrayEnabled;
+        }
+      });
     }
+    focusMainWindow();
   });
 
-  app.on('before-quit', async () => {
-    quitting = true;
-    tray.destroy();
-    downloads.stop();
-    uploads.stop();
-    await monitoring.stop();
-    database.close();
-  });
+  // ponytail: register once — bootstrap runs once per process, but
+  // second-instance recreates never re-run bootstrap, so a duplicate
+  // registration here would double-stop services on quit.
+  if (!quitHandlerRegistered) {
+    quitHandlerRegistered = true;
+    app.on('before-quit', () => {
+      quitting = true;
+      try {
+        trayController?.destroy();
+      } catch {
+        /* tray may already be gone */
+      }
+      // ponytail: stop schedulers synchronously so child transfers are
+      // signalled before the DB handle closes; the async monitoring stop is
+      // fire-and-forget because before-quit does not await listeners.
+      try {
+        downloads.stop();
+      } catch {
+        /* stopping transfers must not block quit */
+      }
+      try {
+        uploads.stop();
+      } catch {
+        /* see above */
+      }
+      void monitoring.stop().catch(() => undefined);
+      try {
+        tor.stop();
+      } catch {
+        /* stopping the proxy must not block quit */
+      }
+      try {
+        database.close();
+      } catch {
+        /* closing twice / torn WAL must not block quit */
+      }
+    });
+  }
 }
 
 /** In development, also scan the monorepo plugins/ folder. */

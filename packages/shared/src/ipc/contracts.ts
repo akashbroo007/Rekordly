@@ -14,6 +14,12 @@ export const IPC_CHANNELS = {
   appGetHardwareProfile: 'app:get-hardware-profile',
   appGetPaths: 'app:get-paths',
   appOpenPath: 'app:open-path',
+  appOpenUrl: 'app:open-url',
+  appExtractFrame: 'app:extract-frame',
+  appCopyImage: 'app:copy-image',
+  appSaveImage: 'app:save-image',
+  appGetMediaInfo: 'app:get-media-info',
+  appFindSubtitle: 'app:find-subtitle',
   logsWrite: 'logs:write',
   logsList: 'logs:list',
   windowMinimize: 'window:minimize',
@@ -28,6 +34,10 @@ export const IPC_CHANNELS = {
   settingsValidate: 'settings:validate',
   settingsImport: 'settings:import',
   settingsExport: 'settings:export',
+
+  licenseGetStatus: 'license:get-status',
+  licenseActivate: 'license:activate',
+  licenseDeactivate: 'license:deactivate',
 
   pluginsList: 'plugins:list',
   pluginsEnable: 'plugins:enable',
@@ -56,6 +66,12 @@ export const IPC_CHANNELS = {
   creatorsSearch: 'creators:search',
   creatorsSetFavorite: 'creators:set-favorite',
   creatorsSetAutoRecord: 'creators:set-auto-record',
+  creatorsSetUseProxy: 'creators:set-use-proxy',
+  proxyGetStatus: 'proxy:get-status',
+  proxyStart: 'proxy:start',
+  proxyTest: 'proxy:test',
+  proxyGetNetworkMode: 'proxy:get-network-mode',
+  proxyEvent: 'proxy:event',
   creatorsGetTags: 'creators:get-tags',
   creatorsCreateTag: 'creators:create-tag',
   creatorsRemoveTag: 'creators:remove-tag',
@@ -70,6 +86,12 @@ export const IPC_CHANNELS = {
   creatorsExportCsv: 'creators:export-csv',
   creatorsImportJson: 'creators:import-json',
   creatorsImportCsv: 'creators:import-csv',
+  creatorsBulkFavorite: 'creators:bulk-favorite',
+  creatorsBulkSetAutoRecord: 'creators:bulk-set-auto-record',
+  creatorsBulkRemove: 'creators:bulk-remove',
+  creatorsBulkAddTag: 'creators:bulk-add-tag',
+  creatorsGetAllTagAssignments: 'creators:get-all-tag-assignments',
+  creatorsStats: 'creators:stats',
 
   recordingsList: 'recordings:list',
   recordingsRecent: 'recordings:recent',
@@ -133,6 +155,16 @@ export const IPC_CHANNELS = {
   libraryRegenerateThumbnails: 'library:regenerate-thumbnails',
   libraryScanFolder: 'library:scan-folder',
 
+  // --- Editor (built-in trim/cut/concat, Phase 10) ---
+  editorTrim: 'editor:trim',
+  editorCut: 'editor:cut',
+  editorConcat: 'editor:concat',
+  editorTimeline: 'editor:timeline',
+  editorExtractAudio: 'editor:extract-audio',
+  editorDetectSilence: 'editor:detect-silence',
+  editorCancelExport: 'editor:cancel-export',
+  editorExportProgress: 'editor:export-progress',
+
   // --- Downloads (Phase 9) ---
   downloadsList: 'downloads:list',
   downloadsGet: 'downloads:get',
@@ -170,6 +202,7 @@ export const IPC_CHANNELS = {
   uploadsProviders: 'uploads:providers',
   uploadsProvidersMeta: 'uploads:providers-meta',
   uploadsTestProvider: 'uploads:test-provider',
+  uploadsConnectGoogleDrive: 'uploads:connect-google-drive',
   uploadsEvent: 'uploads:event',
 
   // --- Storage (Phase 9) ---
@@ -190,6 +223,48 @@ export interface AppInfo {
   electron: string;
   chrome: string;
   node: string;
+}
+
+// --- App: image/frame helpers (player screenshots) ---------------------------
+
+export interface AppExtractFrameRequestDto {
+  filePath: string;
+  seconds: number;
+}
+
+export interface AppExtractFrameResultDto {
+  /** `data:image/png;base64,…` — full-resolution PNG of the frame. */
+  dataUrl: string;
+}
+
+export interface AppCopyImageRequestDto {
+  /** `data:image/png;base64,…` or `data:image/jpeg;base64,…`. */
+  dataUrl: string;
+}
+
+export interface AppSaveImageRequestDto {
+  dataUrl: string;
+  suggestedName: string;
+}
+
+export interface AppSaveImageResultDto {
+  canceled: boolean;
+  filePath?: string | null;
+}
+
+/** Probed media facts for the player's stats-for-nerds overlay. */
+export interface AppMediaInfoDto {
+  duration: number;
+  resolution: string;
+  videoCodec: string;
+  audioCodec: string;
+  bitrate: number;
+  fps: number;
+}
+
+export interface AppSubtitleResultDto {
+  /** `data:text/vtt;base64,…` — SRT sidecars are converted to VTT. */
+  dataUrl: string;
 }
 
 export interface SystemStats {
@@ -306,6 +381,8 @@ export interface AppSettings {
   toastDurationMs: number;
   /** Maximum number of simultaneous generic downloads. */
   maxConcurrentDownloads: number;
+  /** Maximum number of simultaneous cloud uploads. */
+  maxConcurrentUploads: number;
   /** Global download speed cap in bytes/s. 0 = unlimited. */
   downloadBandwidthLimit: number;
   /** Root folder for generic downloads; each website gets its own subfolder. */
@@ -314,6 +391,15 @@ export interface AppSettings {
   lowResourceMode: boolean;
   /** Whether the first-launch welcome + guided tour has been completed. */
   onboardingCompleted: boolean;
+  /** ponytail: latched once any creator's secure-proxy flag is enabled —
+   * controls the conditional "Secure Proxy" nav item. Visibility only. */
+  secureProxyUsed: boolean;
+  /**
+   * ponytail: compression preset for quality-selected recordings (the
+   * background transcode that produces "(480p)" files). 'quality' favors
+   * fidelity, 'size' trades a little quality for much smaller files.
+   */
+  recordingCompression: 'quality' | 'balanced' | 'size';
   /** Upload provider configuration (credentials, defaults). */
   uploadProviders: UploadProvidersSettings;
 }
@@ -329,6 +415,27 @@ export interface UploadProvidersSettings {
 export interface SettingsValidationResult {
   valid: boolean;
   errors: string[];
+}
+
+// --- Secure Proxy -------------------------------------------------------------
+
+export interface ProxyStatusDto {
+  state: 'idle' | 'downloading' | 'connecting' | 'active' | 'error';
+  message?: string;
+}
+
+export interface ProxyTestResultDto {
+  /** Apparent public IP as seen through the proxy exit node. */
+  ip: string;
+  /** Round-trip time of the probe in milliseconds. */
+  latencyMs: number;
+}
+
+export interface ProxyNetworkModeDto {
+  /** A system-level VPN (e.g. Cloudflare WARP) is active on this machine. */
+  systemVpnDetected: boolean;
+  /** Product name when identified (e.g. "Cloudflare WARP"). */
+  product?: string;
 }
 
 // --- Plugins ----------------------------------------------------------------
@@ -435,6 +542,9 @@ export interface CreatorDto {
   autoRecord: boolean;
   /** Quality used for this creator's auto-recordings ('best' | '1080p' | …). */
   autoRecordQuality: string;
+  /** ponytail: per-creator secure-proxy opt-in — routes this creator's
+   * plugin traffic and recording through the host's embedded proxy. */
+  useProxy: boolean;
   notes?: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
@@ -446,6 +556,14 @@ export interface CreatorTagDto {
   name: string;
   color?: string | null;
   createdAt: string;
+}
+
+/** ponytail: per-creator library aggregates for the details dialog. */
+export interface CreatorStatsDto {
+  recordingCount: number;
+  totalDurationSeconds: number;
+  totalSizeBytes: number;
+  lastRecordedAt?: string | null;
 }
 
 export interface CollectionDto {
@@ -574,6 +692,10 @@ export interface RecordingDto {
   fps?: number | null;
   notes?: string | null;
   isFavorite: boolean;
+  /** ponytail: built-in editor — id of the recording this row was cut from (null for originals). */
+  sourceRecordingId?: string | null;
+  /** ponytail: built-in editor — JSON-encoded edit history. */
+  editHistory?: string | null;
   startedAt?: string | null;
   endedAt?: string | null;
   createdAt: string;
@@ -615,13 +737,18 @@ export type RecordingEventTypeDto =
   | 'recording-cancelled'
   | 'recording-finalized'
   | 'verification-started'
-  | 'verification-completed';
+  | 'verification-completed'
+  | 'recording-segment-finished'
+  | 'recording-cap-warning'
+  | 'recording-cap-reached';
 
 export interface RecordingEventDto {
   type: RecordingEventTypeDto;
   jobId?: string;
   recordingId?: string;
   error?: string;
+  /** Event-specific payload (e.g. minutesLeft for cap warnings). */
+  data?: Record<string, unknown>;
   timestamp: string;
 }
 
@@ -636,6 +763,40 @@ export interface RecordingSettingsDto {
   thumbnailEnabled: boolean;
   metadataEnabled: boolean;
   namingTemplate: string;
+}
+
+// --- License / Pro tier -----------------------------------------------------
+
+export type LicenseTierDto = 'free' | 'trial' | 'pro';
+
+export interface LicenseStatusDto {
+  /** Resolved tier: 'pro'/'trial' only when a valid (unexpired) license exists. */
+  tier: LicenseTierDto;
+  /** Email bound into the license key, when present. */
+  email?: string;
+  /** ISO expiry for trial keys; lifetime Pro has none. */
+  expiresAt?: string;
+  /** Whole days left on a trial (0 on the final day). */
+  trialDaysLeft?: number;
+  /** True when a key is stored but invalid/expired (shown in Settings). */
+  expired: boolean;
+  /** Entitlement limits for the resolved tier (drives UI display + gates). */
+  limits: LicenseLimitsDto;
+}
+
+export interface LicenseLimitsDto {
+  /** Max simultaneous recordings. Infinity serializes as null over IPC. */
+  maxConcurrent: number | null;
+  /** Max creators with auto-record enabled. null = unlimited. */
+  maxAutoRecordCreators: number | null;
+  /** Max minutes per recording. null = unlimited. */
+  maxRecordingMinutes: number | null;
+}
+
+export interface LicenseActivateResultDto {
+  ok: boolean;
+  status?: LicenseStatusDto;
+  error?: string;
 }
 
 // --- Dashboard --------------------------------------------------------------
@@ -691,6 +852,11 @@ export interface LibraryFiltersDto {
   tagIds?: string[];
   dateFrom?: string;
   dateTo?: string;
+  /**
+   * ponytail: Edited tab — true = only editor outputs (source_recording_id
+   * IS NOT NULL), false = only originals. Omit = both (back-compat).
+   */
+  isEdited?: boolean;
 }
 
 export interface LibrarySortDto {
@@ -715,6 +881,102 @@ export interface StorageStatsDto {
   tempSizeBytes: number;
   largestRecordings: { id: string; title: string; sizeBytes: number; filePath: string }[];
   largestFolders: { path: string; sizeBytes: number; fileCount: number }[];
+}
+
+// --- Editor (built-in trim/cut/concat, Phase 10) ----------------------------
+
+/** Trim a single [startSeconds, endSeconds) window into a new library entry. */
+export interface EditorTrimRequestDto {
+  recordingId: string;
+  startSeconds: number;
+  endSeconds: number;
+  /** Frame-accurate re-encode instead of fast stream copy. */
+  accurate?: boolean;
+  /**
+   * Client-generated operation id — lets the renderer cancel this specific
+   * export via `editor.cancelExport` and match its progress events.
+   */
+  opId?: string;
+}
+
+/** Remove `cuts` ranges; the kept segments are joined into a new entry. */
+export interface EditorCutRequestDto {
+  recordingId: string;
+  cuts: { startSeconds: number; endSeconds: number }[];
+  /** Frame-accurate re-encode instead of fast stream copy. */
+  accurate?: boolean;
+  /** Client-generated operation id (see EditorTrimRequestDto). */
+  opId?: string;
+}
+
+/** Join recordings (in order) into a new library entry. */
+export interface EditorConcatRequestDto {
+  recordingIds: string[];
+  title?: string;
+}
+
+/** Build (or fetch cached) filmstrip + waveform images for the editor timeline. */
+export interface EditorTimelineRequestDto {
+  /** Library recording — the common case (editor panel). */
+  recordingId?: string;
+  /**
+   * ponytail: bare file path variant — the video player wants hover
+   * previews for library recordings AND downloads (no recording row), so
+   * the cache is keyed by file, not by recording. Exactly one of
+   * recordingId/filePath must be provided.
+   */
+  filePath?: string;
+  /** Approximate filmstrip cell count — clamped server-side to 8–60. */
+  thumbCount?: number;
+  /** False to skip the (slower) waveform pass — the player only needs frames. */
+  includeWaveform?: boolean;
+}
+
+export interface EditorTimelineDto {
+  /** sf-media:// URL of the filmstrip image (cells laid out left→right in time order). */
+  stripUrl: string;
+  /** sf-media:// URL of the whole-file waveform PNG, or null when the source has no audio. */
+  waveformUrl: string | null;
+  thumbCount: number;
+}
+
+/** Extract the (optionally ranged) audio track into a new library entry. */
+export interface EditorExtractAudioRequestDto {
+  recordingId: string;
+  format: 'mp3' | 'm4a';
+  startSeconds?: number;
+  endSeconds?: number;
+  /** Client-generated operation id (see EditorTrimRequestDto). */
+  opId?: string;
+}
+
+/** One quiet span (dead air) detected in the source audio. */
+export interface EditorSilenceSpanDto {
+  startSeconds: number;
+  endSeconds: number;
+}
+
+export interface EditorDetectSilenceRequestDto {
+  /** Library recording (editor panel) — or a bare file path (player). */
+  recordingId?: string;
+  filePath?: string;
+  /** Loudness threshold in dB (default -40). */
+  thresholdDb?: number;
+  /** Minimum span length in seconds. */
+  minSeconds?: number;
+}
+
+/** Progress event for a running editor export (matched by opId). */
+export interface EditorExportProgressDto {
+  opId: string;
+  /** Processed output seconds. */
+  seconds: number;
+  /** 0–100 when the total length is known. */
+  percent?: number;
+}
+
+export interface EditorCancelExportRequestDto {
+  opId: string;
 }
 
 // --- Downloads (Phase 9) ----------------------------------------------------
@@ -861,6 +1123,11 @@ export interface ProviderCredentialsDto {
   userhash?: string;
 }
 
+export interface ProviderConnectResultDto {
+  ok: boolean;
+  error?: string;
+}
+
 export interface FileVerificationResultDto {
   valid: boolean;
   exists: boolean;
@@ -879,8 +1146,20 @@ export interface DesktopApi {
     getPaths(): Promise<AppPaths>;
     /** Open a file or directory with the OS default handler (Explorer/Finder). */
     openPath(path: string): Promise<string>;
+    /** Open an http/https URL in the default browser (gate CTAs etc.). */
+    openUrl(url: string): Promise<void>;
     /** Detects CPU/RAM/disk profile and recommends Low-Resource Mode when weak. */
     getHardwareProfile(): Promise<HardwareProfileDto>;
+    /** Grab a full-resolution frame from a local video file as a PNG data URL. */
+    extractFrame(request: AppExtractFrameRequestDto): Promise<AppExtractFrameResultDto>;
+    /** Write an image data URL to the OS clipboard. */
+    copyImage(request: AppCopyImageRequestDto): Promise<void>;
+    /** Ask the user where to save an image data URL (native Save dialog). */
+    saveImage(request: AppSaveImageRequestDto): Promise<AppSaveImageResultDto>;
+    /** Probe codecs/resolution/bitrate for the stats overlay. */
+    getMediaInfo(request: { filePath: string }): Promise<AppMediaInfoDto>;
+    /** Find a .srt/.vtt sidecar next to the video; returns a VTT data URL or null. */
+    findSubtitle(request: { filePath: string }): Promise<AppSubtitleResultDto | null>;
   };
   windowControls: {
     minimize(): Promise<void>;
@@ -902,6 +1181,12 @@ export interface DesktopApi {
     importFromFile(): Promise<AppSettings | null>;
     /** Opens a save dialog; returns false on cancel. */
     exportToFile(): Promise<boolean>;
+  };
+  license: {
+    getStatus(): Promise<LicenseStatusDto>;
+    /** Activates a license/trial key; never throws — returns ok:false + error. */
+    activate(key: string): Promise<LicenseActivateResultDto>;
+    deactivate(): Promise<LicenseStatusDto>;
   };
   plugins: {
     list(): Promise<PluginInfoDto[]>;
@@ -937,6 +1222,7 @@ export interface DesktopApi {
       profileUrl?: string | null;
       autoRecord?: boolean;
       autoRecordQuality?: string;
+      useProxy?: boolean;
       notes?: string | null;
     }): Promise<CreatorDto>;
     update(id: string, patch: Partial<CreatorDto>): Promise<void>;
@@ -944,6 +1230,7 @@ export interface DesktopApi {
     search(query: string): Promise<CreatorDto[]>;
     setFavorite(id: string, favorite: boolean): Promise<void>;
     setAutoRecord(id: string, enabled: boolean): Promise<void>;
+    setUseProxy(id: string, enabled: boolean): Promise<void>;
     getTags(): Promise<CreatorTagDto[]>;
     createTag(name: string, color?: string): Promise<void>;
     removeTag(id: string): Promise<void>;
@@ -958,6 +1245,24 @@ export interface DesktopApi {
     exportCsv(): Promise<string>;
     importJson(data: string): Promise<{ imported: number; errors: string[] }>;
     importCsv(data: string): Promise<{ imported: number; errors: string[] }>;
+    bulkFavorite(ids: string[], favorite: boolean): Promise<void>;
+    bulkSetAutoRecord(ids: string[], enabled: boolean): Promise<void>;
+    bulkRemove(ids: string[]): Promise<void>;
+    bulkAddTag(ids: string[], tagId: string): Promise<void>;
+    /** All tag assignments at once: creatorId -> its tags (for filtering/cards). */
+    getAllTagAssignments(): Promise<Record<string, CreatorTagDto[]>>;
+    /** Library aggregates (count/duration/size/last recorded) for one creator. */
+    stats(creatorId: string): Promise<CreatorStatsDto>;
+  };
+  proxy: {
+    getStatus(): Promise<ProxyStatusDto>;
+    /** Manual (re)start — the Retry button / error recovery path. */
+    start(): Promise<void>;
+    /** Probe through the active proxy: exit IP + round-trip latency. */
+    test(): Promise<ProxyTestResultDto>;
+    /** Best-effort system VPN detection for the Secure Proxy page banner. */
+    getNetworkMode(): Promise<ProxyNetworkModeDto>;
+    onEvent(callback: (status: ProxyStatusDto) => void): () => void;
   };
   recordings: {
     list(limit?: number): Promise<RecordingDto[]>;
@@ -995,6 +1300,23 @@ export interface DesktopApi {
     regenerateThumbnails(ids: string[]): Promise<void>;
     /** Scan the recordings output folder and import any media files not yet in the library. */
     scanFolder(): Promise<{ imported: number; skipped: number; errors: string[] }>;
+  };
+  editor: {
+    /** Trim a selection into a new library entry (original untouched). */
+    trim(request: EditorTrimRequestDto): Promise<RecordingDto>;
+    /** Remove segments and join the rest into a new library entry. */
+    cut(request: EditorCutRequestDto): Promise<RecordingDto>;
+    /** Combine recordings in order into a new library entry. */
+    concat(request: EditorConcatRequestDto): Promise<RecordingDto>;
+    /** Cached filmstrip + waveform images for the editor timeline. */
+    timeline(request: EditorTimelineRequestDto): Promise<EditorTimelineDto>;
+    /** Extract the (optionally ranged) audio track into a new library entry. */
+    extractAudio(request: EditorExtractAudioRequestDto): Promise<RecordingDto>;
+    /** Detect quiet spans (dead air) in the source audio. */
+    detectSilence(request: EditorDetectSilenceRequestDto): Promise<EditorSilenceSpanDto[]>;
+    /** Kill a running export started with the given opId. */
+    cancelExport(request: EditorCancelExportRequestDto): Promise<void>;
+    onExportProgress(callback: (event: EditorExportProgressDto) => void): () => void;
   };
   monitoring: {
     start(): Promise<void>;
@@ -1069,6 +1391,7 @@ export interface DesktopApi {
     providers(): Promise<UploadProviderDto[]>;
     providersMeta(): Promise<UploadProviderMetaDto[]>;
     testProvider(id: string): Promise<boolean>;
+    connectGoogleDrive(clientId: string, clientSecret: string): Promise<ProviderConnectResultDto>;
     onEvent(callback: (event: UploadEventDto) => void): () => void;
   };
   storage: {

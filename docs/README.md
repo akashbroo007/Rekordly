@@ -21,7 +21,7 @@ Rekordly/
 │   ├── recorder        yt-dlp / ffmpeg wrappers and record queue
 │   ├── shared          Shared types and IPC contracts
 │   └── ui              Shared React components and theme
-├── plugins/            Site plugins (chaturbate, stripchat, twitch, youtube)
+├── plugins/            Site plugins (camsoda, chaturbate, stripchat, twitch, youtube)
 ├── docs/               Architecture, PRD, design and guides
 ├── scripts/            Development and debug utilities
 └── tests/

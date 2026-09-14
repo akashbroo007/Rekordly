@@ -2,6 +2,7 @@
   "name": "@rekordly/plugin-chaturbate",
   "version": "0.1.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

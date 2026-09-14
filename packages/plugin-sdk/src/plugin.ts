@@ -1,4 +1,5 @@
 import type { StreamObject } from '@rekordly/shared';
+import type { Agent } from 'node:http';
 import type { PluginManifest } from './manifest';
 import type { PluginStatus } from './lifecycle';
 import type { PluginSettingsApi, PluginSettingsCapability } from './settings';
@@ -20,6 +21,28 @@ export interface PluginLogger {
   error(message: string, data?: unknown): void;
 }
 
+/**
+ * ponytail: host-owned outbound proxy surface. Some sites are unreachable
+ * from certain networks (ISP/DNS blocks are regional — never a property of
+ * the plugin itself). When the user enables the secure proxy for a creator,
+ * the host runs an embedded proxy and hands plugins an http.Agent (same
+ * process, by reference) so their HTTP calls route through it; `null` means
+ * "go direct". `getProxyHttpUrl` returns a URL string for CHILD processes
+ * (ffmpeg/yt-dlp cannot consume an agent object).
+ */
+export interface PluginNetworkApi {
+  /**
+   * Make sure the host proxy is available for this creator identifier
+   * (may download and bootstrap the proxy on first use — await before
+   * building requests). Safe to call when no proxy is configured.
+   */
+  ensureProxy(identifier: string): Promise<void>;
+  /** Agent for Node http/https requests, or null to go direct. */
+  getProxyAgent(identifier: string): Agent | null;
+  /** HTTP proxy URL for child processes, or null to go direct. */
+  getProxyHttpUrl(identifier: string): string | null;
+}
+
 export interface PluginContext {
   manifest: PluginManifest;
   logger: PluginLogger;
@@ -29,6 +52,8 @@ export interface PluginContext {
   manifestDir: string;
   /** Persisted per-plugin settings storage. */
   settings: PluginSettingsApi;
+  /** Host-provided outbound proxy routing (optional — may be absent in tests). */
+  network?: PluginNetworkApi;
 }
 
 /**

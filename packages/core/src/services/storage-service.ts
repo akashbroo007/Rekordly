@@ -104,12 +104,19 @@ export class StorageService {
     }
   }
 
+  /** ponytail: recurse into subdirectories — the cache dir holds nested trees
+   * (e.g. cache/editor timeline images), so file-only deletion freed almost
+   * nothing and stale entries kept growing. The dir itself is kept: other
+   * services resolve it once at startup and recreate children on demand. */
   private cleanDir(dir: string): void {
     try {
       const entries = readdirSync(dir, { withFileTypes: true });
       for (const entry of entries) {
-        if (entry.isFile()) {
-          rmSync(join(dir, entry.name), { force: true });
+        const fullPath = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          rmSync(fullPath, { recursive: true, force: true });
+        } else {
+          rmSync(fullPath, { force: true });
         }
       }
     } catch {

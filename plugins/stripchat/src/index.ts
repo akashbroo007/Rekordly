@@ -15,19 +15,21 @@ import type {
 import * as https from 'https';
 import * as http from 'http';
 import { MouflonProxy } from './mouflon-proxy';
+import { ProxyRegistry } from '@rekordly/plugin-sdk';
 import { blockHeavyResources, launchHeadlessBrowser } from './browser';
 import { createPdKeyResolver } from './mouflon-cipher';
 import manifest from '../manifest.json';
 
 // ponytail: the Mouflon proxy must outlive extractStream() — the host starts
-// recording right after we return. Proxies are tracked PER signed playlist
-// (each extraction gets a fresh pkey-signed URL): tearing down a shared
-// singleton killed the proxy a just-started recording was about to use,
-// producing ffmpeg "Connection refused" on 127.0.0.1:<port>. A small LRU cap
-// bounds the number of headless browsers kept alive; the proxies' own idle
+// recording right after we return. Proxies are tracked PER MODEL (username):
+// every extraction mints a fresh pkey-signed URL, so keying by URL meant a
+// re-extract of model A evicted some OTHER model's live proxy, producing
+// ffmpeg "Connection refused" on 127.0.0.1:<port> on any 3rd concurrent
+// recording. The registry cap counts only proxies still holding a headless
+// browser (released ones are tiny local servers); the proxies' own idle
 // watchdog releases browsers ~90s after a recording stops requesting.
 const MAX_ACTIVE_PROXIES = 2;
-const activeProxies = new Map<string, MouflonProxy>();
+const activeProxies = new ProxyRegistry<MouflonProxy>(MAX_ACTIVE_PROXIES);
 
 // ponytail: shared pdkey resolver — resolved keys are cached across ALL
 // extractions/recordings (one player-JS scrape per unknown pkey max).
@@ -806,7 +808,7 @@ const plugin: Plugin = {
           // browser is REUSED by the proxy (ownership transfers) — one Chromium
           // process per recording instead of two.
           const base = getBase();
-          const proxyKey = captured.url;
+          const modelKey = (info.username ?? username).toLowerCase();
           const proxy = new MouflonProxy(
             captured.url,
             `${base}/${encodeURIComponent(info.username ?? username)}`,
@@ -823,10 +825,10 @@ const plugin: Plugin = {
               // the headless browser is released for the whole recording.
               resolvePdKey: getPdKeyResolver(),
               // ponytail: when the idle watchdog stops the proxy (recording
-              // ended), drop it from the tracking map so the LRU cap does
-              // not count a dead proxy against live ones.
+              // ended), drop it from the tracking map so the browser-holder
+              // cap does not count a dead proxy against live ones.
               onIdleStop: () => {
-                activeProxies.delete(proxyKey);
+                activeProxies.delete(modelKey);
               },
             },
           );
@@ -841,15 +843,12 @@ const plugin: Plugin = {
             void proxy.stop().catch(() => undefined);
           }
           if (started) {
-            // ponytail: track per-playlist and evict the OLDEST proxy when the
-            // cap is hit — never the one just handed to the recorder.
-            activeProxies.set(proxyKey, proxy);
-            while (activeProxies.size > MAX_ACTIVE_PROXIES) {
-              const oldestKey = activeProxies.keys().next().value;
-              if (oldestKey === undefined) break;
-              const oldest = activeProxies.get(oldestKey);
-              activeProxies.delete(oldestKey);
-              if (oldest !== undefined) void oldest.stop().catch(() => undefined);
+            // ponytail: same-model re-extract replaces its own entry (fresh
+            // signed URL) instead of evicting a neighbor; overflow victims
+            // are stopped asynchronously and only logged.
+            for (const evicted of activeProxies.set(modelKey, proxy)) {
+              ctx?.logger.debug(`stripchat: stopping replaced/evicted proxy for ${evicted.key}`);
+              void evicted.proxy.stop().catch(() => undefined);
             }
             streamUrl = proxy.url;
           } else {
@@ -980,10 +979,9 @@ const plugin: Plugin = {
   },
 
   async cleanup(): Promise<void> {
-    for (const proxy of activeProxies.values()) {
+    for (const { proxy } of activeProxies.clear()) {
       await proxy.stop().catch(() => undefined);
     }
-    activeProxies.clear();
     status.state = 'installed';
     ctx = null;
   },

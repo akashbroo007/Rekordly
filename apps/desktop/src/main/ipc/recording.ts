@@ -23,8 +23,33 @@ export function registerRecordingIpc(context: IpcContext): void {
     const monitorId = `${creator.pluginId}:${creator.externalId}`;
     const jobs = monitoring.getJobs();
     const job = jobs.find((j) => j.creatorId === monitorId);
-    if (job === undefined || job.lastResult?.streamUrl === undefined) {
-      throw new Error(`${creator.displayName} is not live or has no stream URL`);
+
+    // ponytail: the plugin is the source of truth for live state. The stored
+    // check result (job.lastResult.streamUrl) is a cache that can legitimately
+    // be missing or stale — a creator added seconds ago has never been
+    // checked, and a live status can lack a resolvable URL at the moment of
+    // the last poll. Ask the plugin directly instead of refusing to record.
+    const managed = plugins.get(creator.pluginId);
+    const liveDetection = managed?.instance?.capabilities.liveDetection;
+    let lastResult = job?.lastResult;
+    if (lastResult?.streamUrl === undefined) {
+      if (liveDetection === undefined) {
+        throw new Error(`${creator.displayName} is not live or has no stream URL`);
+      }
+      const status = await liveDetection.getLiveStatus(monitorId);
+      if (!status.isLive) {
+        throw new Error(`${creator.displayName} is not live or has no stream URL`);
+      }
+      lastResult = {
+        isLive: true,
+        title: status.title,
+        thumbnail: status.thumbnail,
+        viewerCount: status.viewerCount,
+        streamUrl: status.streamUrl,
+        startedAt: status.startedAt,
+        checkedAt: new Date().toISOString(),
+        durationMs: 0,
+      };
     }
 
     // ponytail: prefer the plugin's extractStream — for platforms like
@@ -32,7 +57,6 @@ export function registerRecordingIpc(context: IpcContext): void {
     // obfuscated segments); extractStream returns a prepared StreamObject
     // (local de-obfuscating proxy URL, headers, cookies).
     let stream: StreamObject | null = null;
-    const managed = plugins.get(job.pluginId);
     const extract = managed?.instance?.capabilities.streamExtraction;
     if (extract !== undefined) {
       try {
@@ -42,14 +66,17 @@ export function registerRecordingIpc(context: IpcContext): void {
       }
     }
     if (stream === null) {
+      if (lastResult.streamUrl === undefined) {
+        throw new Error(`${creator.displayName} is not live or has no stream URL`);
+      }
       stream = {
         creatorId: creator.id,
         creatorName: creator.displayName,
-        platformId: job.pluginId,
-        title: job.lastResult.title ?? `${creator.displayName} live`,
-        streamUrl: job.lastResult.streamUrl,
-        thumbnail: job.lastResult.thumbnail,
-        startedAt: job.lastResult.startedAt,
+        platformId: job?.pluginId ?? creator.pluginId,
+        title: lastResult.title ?? `${creator.displayName} live`,
+        streamUrl: lastResult.streamUrl,
+        thumbnail: lastResult.thumbnail,
+        startedAt: lastResult.startedAt,
       };
     } else {
       // ponytail: extractStream returns the monitor id ("plugin:username")

@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { AppError } from '@rekordly/shared';
 import { resolveExecutable } from './binaries';
 
@@ -6,6 +6,11 @@ export interface RunOptions {
   cwd?: string;
   env?: Record<string, string>;
   timeoutMs?: number;
+  /**
+   * Fires right after spawn so callers can hold a kill handle (cancel) and
+   * stream the child's stdout (ffmpeg `-progress pipe:1` microformat).
+   */
+  onSpawn?: (child: ChildProcessWithoutNullStreams) => void;
 }
 
 export interface RunResult {
@@ -44,6 +49,7 @@ export class ExternalBinary {
     }
     return new Promise<RunResult>((resolve, reject) => {
       const child = spawn(binary, args, { cwd: options.cwd, env: options.env, windowsHide: true });
+      options.onSpawn?.(child);
       let stdout = '';
       let stderr = '';
       child.stdout.on('data', (chunk: Buffer) => {

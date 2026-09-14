@@ -24,6 +24,21 @@ extraResources:
     filter:
       - "*/dist/**"
       - "*/manifest.json"
+  # ponytail: bundled plugins may value-import '@rekordly/plugin-sdk' at
+  # runtime (e.g. ProxyRegistry). Plugins live OUTSIDE app.asar with stripped
+  # node_modules, so one shared copy ships beside them — Node walks up from
+  # resources/plugins/<id>/dist to resources/plugins/node_modules. Its only
+  # runtime dependency is zod (everything else in the SDK is type-only).
+  # WARNING: any NEW runtime dependency added to the SDK must be added here
+  # too — dev works via workspace symlinks and will NOT catch a missing
+  # packaged dep (the plugin only fails to load in the installed app).
+  - from: ../../packages/plugin-sdk
+    to: plugins/node_modules/@rekordly/plugin-sdk
+    filter:
+      - "package.json"
+      - "dist/**"
+  - from: ../../packages/plugin-sdk/node_modules/zod
+    to: plugins/node_modules/zod
   # ponytail: the stripchat plugin does require('playwright-core') at runtime
   # (MOUFLON decoder). Plugins live OUTSIDE app.asar, so Node cannot resolve
   # the copy inside the asar — ship it next to the plugin instead.

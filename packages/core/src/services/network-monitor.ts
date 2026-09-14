@@ -14,6 +14,13 @@ export interface NetworkMonitorOptions {
   logger: Logger;
   /** Polling interval in ms. */
   pollIntervalMs?: number;
+  /**
+   * plan §10: minimum gap between real polls while `isMassLoad()` is true
+   * (mass capture ≈ 10s — powershell spawns must not steal CPU).
+   */
+  massPollIntervalMs?: number;
+  /** True when the recorder is under mass-capture load. */
+  isMassLoad?: () => boolean;
 }
 
 interface NetworkCounters {
@@ -29,6 +36,9 @@ interface NetworkCounters {
 export class NetworkMonitorService {
   private readonly logger: Logger;
   private readonly pollIntervalMs: number;
+  private readonly massPollIntervalMs: number;
+  private readonly isMassLoad: NetworkMonitorOptions['isMassLoad'];
+  private lastPollAt = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private previousCounters: NetworkCounters | null = null;
   private cachedStats: NetworkStats = {
@@ -39,6 +49,8 @@ export class NetworkMonitorService {
   constructor(options: NetworkMonitorOptions) {
     this.logger = options.logger;
     this.pollIntervalMs = options.pollIntervalMs ?? 1500;
+    this.massPollIntervalMs = options.massPollIntervalMs ?? 10_000;
+    this.isMassLoad = options.isMassLoad;
   }
 
   start(): void {
@@ -64,6 +76,13 @@ export class NetworkMonitorService {
   }
 
   private async poll(): Promise<void> {
+    // plan §10: under mass load the base cadence only re-checks the gate —
+    // real powershell counter reads happen at most every massPollIntervalMs.
+    const now = Date.now();
+    if (this.isMassLoad?.() === true && now - this.lastPollAt < this.massPollIntervalMs) {
+      return;
+    }
+    this.lastPollAt = now;
     try {
       const counters = await this.getNetworkCounters();
       const now = Date.now();

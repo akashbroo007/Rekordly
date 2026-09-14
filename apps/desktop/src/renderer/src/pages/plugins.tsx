@@ -7,8 +7,10 @@ import {
   Info,
   Puzzle,
   RefreshCcw,
+  Search,
   Settings2,
   Trash2,
+  X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
@@ -26,11 +28,7 @@ import {
   Switch,
   type BadgeVariant,
 } from '@rekordly/ui';
-import type {
-  PluginInfoDto,
-  PluginStateDto,
-  SettingDefDto,
-} from '@rekordly/shared/contracts';
+import type { PluginInfoDto, PluginStateDto, SettingDefDto } from '@rekordly/shared/contracts';
 import { logger } from '../lib/logger';
 import { useToastStore } from '../stores/toast-store';
 
@@ -63,9 +61,27 @@ const STATE_VARIANTS: Record<PluginStateDto, BadgeVariant> = {
   uninstalled: 'muted',
 };
 
+/** Plugins page filter: matches name, id, author, description and capabilities. */
+function matchesFilter(plugin: PluginInfoDto, query: string): boolean {
+  const haystack = [
+    plugin.name,
+    plugin.id,
+    plugin.author,
+    plugin.description ?? '',
+    ...plugin.capabilities,
+  ]
+    .join(' ')
+    .toLowerCase();
+  return haystack.includes(query);
+}
+
 export function PluginsPage() {
   const queryClient = useQueryClient();
-  const { data: plugins, isLoading, isError } = useQuery({
+  const {
+    data: plugins,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ['plugins'],
     queryFn: () => window.desktop.plugins.list(),
   });
@@ -83,6 +99,12 @@ export function PluginsPage() {
   });
 
   const loading = isLoading || plugins === undefined;
+
+  const [filter, setFilter] = useState('');
+  const normalizedFilter = filter.trim().toLowerCase();
+  const visiblePlugins = (plugins ?? []).filter(
+    (plugin) => normalizedFilter === '' || matchesFilter(plugin, normalizedFilter),
+  );
 
   return (
     <PageContainer>
@@ -123,8 +145,63 @@ export function PluginsPage() {
       )}
 
       {!isError && !loading && (plugins?.length ?? 0) > 0 && (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {plugins?.map((plugin) => <PluginCard key={plugin.id} plugin={plugin} />)}
+        <div className="flex flex-col gap-4">
+          {/* Filter row: local search across name/id/author/description/capabilities */}
+          <div className="flex items-center gap-3">
+            <div className="relative w-full max-w-xs">
+              <Search
+                size={14}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted"
+              />
+              <Input
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+                placeholder="Filter plugins..."
+                aria-label="Filter plugins"
+                className="pl-8"
+              />
+            </div>
+            {filter.trim() !== '' && (
+              <span className="text-xs text-foreground-muted">
+                <span className="font-semibold tabular-nums text-foreground">
+                  {visiblePlugins.length}
+                </span>
+                {visiblePlugins.length !== (plugins?.length ?? 0) && (
+                  <span>
+                    {' '}
+                    of <span className="tabular-nums">{plugins?.length ?? 0}</span>
+                  </span>
+                )}{' '}
+                plugins
+              </span>
+            )}
+            {filter !== '' && (
+              <Button variant="ghost" size="sm" onClick={() => setFilter('')}>
+                <X size={12} />
+                Clear
+              </Button>
+            )}
+          </div>
+
+          {visiblePlugins.length === 0 ? (
+            <EmptyState
+              icon={Search}
+              title="No plugins match"
+              description={`No plugin matches "${filter.trim()}". Try a name, author or capability.`}
+              action={
+                <Button variant="ghost" onClick={() => setFilter('')}>
+                  <X size={14} />
+                  Clear filter
+                </Button>
+              }
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              {visiblePlugins.map((plugin) => (
+                <PluginCard key={plugin.id} plugin={plugin} />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </PageContainer>
@@ -138,12 +215,17 @@ function PluginCard({ plugin }: { plugin: PluginInfoDto }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const toggle = useMutation({
-    mutationFn: () => (plugin.enabled ? window.desktop.plugins.disable(plugin.id) : window.desktop.plugins.enable(plugin.id)),
+    mutationFn: () =>
+      plugin.enabled
+        ? window.desktop.plugins.disable(plugin.id)
+        : window.desktop.plugins.enable(plugin.id),
     onSuccess: () => {
       pushToast({
         level: 'info',
         title: `${plugin.enabled ? 'Disabled' : 'Enabled'} ${plugin.name}`,
-        message: plugin.enabled ? 'The plugin will not run until re-enabled.' : 'The plugin is now running.',
+        message: plugin.enabled
+          ? 'The plugin will not run until re-enabled.'
+          : 'The plugin is now running.',
       });
       void queryClient.invalidateQueries({ queryKey: ['plugins'] });
     },
@@ -167,7 +249,11 @@ function PluginCard({ plugin }: { plugin: PluginInfoDto }) {
   const update = useMutation({
     mutationFn: () => window.desktop.plugins.update(plugin.id),
     onSuccess: () => {
-      pushToast({ level: 'info', title: 'Plugin updated', message: `${plugin.name} was reloaded.` });
+      pushToast({
+        level: 'info',
+        title: 'Plugin updated',
+        message: `${plugin.name} was reloaded.`,
+      });
       void queryClient.invalidateQueries({ queryKey: ['plugins'] });
     },
   });
@@ -181,7 +267,9 @@ function PluginCard({ plugin }: { plugin: PluginInfoDto }) {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className="truncate text-sm font-semibold tracking-tight text-foreground">{plugin.name}</h3>
+              <h3 className="truncate text-sm font-semibold tracking-tight text-foreground">
+                {plugin.name}
+              </h3>
               <Badge variant="default">v{plugin.version}</Badge>
             </div>
             <p className="mt-0.5 text-[11px] uppercase tracking-wide text-foreground-muted">
@@ -211,7 +299,12 @@ function PluginCard({ plugin }: { plugin: PluginInfoDto }) {
             <Info size={12} className="mt-0.5 shrink-0 text-info" />
             {plugin.setupHint}
           </p>
-          <Button variant="ghost" size="sm" className="h-auto shrink-0 px-1.5 py-0.5" onClick={() => setSettingsOpen(true)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-auto shrink-0 px-1.5 py-0.5"
+            onClick={() => setSettingsOpen(true)}
+          >
             <Settings2 size={12} />
             Setup
           </Button>
@@ -249,7 +342,12 @@ function PluginCard({ plugin }: { plugin: PluginInfoDto }) {
           <PluginDetails plugin={plugin} />
         </Dialog>
         <PluginSettingsDialog plugin={plugin} open={settingsOpen} onOpenChange={setSettingsOpen} />
-        <Button variant="ghost" size="sm" loading={update.isPending} onClick={() => update.mutate()}>
+        <Button
+          variant="ghost"
+          size="sm"
+          loading={update.isPending}
+          onClick={() => update.mutate()}
+        >
           <RefreshCcw size={14} />
           Update
         </Button>
@@ -292,10 +390,13 @@ function PluginDetails({ plugin }: { plugin: PluginInfoDto }) {
         {plugin.homepage !== undefined && <DetailRow label="Homepage" value={plugin.homepage} />}
       </dl>
       <div className="mt-4">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground-muted">Permissions</h4>
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground-muted">
+          Permissions
+        </h4>
         <p className="mt-1 text-sm text-foreground-secondary">
-          {plugin.permissionsRequested.map((permission) => PERMISSION_LABELS[permission] ?? permission).join(', ') ||
-            'None requested'}
+          {plugin.permissionsRequested
+            .map((permission) => PERMISSION_LABELS[permission] ?? permission)
+            .join(', ') || 'None requested'}
         </p>
       </div>
     </DialogContent>
@@ -305,8 +406,13 @@ function PluginDetails({ plugin }: { plugin: PluginInfoDto }) {
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-4 py-2 first:pt-0 last:pb-0">
-      <dt className="text-[11px] font-medium uppercase tracking-wide text-foreground-muted">{label}</dt>
-      <dd className="max-w-[60%] truncate text-right tabular-nums text-foreground-secondary" title={value}>
+      <dt className="text-[11px] font-medium uppercase tracking-wide text-foreground-muted">
+        {label}
+      </dt>
+      <dd
+        className="max-w-[60%] truncate text-right tabular-nums text-foreground-secondary"
+        title={value}
+      >
         {value}
       </dd>
     </div>
@@ -324,7 +430,8 @@ function PluginDiagnosticsDialog({ plugin }: { plugin: PluginInfoDto }) {
       pushToast({
         level: result.healthy ? 'info' : 'warn',
         title: `${plugin.name} health: ${result.healthy ? 'healthy' : 'unhealthy'}`,
-        message: result.message ?? (result.healthy ? 'All systems nominal.' : 'Health check failed.'),
+        message:
+          result.message ?? (result.healthy ? 'All systems nominal.' : 'Health check failed.'),
       });
       void queryClient.invalidateQueries({ queryKey: ['plugins'] });
     },
@@ -388,9 +495,14 @@ function PluginSettingsDialog({
   }, [values]);
 
   const save = useMutation({
-    mutationFn: (next: Record<string, unknown>) => window.desktop.plugins.setSettings(plugin.id, next),
+    mutationFn: (next: Record<string, unknown>) =>
+      window.desktop.plugins.setSettings(plugin.id, next),
     onSuccess: () => {
-      pushToast({ level: 'info', title: 'Settings saved', message: `${plugin.name} settings updated.` });
+      pushToast({
+        level: 'info',
+        title: 'Settings saved',
+        message: `${plugin.name} settings updated.`,
+      });
       void queryClient.invalidateQueries({ queryKey: ['plugins'] });
       onOpenChange(false);
     },
@@ -413,13 +525,21 @@ function PluginSettingsDialog({
           Settings
         </Button>
       </DialogTrigger>
-      <DialogContent title={`${plugin.name} settings`} description="Platform-specific configuration.">
+      <DialogContent
+        title={`${plugin.name} settings`}
+        description="Platform-specific configuration."
+      >
         {!hasSettings ? (
           <p className="text-sm text-foreground-muted">This plugin does not expose settings.</p>
         ) : (
           <div className="space-y-4">
             {(schema ?? []).map((def) => (
-              <SettingField key={def.key} def={def} value={draft[def.key]} onChange={(value) => setDraft((prev) => ({ ...prev, [def.key]: value }))} />
+              <SettingField
+                key={def.key}
+                def={def}
+                value={draft[def.key]}
+                onChange={(value) => setDraft((prev) => ({ ...prev, [def.key]: value }))}
+              />
             ))}
             <Button loading={save.isPending} onClick={() => save.mutate(draft)} className="w-full">
               Save settings
@@ -466,13 +586,11 @@ function SettingField({
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-medium text-foreground">{def.label}</p>
-          {def.description !== undefined && <p className="text-xs text-foreground-muted">{def.description}</p>}
+          {def.description !== undefined && (
+            <p className="text-xs text-foreground-muted">{def.description}</p>
+          )}
         </div>
-        <Switch
-          checked={value === true}
-          onCheckedChange={onChange}
-          aria-label={def.label}
-        />
+        <Switch checked={value === true} onCheckedChange={onChange} aria-label={def.label} />
       </div>
     );
   }
@@ -501,7 +619,11 @@ function SettingField({
       label={def.label}
       hint={def.description}
       type={def.type === 'number' ? 'number' : def.type === 'password' ? 'password' : 'text'}
-      value={value === undefined ? (def.defaultValue as string | number | undefined) ?? '' : String(value)}
+      value={
+        value === undefined
+          ? ((def.defaultValue as string | number | undefined) ?? '')
+          : String(value)
+      }
       onChange={(event) => {
         const raw = event.target.value;
         onChange(def.type === 'number' ? Number(raw) : raw);

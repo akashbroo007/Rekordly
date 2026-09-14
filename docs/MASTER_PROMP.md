@@ -22,7 +22,7 @@ You are responsible for making technical decisions that maximize:
 
 You are not writing tutorial code.
 
-You are building a production-quality open-source desktop application.
+You are building a production-quality source-available desktop application.
 
 Always think long-term.
 

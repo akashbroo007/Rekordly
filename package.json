@@ -7,7 +7,9 @@
     "dev": "pnpm --filter @rekordly/desktop dev",
     "build": "pnpm -r build && pnpm --filter @rekordly/desktop build",
     "typecheck": "pnpm -r typecheck",
-    "package": "pnpm --filter @rekordly/desktop package"
+    "package": "pnpm --filter @rekordly/desktop package",
+    "site:dev": "pnpm --filter @rekordly/website dev",
+    "site:build": "pnpm --filter @rekordly/website build"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

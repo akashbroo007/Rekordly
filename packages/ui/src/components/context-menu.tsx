@@ -53,3 +53,38 @@ export function ContextMenuItem({ children, onClick, destructive, disabled }: Co
 export function ContextMenuSeparator() {
   return <RadixContextMenu.Separator className="my-1 h-px bg-border" />;
 }
+
+export const ContextMenuSub = RadixContextMenu.Sub;
+
+export interface ContextMenuSubTriggerProps {
+  children: ReactNode;
+  disabled?: boolean;
+}
+
+export function ContextMenuSubTrigger({ children, disabled }: ContextMenuSubTriggerProps) {
+  return (
+    <RadixContextMenu.SubTrigger
+      disabled={disabled}
+      className={`flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors text-foreground-secondary data-[state=open]:bg-hover data-[state=open]:text-foreground hover:bg-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50`}
+    >
+      {children}
+    </RadixContextMenu.SubTrigger>
+  );
+}
+
+export interface ContextMenuSubContentProps {
+  children: ReactNode;
+  className?: string;
+}
+
+export function ContextMenuSubContent({ children, className }: ContextMenuSubContentProps) {
+  return (
+    <RadixContextMenu.Portal>
+      <RadixContextMenu.SubContent
+        className={`min-w-[160px] max-h-64 overflow-y-auto rounded-md border border-border bg-surface p-1 shadow-md ${className ?? ''}`}
+      >
+        {children}
+      </RadixContextMenu.SubContent>
+    </RadixContextMenu.Portal>
+  );
+}

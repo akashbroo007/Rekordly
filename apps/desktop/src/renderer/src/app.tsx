@@ -7,14 +7,16 @@ import { ErrorBoundary } from './components/error-boundary';
 import { AppLayout } from './components/layout/app-layout';
 import { ToastStack } from './components/toast-stack';
 import { useRecordingEvents } from './lib/use-recording-events';
+import { useNotificationEvents } from './lib/use-notification-events';
 import { AnalyticsPage } from './pages/analytics';
-import { CreatorsPage } from './pages/creators';
+import { CreatorsPage } from './pages/creators/creators-page';
 import { DashboardPage } from './pages/dashboard';
 import { DownloadsPage } from './pages/downloads';
 import { UploadsPage } from './pages/uploads';
 import { LibraryPage } from './pages/library';
 import { LogsPage } from './pages/logs';
 import { PluginsPage } from './pages/plugins';
+import { ProxyPage } from './pages/proxy';
 import { RecordingsPage } from './pages/recordings';
 import { SettingsPage } from './pages/settings';
 import { useThemeStore } from './stores/theme-store';
@@ -23,6 +25,7 @@ import { queryClient } from './lib/query-client';
 
 function EventBridge() {
   useRecordingEvents();
+  useNotificationEvents();
   return null;
 }
 
@@ -83,6 +86,7 @@ function AppShell() {
               <Route path="downloads" element={<DownloadsPage />} />
               <Route path="uploads" element={<UploadsPage />} />
               <Route path="plugins" element={<PluginsPage />} />
+              <Route path="proxy" element={<ProxyPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="logs" element={<LogsPage />} />
               <Route path="settings" element={<SettingsPage />} />

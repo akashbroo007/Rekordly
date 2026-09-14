@@ -30,8 +30,8 @@ interface DriveFileResponse {
 }
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const DRIVE_UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
-const DRIVE_METADATA_URL = 'https://www.googleapis.com/drive/v3/files';
+const DRIVE_UPLOAD_URL =
+  'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink';
 
 export class GoogleDriveProvider implements UploadProvider {
   readonly id = 'google-drive';
@@ -117,7 +117,13 @@ export class GoogleDriveProvider implements UploadProvider {
       throw new Error(`Google Drive upload failed: ${detail || 'empty response'}`);
     }
 
-    const link = parsed.webViewLink ?? `${DRIVE_METADATA_URL}/${parsed.id}`;
+    // ponytail: the bare API path is not a browsable link — webViewLink comes
+    // back via the fields param, and the drive.google.com viewer is the
+    // fallback.
+    const link =
+      parsed.webViewLink ??
+      parsed.webContentLink ??
+      `https://drive.google.com/file/d/${parsed.id}/view`;
 
     this.logger.info({ fileId: parsed.id, link }, 'google drive upload completed');
 
@@ -204,6 +210,18 @@ export class GoogleDriveProvider implements UploadProvider {
       const stream = createReadStream(filePath);
       this.currentStream = stream;
 
+      // ponytail: metadata part + media part + epilogue — exact length keeps
+      // the request off chunked encoding (more reliable across middleboxes).
+      const metadata = JSON.stringify({ name: fileName });
+      const preamble =
+        `--${boundary}\r\n` +
+        `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+        `${metadata}\r\n` +
+        `--${boundary}\r\n` +
+        `Content-Type: application/octet-stream\r\n\r\n`;
+      const epilogue = `\r\n--${boundary}--\r\n`;
+      const contentLength = Buffer.byteLength(preamble) + totalBytes + Buffer.byteLength(epilogue);
+
       let settled = false;
       let requestFinished = false;
       let responseData: string | null = null;
@@ -235,9 +253,18 @@ export class GoogleDriveProvider implements UploadProvider {
           headers: {
             'Authorization': `Bearer ${this.accessToken}`,
             'Content-Type': `multipart/related; boundary=${boundary}`,
+            'Content-Length': String(contentLength),
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
           },
+          timeout: 120_000,
         },
         (response) => {
+          if (response.statusCode !== undefined && (response.statusCode < 200 || response.statusCode > 299)) {
+            fail(new Error(`Google Drive responded with HTTP ${response.statusCode}`));
+            response.resume();
+            return;
+          }
           const chunks: Buffer[] = [];
           response.on('data', (chunk: Buffer) => chunks.push(chunk));
           response.on('end', () => {
@@ -251,6 +278,7 @@ export class GoogleDriveProvider implements UploadProvider {
       this.currentRequest = request;
 
       request.on('error', fail);
+      request.on('timeout', () => fail(new Error('connection timed out')));
       request.on('finish', () => {
         requestFinished = true;
         tryResolve();
@@ -280,14 +308,6 @@ export class GoogleDriveProvider implements UploadProvider {
       body.on('error', fail);
       body.pipe(request);
 
-      const metadata = JSON.stringify({ name: fileName });
-      const preamble =
-        `--${boundary}\r\n` +
-        `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
-        `${metadata}\r\n` +
-        `--${boundary}\r\n` +
-        `Content-Type: application/octet-stream\r\n\r\n`;
-
       if (!settled) body.write(preamble);
       stream.on('data', (chunk) => {
         bytesSent += chunk.length;
@@ -296,7 +316,6 @@ export class GoogleDriveProvider implements UploadProvider {
       stream.pipe(body, { end: false });
       stream.on('end', () => {
         if (settled) return;
-        const epilogue = `\r\n--${boundary}--\r\n`;
         body.end(epilogue, () => {
           report();
           onProgress(100, 0);

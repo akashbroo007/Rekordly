@@ -1,7 +1,10 @@
 import { EventEmitter } from 'node:events';
-import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { execFile, execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { promisify } from 'node:util';
 import { AppError } from '@rekordly/shared';
 import { ExternalBinary, resolveExecutable } from '@rekordly/recorder';import { attemptDnsFix, extractUnresolvedHost, isDnsFailure } from './dns-fix';
+
+const execFileAsync = promisify(execFile);
 
 const ytDlpBinary = new ExternalBinary('yt-dlp');
 
@@ -91,6 +94,96 @@ export function findRecordingProcessPids(pathFragment: string): number[] {
   }
 }
 
+/**
+ * plan §11: async liveness check — same semantics as `isPidAlive` without
+ * blocking Electron's main process. Orphan/recovery paths must use this.
+ */
+export async function isPidAliveAsync(pid: number, allowedNames?: string[]): Promise<boolean> {
+  if (process.platform === 'win32') {
+    try {
+      const { stdout } = await execFileAsync(
+        'tasklist',
+        ['/FI', 'PID eq ' + String(pid), '/FO', 'CSV', '/NH'],
+        { windowsHide: true, timeout: 5000 },
+      );
+      const line = stdout.split(/\r?\n/).find((l) => l.includes(String.fromCharCode(34) + String(pid) + String.fromCharCode(34)));
+      if (line === undefined) return false;
+      if (allowedNames !== undefined) {
+        const lower = line.toLowerCase();
+        return allowedNames.some((name) => lower.startsWith(String.fromCharCode(34) + name.toLowerCase()));
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+export interface RecorderProcessSnapshot {
+  pid: number;
+  name: string;
+  commandLine: string;
+}
+
+/**
+ * plan §11: ONE bulk snapshot of all running recorder processes instead of one
+ * powershell scan per stale job. The caller matches output-path fragments in
+ * JS, so 30 orphans cost a single subprocess instead of 30.
+ */
+export async function listRecorderProcessesAsync(): Promise<RecorderProcessSnapshot[]> {
+  if (process.platform !== 'win32') return [];
+  try {
+    const { stdout } = await execFileAsync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'ffmpeg.exe' -or $_.Name -eq 'yt-dlp.exe' } | Select-Object ProcessId,Name,CommandLine | ConvertTo-Json`,
+      ],
+      { windowsHide: true, timeout: 15000, maxBuffer: 10 * 1024 * 1024 },
+    );
+    const text = stdout.trim();
+    if (text === '' || text === 'null') return [];
+    const rows = (
+      Array.isArray(JSON.parse(text)) ? JSON.parse(text) : [JSON.parse(text)]
+    ) as Array<{ ProcessId?: number; Name?: string; CommandLine?: string | null }>;
+    const snapshots: RecorderProcessSnapshot[] = [];
+    for (const row of rows) {
+      if (typeof row.ProcessId === 'number' && row.ProcessId > 0) {
+        snapshots.push({
+          pid: row.ProcessId,
+          name: typeof row.Name === 'string' ? row.Name : '',
+          commandLine: typeof row.CommandLine === 'string' ? row.CommandLine : '',
+        });
+      }
+    }
+    return snapshots;
+  } catch {
+    return [];
+  }
+}
+
+/** plan §11: async whole-tree kill (awaited — no fire-and-forget races). */
+export async function killProcessTreeAsync(pid: number): Promise<void> {
+  if (process.platform === 'win32') {
+    try {
+      await execFileAsync('taskkill', ['/pid', String(pid), '/T', '/F'], {
+        windowsHide: true,
+        timeout: 15000,
+      });
+    } catch {
+      /* process already gone — nothing to kill */
+    }
+  }
+}
+
 export interface YtDlpProgress {
   percent: number;
   speed: number;
@@ -129,9 +222,23 @@ export interface YtDlpDownloadOptions {
   quality?: string;
   headers?: Record<string, string>;
   cookies?: Array<{ name: string; value: string }>;
+  /**
+   * ponytail: HTTP proxy URL for the download child process — routes ffmpeg
+   * (`-proxy`) / yt-dlp (`--proxy`) through the host proxy when the plugin
+   * site is only reachable that way (creators.useProxy).
+   */
+  proxyUrl?: string;
   resume?: boolean;
   /** Stop recording after this many seconds (live duration cap). */
   durationSeconds?: number;
+  /**
+   * ponytail: live-HLS stall watchdog — when a live capture produces no NEW
+   * media (output size stops growing) for this long, the capture is torn
+   * down and surfaced as a transient failure so the recording service can
+   * restart it with the captured parts preserved. Default 90s (live HLS
+   * segments are a few seconds; a healthy capture grows every keyframe).
+   */
+  stallTimeoutMs?: number;
   /** Cap transfer speed, e.g. "500K" or "4M" (bytes/s as yt-dlp --limit-rate). */
   limitRate?: string;
   /** Extract audio only and convert to MP3 (requires ffmpeg). */
@@ -143,8 +250,10 @@ export interface YtDlpDownloadOptions {
 /**
  * ponytail: parse a quality preference like "480p" / "720p" / "1080p" into a
  * target height in pixels. Returns null for 'best'/unset/unknown values.
+ * Exported for the post-record transcode router (plan §8) — the live path
+ * itself never transcodes.
  */
-function parseQualityHeight(quality?: string): number | null {
+export function parseQualityHeight(quality?: string): number | null {
   if (quality === undefined || quality === '' || quality === 'best') return null;
   const match = quality.match(/^(\d{3,4})p$/i);
   if (match === null) return null;
@@ -165,6 +274,14 @@ export function buildFormatSelector(quality?: string): string {
   return `bv*[height<=${height}]+ba/b[height<=${height}]/bv*+ba/b`;
 }
 
+/**
+ * ponytail: default live-HLS stall watchdog window (see YtDlpDownloadOptions
+ * .stallTimeoutMs). Generous against real keyframe/segment cadence (2-6s)
+ * but far below the minutes-long dead windows a failing playlist reload
+ * produces silently.
+ */
+const DEFAULT_LIVE_STALL_TIMEOUT_MS = 90_000;
+
 function unitToBytes(unit: string): number {
   switch (unit) {
     case 'GiB':
@@ -175,10 +292,93 @@ function unitToBytes(unit: string): number {
       return 1024 * 1024;
     case 'KiB':
     case 'kB':
-      return 1024;
-    default:
+      return 1024;    default:
       return 1;
   }
+}
+
+/**
+ * plan §7: pure constructor for the direct-HLS ffmpeg capture command.
+ * Extracted verbatim from `downloadHlsFfmpeg` so the copy-only gate test can
+ * scan the exact args a live recording spawns — no process needed.
+ */
+export function buildDirectFfmpegArgs(
+  streamUrl: string,
+  outputPath: string,
+  options: YtDlpDownloadOptions = {},
+): string[] {
+  const args: string[] = [];
+  // ponytail: input-option form — must come BEFORE `-i`. The option name is
+  // `-http_proxy` (verified against the vendored ffmpeg: `-proxy` is NOT a
+  // recognized CLI option there and fails the whole recording with
+  // "Unrecognized option 'proxy'"). An HTTP CONNECT URL is used because
+  // every ffmpeg build supports it (SOCKS support is newer). The host's
+  // HTTPTunnelPort provides exactly such a URL.
+  if (options.proxyUrl !== undefined && options.proxyUrl !== '') {
+    args.push('-http_proxy', options.proxyUrl);
+  }
+  const ua = options.headers?.['User-Agent'] ?? options.headers?.['user-agent'];
+  if (ua) {
+    args.push('-user_agent', ua);
+  }
+
+  // ponytail: forward every other header (Referer/Origin/etc.) plus cookies —
+  // many HLS edges reject requests without them.
+  const headerLines: string[] = [];
+  for (const [key, value] of Object.entries(options.headers ?? {})) {
+    if (key.toLowerCase() === 'user-agent') continue;
+    headerLines.push(`${key}: ${value}`);
+  }
+  if (options.cookies !== undefined && options.cookies.length > 0) {
+    headerLines.push(`Cookie: ${options.cookies.map((c) => `${c.name}=${c.value}`).join('; ')}`);
+  }
+  if (headerLines.length > 0) {
+    args.push('-headers', headerLines.join('\r\n'));
+  }
+
+  // ponytail: live HLS connections drop occasionally — reconnect instead of failing
+  args.push('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5');
+
+  // ponytail: accept fragmented-MP4 HLS regardless of segment file names.
+  // Many platforms serve Apple-standard fMP4 HLS whose segments end in
+  // ".hls.fmp4" — ffmpeg's HLS demuxer rejects such URLs by default
+  // ("detected format mov,mp4... mismatches allowed extensions"), which
+  // fails the recording before a single segment is read. The plugin SDK's
+  // StreamObject cannot express ffmpeg input options, so the recorder must
+  // be lenient generically: this flag encodes no platform knowledge and
+  // enables every plugin serving fMP4 HLS.
+  args.push('-extension_picky', '0');
+
+  args.push('-i', streamUrl);
+
+  // plan §8: the live path ALWAYS captures source quality with -c copy.
+  // An explicit downgrade ("720p") is served later by the background
+  // transcode pool, never by a live libx264 re-encode (see requiresLiveTranscode
+  // for the routing decision). `options.quality` is intentionally ignored here.
+  args.push('-c', 'copy');
+
+  // ponytail: TS-based HLS carries ADTS AAC; the MP4 muxer rejects ADTS
+  // ("Malformed AAC bitstream detected") and the trailer write fails, leaving
+  // a truncated file. aac_adtstoasc converts ADTS → raw AAC for MP4; on fMP4
+  // HLS inputs (already raw, no ADTS) the filter passes packets through
+  // unchanged — verified against both a Camsoda fMP4 stream (still records
+  // fine) and a BongaCams TS stream (fails without the filter).
+  args.push('-bsf:a', 'aac_adtstoasc');
+
+  // ponytail: fragmented MP4 instead of faststart — faststart defers the
+  // moov atom to process exit, so a cancelled/killed recording produced an
+  // unplayable file. Fragmented MP4 writes self-contained fragments as it
+  // goes: the file is playable at ANY point (while still recording,
+  // after cancel, after stream-end) with no repair pass needed.
+  args.push('-movflags', '+frag_keyframe+empty_moov+default_base_moof');
+
+  // ponytail: the per-recording duration cap is enforced by a timer +
+  // graceful 'q' stop (NOT `-t`) — the close handler must be able to
+  // distinguish a duration-cap stop from a natural stream end, which the
+  // segment-chaining logic keys off (same as the yt-dlp path).
+
+  args.push('-y', outputPath);
+  return args;
 }
 
 /**
@@ -193,6 +393,14 @@ export class YtDlpService extends EventEmitter<YtDlpEvents> {
   private readonly durationCappedJobs = new Set<string>();
   /** Jobs asked to stop: their exit resolves as `stopped` instead of an error. */
   private readonly stoppingJobs = new Set<string>();
+  /**
+   * ponytail: jobs the live-HLS stall watchdog tore down — their close
+   * resolves as a TRANSIENT failure (not a graceful end) so the recording
+   * service restarts capture with the captured parts preserved. Without
+   * this a dead playlist window silently removed minutes from the saved
+   * video (15min wall → 6min file, verified).
+   */
+  private readonly stalledJobs = new Set<string>();
   /**
    * ponytail: jobs whose child process IS ffmpeg directly (m3u8 path) —
    * it reads stdin, so 'q' stops it gracefully. Jobs running yt-dlp instead
@@ -336,6 +544,11 @@ export class YtDlpService extends EventEmitter<YtDlpEvents> {
     const ffmpegPath = resolveExecutable('ffmpeg');
     if (ffmpegPath !== null) {
       args.push('--ffmpeg-location', ffmpegPath);
+    }
+
+    // ponytail: route through the host proxy when the site needs it.
+    if (options.proxyUrl !== undefined && options.proxyUrl !== '') {
+      args.push('--proxy', options.proxyUrl);
     }
 
     // Quality selection
@@ -546,62 +759,7 @@ export class YtDlpService extends EventEmitter<YtDlpEvents> {
       });
     }
 
-    const args: string[] = [];
-    const ua = options.headers?.['User-Agent'] ?? options.headers?.['user-agent'];
-    if (ua) {
-      args.push('-user_agent', ua);
-    }
-
-    // ponytail: forward every other header (Referer/Origin/etc.) plus cookies —
-    // many HLS edges reject requests without them.
-    const headerLines: string[] = [];
-    for (const [key, value] of Object.entries(options.headers ?? {})) {
-      if (key.toLowerCase() === 'user-agent') continue;
-      headerLines.push(`${key}: ${value}`);
-    }
-    if (options.cookies !== undefined && options.cookies.length > 0) {
-      headerLines.push(`Cookie: ${options.cookies.map((c) => `${c.name}=${c.value}`).join('; ')}`);
-    }
-    if (headerLines.length > 0) {
-      args.push('-headers', headerLines.join('\r\n'));
-    }
-
-    // ponytail: live HLS connections drop occasionally — reconnect instead of failing
-    args.push('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5');
-
-    args.push('-i', streamUrl);
-
-    // ponytail: honor the requested quality. Live HLS sources usually expose
-    // only their best variant (and the Stripchat proxy serves a single
-    // playlist), so a resolution request like "480p" must be enforced here.
-    // scale=-2:'min(ih,H)' downscales to at most H pixels of height and never
-    // upscales; 'best' (or unset) keeps the original stream with -c copy.
-    const requestedHeight = parseQualityHeight(options.quality);
-    if (requestedHeight !== null) {
-      args.push(
-        '-vf', `scale=-2:'min(ih,${requestedHeight})'`,
-        '-c:v', 'libx264',
-        '-preset', 'veryfast',
-        '-crf', '23',
-        '-c:a', 'copy',
-      );
-    } else {
-      args.push('-c', 'copy');
-    }
-
-    // ponytail: fragmented MP4 instead of faststart — faststart defers the
-    // moov atom to process exit, so a cancelled/killed recording produced an
-    // unplayable file. Fragmented MP4 writes self-contained fragments as it
-    // goes: the file is playable at ANY point (while still recording,
-    // after cancel, after stream-end) with no repair pass needed.
-    args.push('-movflags', '+frag_keyframe+empty_moov+default_base_moof');
-
-    // ponytail: the per-recording duration cap is enforced by a timer +
-    // graceful 'q' stop (NOT `-t`) — the close handler must be able to
-    // distinguish a duration-cap stop from a natural stream end, which the
-    // segment-chaining logic keys off (same as the yt-dlp path).
-
-    args.push('-y', outputPath);
+    const args = buildDirectFfmpegArgs(streamUrl, outputPath, options);
 
     return new Promise<YtDlpDownloadResult>((resolve, reject) => {
       const child = spawn(binary, args, { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -622,9 +780,14 @@ export class YtDlpService extends EventEmitter<YtDlpEvents> {
         this.stoppingJobs.delete(jobId);
         this.directFfmpegJobs.delete(jobId);
         this.durationCappedJobs.delete(jobId);
+        this.stalledJobs.delete(jobId);
         if (durationTimer !== undefined) {
           clearTimeout(durationTimer);
           durationTimer = undefined;
+        }
+        if (stallTimer !== undefined) {
+          clearTimeout(stallTimer);
+          stallTimer = undefined;
         }
       };
 
@@ -638,6 +801,36 @@ export class YtDlpService extends EventEmitter<YtDlpEvents> {
         durationTimer.unref?.();
       }
 
+      // ponytail: LIVE-HLS STALL WATCHDOG. A live capture must keep
+      // producing media — ffmpeg's stderr lines keep coming even when the
+      // playlist reload is failing, but the OUTPUT SIZE stops growing. When
+      // that happens the stream is silently dead (verified against
+      // MyFreeCams: a dropped TLS handshake stalls the playlist reload and
+      // ffmpeg idles on the stale playlist — a 15-minute wall-clock
+      // recording saved a 6-minute video, every stalled minute simply
+      // absent). Treat the stall as a transient failure: tear the capture
+      // down and let the service's retry loop restart it with the captured
+      // parts preserved, instead of silently losing minutes.
+      const stallTimeoutMs = options.stallTimeoutMs ?? DEFAULT_LIVE_STALL_TIMEOUT_MS;
+      let stallTimer: ReturnType<typeof setTimeout> | undefined;
+      let lastGrowthBytes = 0;
+      let lastGrowthAt = Date.now();
+      if (stallTimeoutMs > 0) {
+        const checkStalled = (): void => {
+          if (Date.now() - lastGrowthAt >= stallTimeoutMs) {
+            // No new media for the whole window — the edge is serving a
+            // dead playlist window. Tear down as a transient failure.
+            this.stalledJobs.add(jobId);
+            this.stopDownload(jobId);
+            return;
+          }
+          stallTimer = setTimeout(checkStalled, Math.min(10_000, stallTimeoutMs));
+          stallTimer.unref?.();
+        };
+        stallTimer = setTimeout(checkStalled, Math.min(10_000, stallTimeoutMs));
+        stallTimer.unref?.();
+      }
+
       child.stderr.on('data', (chunk: Buffer) => {
         const text = chunk.toString();
         stderrTail = (stderrTail + text).slice(-16_000);
@@ -649,6 +842,13 @@ export class YtDlpService extends EventEmitter<YtDlpEvents> {
           const bitrateMatch = line.match(/bitrate=\s*([\d.]+)(\w+)/);
           if (sizeMatch) {
             const bytesDownloaded = parseInt(sizeMatch[1]!, 10) * unitToBytes(sizeMatch[2]!);
+            // ponytail: the watchdog keys off OUTPUT GROWTH, not line
+            // arrival — ffmpeg keeps emitting identical progress lines
+            // while the demuxer is stalled on a dead playlist.
+            if (bytesDownloaded > lastGrowthBytes) {
+              lastGrowthBytes = bytesDownloaded;
+              lastGrowthAt = Date.now();
+            }
             const speedBps = bitrateMatch ? parseFloat(bitrateMatch[1]!) * 1000 : 0; // kbits/s -> bps
             this.emit('progress', jobId, {
               percent: 0,
@@ -672,9 +872,22 @@ export class YtDlpService extends EventEmitter<YtDlpEvents> {
 
       child.on('close', (code) => {
         // ponytail: capture the stop flags BEFORE cleanup deletes them (see download()).
+        const wasStalled = this.stalledJobs.has(jobId);
         const wasStopping = this.stoppingJobs.has(jobId);
         const wasDurationCapped = this.durationCappedJobs.has(jobId);
         cleanup();
+        // ponytail: a stall-detected stop must NOT resolve as a graceful
+        // end — that is how multi-minute dead windows became invisible and
+        // the saved video came up minutes short. Reject with the stall
+        // signature so the service's transient-retry loop restarts capture.
+        if (wasStalled) {
+          reject(new AppError({
+            code: 'FFMPEG_HLS_DOWNLOAD_FAILED',
+            message: `live capture stalled — no media progress for ${Math.round(stallTimeoutMs / 1000)}s (connection stalled), restarting capture`,
+            recoverable: true,
+          }));
+          return;
+        }
         // ponytail: code === null means the process was killed by a signal
         // (e.g. user cancel via TerminateProcess on Windows) — treat it as an
         // intentional stop, not a failure.
@@ -785,6 +998,21 @@ export class YtDlpService extends EventEmitter<YtDlpEvents> {
       // ponytail: killProcessTree is Windows-only — fall back to a direct
       // SIGKILL so adopted orphans are still stoppable on POSIX (the
       // yt-dlp/ffmpeg grandchild may survive until tree-kill is implemented).
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch {
+        /* already gone */
+      }
+    }
+  }
+
+  /**
+   * plan §11: async variant of `stopPidTree` for orphan/recovery paths —
+   * same semantics, never blocks the event loop.
+   */
+  async stopPidTreeAsync(pid: number): Promise<void> {
+    await killProcessTreeAsync(pid);
+    if (process.platform !== 'win32') {
       try {
         process.kill(pid, 'SIGKILL');
       } catch {

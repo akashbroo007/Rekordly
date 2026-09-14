@@ -73,11 +73,26 @@ export class MonitoringQueue extends EventEmitter<MonitoringQueueEvents> {
     return this.list().filter((j) => j.state === state);
   }
 
-  /** Get jobs ready to be checked, ordered by priority then nextCheckAt. */
+  /**
+   * Get jobs ready to be checked, ordered by priority then nextCheckAt.
+   * ponytail: `retrying` and `failed` jobs must come back due again —
+   * `scheduleRetry` stamps a backoff deadline on them, and a `failed` monitor
+   * carries a long cooldown for automatic recovery. Excluding them meant the
+   * first transport error turned a monitor into a zombie that never ran
+   * again ("Monitoring permanently failed" with no way back).
+   */
   due(limit = 10): MonitoringJob[] {
     const now = Date.now();
     return this.list()
-      .filter((j) => (j.state === 'queued' || j.state === 'offline' || j.state === 'live') && j.nextCheckAt <= now)
+      .filter(
+        (j) =>
+          (j.state === 'queued' ||
+            j.state === 'offline' ||
+            j.state === 'live' ||
+            j.state === 'retrying' ||
+            j.state === 'failed') &&
+          j.nextCheckAt <= now,
+      )
       .sort((a, b) => a.priority - b.priority || a.nextCheckAt - b.nextCheckAt)
       .slice(0, limit);
   }
@@ -99,7 +114,12 @@ export class MonitoringQueue extends EventEmitter<MonitoringQueueEvents> {
     if (job === undefined) return undefined;
     job.lastCheckAt = Date.now();
     job.lastResult = result;
-    job.attempts += 1;
+    // ponytail: attempts counts CONSECUTIVE failures (see scheduleRetry) — a
+    // successful check proves the monitor works again, so the failure streak
+    // restarts here. Accumulating successes into the same counter meant five
+    // healthy checks armed a tripwire: the next single transport error
+    // permanently failed the monitor with zero retries.
+    job.attempts = 0;
     job.nextCheckAt = Date.now() + job.intervalMs;
     job.updatedAt = new Date().toISOString();
 
@@ -117,7 +137,14 @@ export class MonitoringQueue extends EventEmitter<MonitoringQueueEvents> {
 
     job.attempts += 1;
     if (job.attempts >= this.options.maxRetries) {
+      // ponytail: 'failed' is not a tombstone — the job keeps a long
+      // cooldown (maxBackoffMs) so it re-enters rotation automatically
+      // once the network/site recovers (PRD: monitoring recovers
+      // automatically). A dead-forever monitor made every transient
+      // outage look like "monitoring continuously failing".
       job.state = 'failed';
+      job.nextCheckAt = Date.now() + this.options.maxBackoffMs;
+      job.updatedAt = new Date().toISOString();
       this.emit('job-failed', job);
       return job;
     }

@@ -103,6 +103,21 @@ export class CatboxProvider implements UploadProvider {
       const stream = createReadStream(filePath);
       this.currentStream = stream;
 
+      // catbox.moe sits behind Cloudflare, which hangs up on requests with
+      // no User-Agent or with chunked transfer encoding — send both a UA and
+      // an exact Content-Length so the upload survives.
+      const fileName =
+        filePath.replace(/\\/g, '/').split('/').pop()?.replace(/["\r\n]/g, '_') ?? 'upload';
+      const preamble =
+        `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name="reqtype"\r\n\r\n` +
+        `fileupload\r\n` +
+        `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name="fileToUpload"; filename="${fileName}"\r\n` +
+        `Content-Type: application/octet-stream\r\n\r\n`;
+      const epilogue = `\r\n--${boundary}--\r\n`;
+      const contentLength = Buffer.byteLength(preamble) + totalBytes + Buffer.byteLength(epilogue);
+
       let settled = false;
       let requestFinished = false;
       let responseData: string | null = null;
@@ -133,9 +148,19 @@ export class CatboxProvider implements UploadProvider {
           method: 'POST',
           headers: {
             'Content-Type': `multipart/form-data; boundary=${boundary}`,
+            'Content-Length': String(contentLength),
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            Accept: '*/*',
           },
+          timeout: 120_000,
         },
         (response) => {
+          if (response.statusCode !== undefined && (response.statusCode < 200 || response.statusCode > 299)) {
+            fail(new Error(`catbox responded with HTTP ${response.statusCode}`));
+            response.resume();
+            return;
+          }
           const chunks: Buffer[] = [];
           response.on('data', (chunk: Buffer) => chunks.push(chunk));
           response.on('end', () => {
@@ -149,6 +174,7 @@ export class CatboxProvider implements UploadProvider {
       this.currentRequest = request;
 
       request.on('error', fail);
+      request.on('timeout', () => fail(new Error('connection timed out')));
       request.on('finish', () => {
         requestFinished = true;
         tryResolve();
@@ -178,14 +204,6 @@ export class CatboxProvider implements UploadProvider {
       body.on('error', fail);
       body.pipe(request);
 
-      const preamble =
-        `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="reqtype"\r\n\r\n` +
-        `fileupload\r\n` +
-        `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="fileToUpload"; filename="${filePath.replace(/\\/g, '/').split('/').pop() ?? 'upload'}"\r\n` +
-        `Content-Type: application/octet-stream\r\n\r\n`;
-
       if (!settled) body.write(preamble);
       stream.on('data', (chunk) => {
         bytesSent += chunk.length;
@@ -194,7 +212,6 @@ export class CatboxProvider implements UploadProvider {
       stream.pipe(body, { end: false });
       stream.on('end', () => {
         if (settled) return;
-        const epilogue = `\r\n--${boundary}--\r\n`;
         body.end(epilogue, () => {
           report();
           onProgress(100, 0);

@@ -1,6 +1,7 @@
 import { dialog, ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { IPC_CHANNELS } from '@rekordly/shared';
 import { getAllProviderMeta } from '@rekordly/core';
+import { runGoogleDriveOAuth } from '../google-oauth';
 import type { IpcContext } from './context';
 
 function trusted(event: IpcMainInvokeEvent, getWindow: IpcContext['getWindow']): void {
@@ -14,7 +15,7 @@ function isString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= 2000;
 }
 
-export function registerUploadsIpc({ getWindow, uploads }: IpcContext): void {
+export function registerUploadsIpc({ getWindow, uploads, settings, logger }: IpcContext): void {
   ipcMain.handle(IPC_CHANNELS.uploadsList, (event, status: unknown) => {
     trusted(event, getWindow);
     return uploads.listUploads(typeof status === 'string' ? status : undefined);
@@ -102,6 +103,40 @@ export function registerUploadsIpc({ getWindow, uploads }: IpcContext): void {
     if (!isString(id)) throw new Error('Invalid provider id');
     return uploads.testProvider(id);
   });
+
+  // ponytail: Google Drive needs an OAuth loop to mint the refresh token —
+  // opens the system browser, catches the redirect on a local loopback
+  // server and persists the credentials (including the refresh token).
+  ipcMain.handle(
+    IPC_CHANNELS.uploadsConnectGoogleDrive,
+    async (event, clientId: unknown, clientSecret: unknown) => {
+      trusted(event, getWindow);
+      if (!isString(clientId) || !isString(clientSecret)) {
+        throw new Error('Client ID and Client Secret are required');
+      }
+      try {
+        const { refreshToken } = await runGoogleDriveOAuth(clientId, clientSecret, logger);
+        const current = settings.getAll().uploadProviders;
+        settings.set({
+          uploadProviders: {
+            ...current,
+            'google-drive': {
+              enabled: true,
+              clientId,
+              clientSecret,
+              refreshToken,
+            },
+          },
+        });
+        const ok = await uploads.testProvider('google-drive');
+        return { ok, error: ok ? undefined : 'Credentials saved but the connection test failed.' };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        logger.warn({ error: message }, 'google drive connect failed');
+        return { ok: false, error: message };
+      }
+    },
+  );
 
   ipcMain.handle(IPC_CHANNELS.uploadsPickFile, async (event) => {
     trusted(event, getWindow);

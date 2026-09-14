@@ -5,7 +5,7 @@
   "description": "Rekordly desktop application",
   "main": "out/main/index.js",
   "author": "Rekordly",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",

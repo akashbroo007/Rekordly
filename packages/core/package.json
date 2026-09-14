@@ -2,6 +2,7 @@
   "name": "@rekordly/core",
   "version": "0.1.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -16,10 +17,14 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@noble/ed25519": "^3.2.0",
+    "@noble/hashes": "^2.2.0",
     "@rekordly/database": "workspace:*",
     "@rekordly/plugin-sdk": "workspace:*",
     "@rekordly/recorder": "workspace:*",
     "@rekordly/shared": "workspace:*",
+    "@scure/base": "^1.2.6",
+    "socks-proxy-agent": "^8.0.5",
     "zod": "^3.24.0"
   },
   "devDependencies": {

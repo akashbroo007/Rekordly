@@ -17,7 +17,7 @@ const SECTIONS: Section[] = [
     title: '2. License & permitted use',
     body:
       'Rekordly is provided for personal, non-commercial use. You may install it, use it, and modify your local copy ' +
-      'in accordance with its open-source license. You may not sell the application itself or present it as your own product.',
+      'in accordance with its source-available license. You may not sell the application itself or present it as your own product.',
   },
   {
     title: '3. Respect for platforms and content owners',

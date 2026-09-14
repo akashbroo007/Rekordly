@@ -519,7 +519,7 @@ Focus on execution.
 
 # Project Vision
 
-Rekordly should become the best open-source, plugin-first desktop application for livestream monitoring and recording.
+Rekordly should become the best source-available, plugin-first desktop application for livestream monitoring and recording.
 
 Every contribution should move the project closer to that vision.
 

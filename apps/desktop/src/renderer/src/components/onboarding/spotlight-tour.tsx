@@ -1,6 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@rekordly/ui';
+
+// ponytail: neutralizes the TitleBar's native drag strip (still active under
+// a fullscreen overlay even when visually covered) so top-of-window clicks
+// land in the DOM instead of being swallowed as window-drag events.
+const NO_DRAG_REGION = { WebkitAppRegion: 'no-drag' } as CSSProperties;
 
 export interface SpotlightStep {
   /** Value of the data-tour-id attribute to spotlight. */
@@ -117,7 +122,7 @@ export function SpotlightTour({ steps, onFinish, onSkip }: SpotlightTourProps) {
   const isLast = index >= steps.length - 1;
 
   return (
-    <div className="fixed inset-0 z-[100]" role="dialog" aria-label="Guided tour">
+    <div className="fixed inset-0 z-[100]" style={NO_DRAG_REGION} role="dialog" aria-label="Guided tour">
       {/* Cutout: transparent hole over the target, huge shadow dims the rest */}
       {rect !== null && (
         <div
