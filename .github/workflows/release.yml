@@ -1,0 +1,72 @@
+name: Release
+
+# ponytail: pushing a tag like v0.1.0 builds the Windows installer +
+# portable exe on a clean runner and publishes the GitHub Release with the
+# artifacts (plus latest.yml/blockmap metadata for future auto-updates).
+# Also runnable manually from the Actions tab — the version then comes from
+# apps/desktop/package.json and the release is created for it.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & publish Windows release
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # ponytail: --frozen-lockfile keeps CI on exactly the committed
+      # dependency graph; the desktop postinstall runs electron-rebuild for
+      # better-sqlite3 against this job's Electron-matching toolchain.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ponytail: vendored yt-dlp + ffmpeg — without these the packaged app
+      # ships without a capture engine.
+      - name: Fetch vendored binaries (yt-dlp + ffmpeg)
+        shell: pwsh
+        run: ./scripts/fetch-binaries.ps1
+
+      # ponytail: builds every workspace package in dependency order,
+      # including the bundled plugins' dist/ outputs that electron-builder's
+      # extraResources copies into the installer.
+      - name: Build packages + desktop app
+        run: pnpm build
+
+      - name: Package & publish to GitHub Releases
+        working-directory: apps/desktop
+        run: pnpm exec electron-builder --win --publish always
+        env:
+          # Built-in token — no secret setup needed. electron-builder uses it
+          # to create the release for the pushed tag and upload artifacts.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ponytail: best-effort copies of the installers for troubleshooting —
+      # the real distribution channel is the GitHub Release itself.
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: apps/desktop/release/*.exe
+          if-no-files-found: warn
+          retention-days: 14

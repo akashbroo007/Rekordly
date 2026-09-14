@@ -6,6 +6,16 @@ directories:
   output: release
   buildResources: build
 
+# ponytail: GitHub Releases distribution — used by `electron-builder --publish
+# always` in .github/workflows/release.yml (GH_TOKEN comes from the workflow).
+publish:
+  provider: github
+  owner: akashbroo007
+  repo: Rekordly
+  # ponytail: publish directly (not as a draft) so electron-updater sees the
+  # release immediately — drafts are invisible to the auto-updater.
+  releaseType: release
+
 # ponytail: runtime icon assets (tray / window icon) — resolved by
 # src/main/icons.ts via process.resourcesPath in the packaged app.
 extraResources:

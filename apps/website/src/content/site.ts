@@ -29,7 +29,10 @@ export const hero = {
   titleTail: "again",
   subtitle:
     "A free, source-available Windows app for monitoring creators, automatically recording live streams, downloading videos and VODs, and organizing your recordings.",
-  primaryCta: { label: "Download for Windows", href: site.releasesUrl },
+  primaryCta: {
+    label: "Download for Windows",
+    href: "https://rekordly.in/download",
+  },
   secondaryCta: { label: "View on GitHub", href: site.repoUrl },
   stats: [
     { value: "7", label: "Sites supported" },
