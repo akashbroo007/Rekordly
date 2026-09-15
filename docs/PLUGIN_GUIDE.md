@@ -27,7 +27,7 @@ If an SDK improvement is needed, implement it in a platform-agnostic way.
 
 # Target Platform
 
-www.cam4.com
+dreamcam.com
 
 ---
 

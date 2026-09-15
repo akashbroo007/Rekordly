@@ -1,0 +1,22 @@
+{
+  "id": "dreamcam",
+  "name": "Dreamcam",
+  "version": "0.1.0",
+  "description": "Monitor and record livestreams from Dreamcam (dreamcam.com), including VR (3D) shows.",
+  "author": "Rekordly",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "homepage": "https://github.com/Rekordly/Rekordly",
+  "setupHint": "Works without an account. Optional session cookies enable logged-in quality.",
+  "entry": "dist/index.js",
+  "minAppVersion": "0.1.0",
+  "capabilities": [
+    "auth",
+    "creator-search",
+    "live-detection",
+    "stream-extraction",
+    "settings",
+    "health-check",
+    "metadata"
+  ],
+  "permissions": ["network", "cookies", "recording"]
+}

@@ -54,6 +54,16 @@ extraResources:
   # the copy inside the asar — ship it next to the plugin instead.
   - from: ../../plugins/stripchat/node_modules/playwright-core
     to: plugins/stripchat/node_modules/playwright-core
+  # ponytail: the dreamcam plugin does require('ws') at runtime (VR feed
+  # bridge — fmp4s:// WebSocket served back as local HLS). Same asar rule as
+  # playwright-core: ship the copy next to the plugin.
+  - from: ../../plugins/dreamcam/node_modules/ws
+    to: plugins/dreamcam/node_modules/ws
+  - from: ../../plugins/dreamcam/node_modules/.pnpm
+    to: plugins/dreamcam/node_modules/.pnpm
+    filter:
+      - "ws@*/node_modules/ws/**"
+      - "@types/ws@*/node_modules/@types/ws/**"
   # ponytail: vendored yt-dlp/ffmpeg — end users get a fully working app with
   # zero external installs (resolved via resolveExecutable, see binaries.ts).
   - from: resources/binaries
