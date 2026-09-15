@@ -9,6 +9,7 @@ Rekordly supports the following sites out of the box:
 | BongaCams  |       ✓        |     ✓     |     —     |
 | CamSoda    |       ✓        |     ✓     |     —     |
 | MyFreeCams |       ✓        |     ✓     |     —     |
+| Dreamcam   |       ✓        |     ✓     |     —     |
 | Twitch     |       ✓        |     ✓     |     ✓     |
 | YouTube    |       ✓        |     ✓     |     ✓     |
 

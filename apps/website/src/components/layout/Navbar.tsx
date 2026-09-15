@@ -1,89 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { ArrowRight, ChevronDown, Github, Menu, X } from "lucide-react";
+import { ArrowRight, Github, Menu, X } from "lucide-react";
 import {
   navLinks,
   secondaryNavLinks,
   site,
 } from "../../content/site";
-
-function MoreMenu() {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const location = useLocation();
-
-  // Close on any navigation and on outside click / Escape.
-  useEffect(() => {
-    setOpen(false);
-  }, [location.pathname]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  const isActive = secondaryNavLinks.some(
-    (link) => link.href === location.pathname,
-  );
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        className={`inline-flex items-center gap-1 rounded-full px-4 py-2 text-sm font-medium transition-all hover:bg-white/10 hover:text-white ${
-          isActive ? "bg-white/10 text-white" : "text-white/90"
-        }`}
-      >
-        More
-        <ChevronDown
-          className={`h-3.5 w-3.5 transition-transform duration-200 ${
-            open ? "rotate-180" : ""
-          }`}
-        />
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-30 mt-2 w-44 overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0a]/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl"
-        >
-          {secondaryNavLinks.map((link) => (
-            <NavLink
-              key={link.href}
-              to={link.href}
-              role="menuitem"
-              className={({ isActive: active }) =>
-                `block rounded-lg px-3 py-2 text-sm transition-colors ${
-                  active
-                    ? "bg-white/10 font-medium text-white"
-                    : "text-white/80 hover:bg-white/5 hover:text-white"
-                }`
-              }
-            >
-              {link.label}
-            </NavLink>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function Navbar() {
   const [open, setOpen] = useState(false);
@@ -109,20 +31,13 @@ export function Navbar() {
           <div className="flex items-center justify-start">
             <Link
               to="/"
-              className="flex items-center gap-2 text-xl font-bold text-white"
+              className="flex items-center text-xl font-bold text-white"
             >
-              <img
-                src="./icon.png"
-                alt=""
-                width={24}
-                height={24}
-                className="h-6 w-6"
-              />
               {site.name}
             </Link>
           </div>
 
-          {/* Glassmorphic Navigation Pills (center) — primary links + More */}
+          {/* Glassmorphic Navigation Pills (center) */}
           <div className="hidden md:flex items-center space-x-1 rounded-full bg-white/5 backdrop-blur-xl border border-white/10 p-1">
             {navLinks.map((link) => (
               <NavLink
@@ -137,7 +52,6 @@ export function Navbar() {
                 {link.label}
               </NavLink>
             ))}
-            <MoreMenu />
           </div>
 
           {/* CTA (right) */}

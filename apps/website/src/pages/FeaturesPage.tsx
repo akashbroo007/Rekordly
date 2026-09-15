@@ -250,7 +250,7 @@ export default function FeaturesPage() {
   useSeo({
     title: "Features — monitoring, auto-record, downloads, editor & more",
     description:
-      "Every Rekordly feature: live monitoring across 7 sites, auto-record with safety rails, VOD downloads, built-in editor, cloud uploads, and a Secure Proxy for blocked networks.",
+      "Every Rekordly feature: live monitoring across 8 sites, auto-record with safety rails, VOD downloads, built-in editor, cloud uploads, and a Secure Proxy for blocked networks.",
     path: "/features",
   });
 

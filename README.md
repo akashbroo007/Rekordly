@@ -213,6 +213,12 @@ The table below reflects what each bundled plugin currently implements.
 | YouTube    |       ✓        |      ✓      |        ✓         |     ✓     |
 | BongaCams  |       ✓        |      ✓      |        ✓         |     —     |
 | CamSoda    |       ✓        |      ✓      |        ✓         |     —     |
+| MyFreeCams |       ✓        |      ✓      |        ✓         |     —     |
+| Dreamcam   |       ✓        |      ✓      |        ✓         |     —     |
+
+The Dreamcam plugin also supports **VR (3D) shows** — the stereoscopic feed is
+bridged to a local HLS playlist and recorded like any other stream, with a
+per-creator preference for VR, 2D, or auto.
 
 Want another site — or better support for an existing one?
 See [Writing a plugin](docs/PLUGIN_GUIDE.md).

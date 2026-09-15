@@ -16,18 +16,18 @@ export const site = {
   email: "hello@rekordly.in",
 } as const;
 
-/** Primary links shown in the navbar pill (kept deliberately short). */
+/** Primary links shown in the navbar pill. */
 export const navLinks = [
   { label: "Features", href: "/features" },
   { label: "Docs", href: "/docs" },
   { label: "Download", href: "/download" },
+  { label: "Plugins", href: "/plugins" },
+  { label: "Pricing", href: "/pricing" },
 ] as const;
 
-/** Secondary links live in the "More" dropdown and the footer. */
+/** Secondary links live in the footer (and the mobile menu), not the navbar. */
 export const secondaryNavLinks = [
-  { label: "Plugins", href: "/plugins" },
   { label: "Blog", href: "/blog" },
-  { label: "Pricing", href: "/pricing" },
   { label: "Roadmap", href: "/roadmap" },
   { label: "Contact", href: "/contact" },
 ] as const;
@@ -45,7 +45,7 @@ export const hero = {
   },
   secondaryCta: { label: "View on GitHub", href: site.repoUrl },
   stats: [
-    { value: "7", label: "Sites supported" },
+    { value: "8", label: "Sites supported" },
     { value: "0", label: "Setup — yt-dlp & ffmpeg bundled" },
     { value: "100%", label: "Free for personal use" },
   ],
@@ -141,6 +141,7 @@ export const platforms = [
   { name: "BongaCams", live: true, recording: true, downloads: false },
   { name: "CamSoda", live: true, recording: true, downloads: false },
   { name: "MyFreeCams", live: true, recording: true, downloads: false },
+  { name: "Dreamcam", live: true, recording: true, downloads: false },
   { name: "Twitch", live: true, recording: true, downloads: true },
   { name: "YouTube", live: true, recording: true, downloads: true },
 ] as const;
@@ -159,7 +160,7 @@ export const faqs = [
   {
     question: "Which platforms are supported?",
     answer:
-      "Chaturbate, Stripchat, BongaCams, CamSoda, MyFreeCams, Twitch, and YouTube are supported out of the box for live detection and recording. New sites can be added as plugins without touching the core app.",
+      "Chaturbate, Stripchat, BongaCams, CamSoda, MyFreeCams, Dreamcam, Twitch, and YouTube are supported out of the box for live detection and recording — Dreamcam including VR (3D) shows. New sites can be added as plugins without touching the core app.",
   },
   {
     question: "My ISP blocks one of the sites — can I still record?",
@@ -242,7 +243,7 @@ export const roadmap: RoadmapGroup[] = [
       {
         title: "Bundled site plugins",
         description:
-          "Chaturbate, Stripchat, Twitch, YouTube, BongaCams, CamSoda, MyFreeCams — each with live detection, auto-record, and manual recording.",
+          "Chaturbate, Stripchat, Twitch, YouTube, BongaCams, CamSoda, MyFreeCams, and Dreamcam — each with live detection, auto-record, and manual recording, plus VR (3D) capture on Dreamcam.",
         target: "0.1.0",
       },
       {

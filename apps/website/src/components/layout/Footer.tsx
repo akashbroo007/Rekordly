@@ -1,14 +1,14 @@
 import { Link } from "react-router-dom";
 import { Globe, Github } from "lucide-react";
-import { navLinks, secondaryNavLinks, site } from "../../content/site";
+import { navLinks, site } from "../../content/site";
 import { useCurrency } from "../../lib/CurrencyContext";
 import { CURRENCY_OPTIONS } from "../../lib/currency";
 
 const footerNav = [
   {
     heading: "Product",
-    // Full product nav — the navbar only shows the top three.
-    links: [...navLinks, ...secondaryNavLinks],
+    // Blog/Roadmap live under Resources, Contact under Company.
+    links: [...navLinks],
   },
   {
     heading: "Resources",

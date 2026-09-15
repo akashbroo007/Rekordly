@@ -33,7 +33,7 @@ If you have ever refreshed a follower page 30 times hoping to catch a stream, or
 
 ## What Rekordly actually does
 
-- **Live monitoring** — track creators across 7 sites (Chaturbate, Stripchat, Twitch, YouTube, BongaCams, CamSoda, MyFreeCams) from one dashboard with live status, viewer counts, and stream titles.
+- **Live monitoring** — track creators across 8 sites (Chaturbate, Stripchat, Twitch, YouTube, BongaCams, CamSoda, MyFreeCams, Dreamcam) from one dashboard with live status, viewer counts, and stream titles.
 - **Auto-Record** — flip one per-creator switch and recording starts the second the creator goes live, then stops cleanly when the stream ends.
 - **Downloads** — grab VODs, clips, and highlights, or extract audio-only MP3s from anything.
 - **Library** — every capture lands in a local, searchable library with tags, collections, favorites, and notes.
