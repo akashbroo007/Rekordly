@@ -2,7 +2,7 @@
   "id": "stripchat",
   "name": "Stripchat",
   "version": "0.1.0",
-  "description": "Monitor and record livestreams from Stripchat (stripchat.ooo).",
+  "description": "Monitor and record livestreams from Stripchat (stripchat.ooo), including VR (3D) cams.",
   "author": "Rekordly",
   "license": "PolyForm-Noncommercial-1.0.0",
   "homepage": "https://github.com/Rekordly/Rekordly",
@@ -17,5 +17,6 @@
     "health-check",
     "metadata"
   ],
-  "permissions": ["network", "cookies", "recording"]
+  "permissions": ["network", "cookies", "recording"],
+  "streamTypes": ["2d", "vr"]
 }

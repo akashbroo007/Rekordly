@@ -204,7 +204,13 @@ const desktopApi: DesktopApi = {
     start: (stream) => ipcRenderer.invoke(IPC_CHANNELS.recordingStart, stream),
     startForCreator: (
       creatorId,
-      options?: { durationMinutes?: number; quality?: string; segmentMinutes?: number },
+      options?: {
+        durationMinutes?: number;
+        quality?: string;
+        segmentMinutes?: number;
+        /** ponytail: per-recording stream variant pick (plugin-defined, e.g. 'vr'). */
+        streamType?: string;
+      },
     ) => ipcRenderer.invoke(IPC_CHANNELS.recordingStartForCreator, { creatorId, options }),
     pause: (jobId) => ipcRenderer.invoke(IPC_CHANNELS.recordingPause, jobId),
     resume: (jobId) => ipcRenderer.invoke(IPC_CHANNELS.recordingResume, jobId),
@@ -292,6 +298,14 @@ const desktopApi: DesktopApi = {
     cleanup: (options) => ipcRenderer.invoke(IPC_CHANNELS.storageCleanup, options),
     getLargestRecordings: (limit) => ipcRenderer.invoke(IPC_CHANNELS.storageGetLargestRecordings, limit),
     getLargestFolders: (limit) => ipcRenderer.invoke(IPC_CHANNELS.storageGetLargestFolders, limit),
+  },
+  push: {
+    test: () => ipcRenderer.invoke(IPC_CHANNELS.pushTest),
+    detectTelegramChatId: (token) => ipcRenderer.invoke(IPC_CHANNELS.pushDetectTelegramChatId, token),
+  },
+  automation: {
+    runForRecording: (recordingId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.automationRunForRecording, recordingId),
   },
   editor: {
     trim: (request) => ipcRenderer.invoke(IPC_CHANNELS.editorTrim, request),

@@ -76,7 +76,27 @@ const SETTINGS_SCHEMA: Record<string, SettingDef> = {
     description: 'Browser User-Agent string sent with requests.',
     defaultValue: UA,
   },
+  // ponytail: VR-capable plugin (manifest.streamTypes = ["2d","vr"]) — this
+  // is the default when no per-recording pick arrives (auto-record etc.),
+  // same pattern as the Dreamcam plugin's preferVr.
+  preferVr: {
+    type: 'select',
+    label: 'Preferred stream type',
+    description:
+      'VR (3D) records the stereoscopic fisheye feed (only VR-tagged models broadcast one); 2D records the flat HD stream; Auto picks VR when the model is a VR cam.',
+    defaultValue: 'auto',
+    options: [
+      { value: 'auto', label: 'Auto (prefer VR when the model is a VR cam)' },
+      { value: 'vr', label: 'VR (3D) only' },
+      { value: '2d', label: '2D only' },
+    ],
+  },
 };
+
+function getPreferVr(): 'auto' | 'vr' | '2d' {
+  const v = ctx?.settings.get('preferVr');
+  return v === 'vr' || v === '2d' ? v : 'auto';
+}
 
 function getCookieString(): string {
   return Object.entries(cookieJar)
@@ -250,6 +270,15 @@ interface CamInfo {
   snapshot?: string;
   /** e.g. "27" from viewServers.flashphoner-hls = "b-hls-27" */
   serverHint?: string;
+  /** Model is a VR cam (broadcasts a stereoscopic feed on the _vr playlist). */
+  isVr?: boolean;
+  /** ponytail: raw VR camera settings from broadcastSettings — drives the
+   *  stereo-layout/lens defaults the player auto-applies. */
+  vrCameraSettings?: {
+    stereoPacking?: string;   // 'SBS' | 'TB' | 'MONO'
+    frameFormat?: string;     // 'FISHEYE' | 'PANORAMIC' | 'CIRCULAR'
+    horizontalAngle?: number; // fisheye lens FOV in degrees
+  };
 }
 
 /**
@@ -453,6 +482,27 @@ async function findWorkingMaster(modelId: number, serverHint?: string): Promise<
   );
 }
 
+/**
+ * ponytail: VR (3D) playlist — same doppiocdn edges, but the VR feed lives
+ * under an `_vr` suffixed path (confirmed against StreaMonitor's StripChatVR):
+ *
+ *   https://edge-hls.doppiocdn.{org|com|net}/hls/{id}_vr/master/{id}_vr.m3u8
+ *
+ * It only exists for VR-tagged models (model.isVr); anything else 404s. The
+ * playlist is MOUFLON-obfuscated like the 2D one, so it runs through the
+ * same MouflonProxy de-obfuscation path as regular recordings.
+ */
+async function findVrMaster(modelId: number): Promise<string> {
+  for (const tld of ['org', 'com', 'net']) {
+    const url = `https://edge-hls.doppiocdn.${tld}/hls/${modelId}_vr/master/${modelId}_vr.m3u8`;
+    if (await probeMaster(url)) {
+      ctx?.logger.debug(`stripchat: VR master playlist: ${url}`);
+      return url;
+    }
+  }
+  throw new Error(`No VR (3D) playlist for model ${modelId} — the model may not be a VR cam`);
+}
+
 interface Variant {
   url: string;
   bandwidth: number;
@@ -551,6 +601,21 @@ function pickSnapshot(model: Json | null, cam: Json | null): string | undefined 
   );
 }
 
+/** ponytail: pull the VR camera config out of broadcastSettings (best-effort). */
+function vrCameraSettingsOf(model: Json | null, cam: Json | null): CamInfo['vrCameraSettings'] {
+  const settings = rec(model, 'broadcastSettings') ?? rec(cam, 'broadcastSettings');
+  const vr = rec(settings, 'vrCameraSettings');
+  if (vr === null) return undefined;
+  const out: CamInfo['vrCameraSettings'] = {};
+  const packing = str(vr, 'stereoPacking');
+  if (packing !== undefined) out.stereoPacking = packing;
+  const frameFormat = str(vr, 'frameFormat');
+  if (frameFormat !== undefined) out.frameFormat = frameFormat;
+  const angle = num(vr, 'horizontalAngle');
+  if (angle !== undefined) out.horizontalAngle = angle;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function camInfoFromApi(json: unknown): CamInfo | null {
   // ponytail: actual API shape is { cam, user: { user: {id, username, ...} } }
   // — the model object lives at user.user; some versions expose "model" instead.
@@ -569,6 +634,8 @@ function camInfoFromApi(json: unknown): CamInfo | null {
     snapshot: pickSnapshot(model, cam),
     serverHint:
       str(viewServers, 'flashphoner-hls') ?? str(model, 'broadcastServer'),
+    isVr: bool(model, 'isVr') === true,
+    vrCameraSettings: vrCameraSettingsOf(model, cam),
   };
 }
 
@@ -589,6 +656,8 @@ function camInfoFromPageState(state: unknown): CamInfo | null {
     viewers: num(cam, 'viewersCount') ?? num(cam, 'viewers'),
     snapshot: pickSnapshot(model, cam),
     serverHint: str(viewServers, 'flashphoner-hls'),
+    isVr: bool(model, 'isVr') === true,
+    vrCameraSettings: vrCameraSettingsOf(model, cam),
   };
 }
 
@@ -667,6 +736,105 @@ function collectModels(node: unknown, out: Map<string, CreatorInfo>, depth = 0):
 }
 
 // ---- plugin ---------------------------------------------------------------
+
+/** Build the final StreamObject with the variant tag the host persists to the Library row. */
+function finalizeStreamObject(
+  info: CamInfo,
+  username: string,
+  streamUrl: string,
+  qualityOptions: Array<{
+    id: string;
+    label: string;
+    format: string;
+    resolution?: string;
+    bitrate?: number;
+    isBest?: boolean;
+  }>,
+  streamType: 'vr' | '2d',
+): StreamObject {
+  const base = getBase();
+  const isVr = streamType === 'vr';
+  const cookies = Object.entries(cookieJar).map(([name, value]) => ({
+    name,
+    value,
+    domain: new URL(base).hostname,
+    path: '/',
+    secure: true,
+  }));
+  return {
+    creatorId: `stripchat:${info.username ?? username}`,
+    creatorName: info.displayName ?? username,
+    platformId: 'stripchat',
+    title: isVr ? (info.title ?? `${username} live on Stripchat (VR)`) : (info.title ?? `${username} live on Stripchat`),
+    thumbnail: info.snapshot,
+    streamUrl,
+    headers: {
+      'User-Agent': getUserAgent(),
+      Referer: `${base}/`,
+      Origin: base,
+    },
+    cookies,
+    qualityOptions,
+    metadata: {
+      // ponytail: the player auto-enables VR view when the Library row's
+      // streamType is 'vr' — always tag the canonical 'vr'/'2d', never a
+      // site-specific label (Dreamcam's 'video3D' tag is a known mismatch).
+      category: isVr ? 'Stripchat VR' : 'Stripchat',
+      tags: isVr ? ['live', 'vr', '3d'] : ['live'],
+      resolution: qualityOptions[0]?.resolution,
+      streamType,
+    },
+    startedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * ponytail: VR (3D) extraction — resolve the `_vr` master playlist on the
+ * doppiocdn edge and run it through the SAME MouflonProxy de-obfuscation as
+ * 2D recordings (the VR playlist is MOUFLON-tagged identically; ffmpeg
+ * alone cannot read either). The room page for browser decoding is the
+ * vr.stripchat.com cam page — its player fetches the same _vr segments.
+ */
+async function extractVrStream(username: string, info: CamInfo): Promise<StreamObject> {
+  if (info.modelId === undefined) throw new Error(`No model ID for ${username}`);
+  const vrMaster = await findVrMaster(info.modelId);
+
+  // Best variant of the VR master (usually a single high-bitrate fisheye
+  // variant; still parsed for robustness and the resolution label).
+  const { url: variantUrl, qualityOptions } = await resolveBestVariant(vrMaster);
+
+  const base = getBase();
+  const modelKey = `${(info.username ?? username).toLowerCase()}:vr`;
+  const proxy = new MouflonProxy(
+    variantUrl,
+    `https://vr.stripchat.com/cam/${encodeURIComponent(info.username ?? username)}`,
+    {
+      'User-Agent': getUserAgent(),
+      Referer: 'https://vr.stripchat.com/',
+      Origin: base,
+      Accept: '*/*',
+    },
+    {
+      logger: ctx ? { debug: (m: string) => ctx?.logger.debug(m) } : undefined,
+      resolvePdKey: getPdKeyResolver(),
+      onIdleStop: () => {
+        activeProxies.delete(modelKey);
+      },
+    },
+  );
+  try {
+    await proxy.start();
+  } catch (e) {
+    void proxy.stop().catch(() => undefined);
+    throw new Error(`Stripchat VR proxy failed to start: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
+  }
+  for (const evicted of activeProxies.set(modelKey, proxy)) {
+    ctx?.logger.debug(`stripchat: stopping replaced/evicted VR proxy for ${evicted.key}`);
+    void evicted.proxy.stop().catch(() => undefined);
+  }
+  ctx?.logger.debug(`stripchat: VR stream extracted for ${username}`);
+  return finalizeStreamObject(info, username, proxy.url, qualityOptions, 'vr');
+}
 
 const plugin: Plugin = {
   manifest,
@@ -781,12 +949,29 @@ const plugin: Plugin = {
     },
 
     streamExtraction: {
-      async extractStream(identifier): Promise<StreamObject> {
+      async extractStream(identifier, hints): Promise<StreamObject> {
         const username = identifier.replace(/^stripchat:/, '');
-        ctx?.logger.debug(`stripchat: extracting stream for ${username}`);
+        const prefer =
+          hints?.streamType === 'vr' || hints?.streamType === '2d' ? hints.streamType : getPreferVr();
+        ctx?.logger.debug(
+          `stripchat: extracting stream for ${username}${hints?.streamType !== undefined ? ` (type: ${hints.streamType})` : ''}`,
+        );
         const info = await fetchCamData(username);
         if (!info.isLive) throw new Error(`${username} is not live`);
         if (info.modelId === undefined) throw new Error(`No model ID for ${username}`);
+
+        // ponytail: VR routing — the VR (3D) feed only exists for models
+        // broadcasting the stereoscopic camera (model.isVr). 'vr' hard-fails
+        // rather than silently recording flat; 'auto' falls back to 2D when
+        // no VR playlist is live so auto-record keeps working for everyone.
+        if (prefer === 'vr' || (prefer === 'auto' && info.isVr === true)) {
+          try {
+            return await extractVrStream(username, info);
+          } catch (e) {
+            if (prefer === 'vr') throw e;
+            ctx?.logger.debug(`stripchat: VR extraction unavailable, falling back to 2D: ${e}`);
+          }
+        }
 
         // ponytail: prefer the REAL signed stream captured from the player;
         // unsigned paths only serve a looping promo clip. Fall back to the
@@ -870,36 +1055,7 @@ const plugin: Plugin = {
         }
         ctx?.logger.debug(`stripchat: stream extracted for ${username}: ${streamUrl.substring(0, 80)}...`);
 
-        const base = getBase();
-        const cookies = Object.entries(cookieJar).map(([name, value]) => ({
-          name,
-          value,
-          domain: new URL(base).hostname,
-          path: '/',
-          secure: true,
-        }));
-
-        return {
-          creatorId: `stripchat:${info.username ?? username}`,
-          creatorName: info.displayName ?? username,
-          platformId: 'stripchat',
-          title: info.title ?? `${username} live on Stripchat`,
-          thumbnail: info.snapshot,
-          streamUrl,
-          headers: {
-            'User-Agent': getUserAgent(),
-            Referer: `${base}/`,
-            Origin: base,
-          },
-          cookies,
-          qualityOptions,
-          metadata: {
-            category: 'Stripchat',
-            tags: ['live'],
-            resolution: qualityOptions[0]?.resolution,
-          },
-          startedAt: new Date().toISOString(),
-        };
+        return finalizeStreamObject(info, username, streamUrl, qualityOptions, '2d');
       },
     },
 

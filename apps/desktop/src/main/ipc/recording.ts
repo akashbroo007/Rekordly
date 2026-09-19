@@ -13,7 +13,16 @@ export function registerRecordingIpc(context: IpcContext): void {
     IPC_CHANNELS.recordingStartForCreator,
     async (
       _event,
-      payload: string | { creatorId: string; options?: { durationMinutes?: number; quality?: string; segmentMinutes?: number } },
+      payload: string | {
+        creatorId: string;
+        options?: {
+          durationMinutes?: number;
+          quality?: string;
+          segmentMinutes?: number;
+          /** ponytail: per-recording stream variant pick (plugin-defined, e.g. 'vr'). */
+          streamType?: string;
+        };
+      },
     ) => {
       const creatorDbId = typeof payload === 'string' ? payload : payload.creatorId;
       const startOptions = typeof payload === 'string' ? {} : (payload.options ?? {});
@@ -60,7 +69,11 @@ export function registerRecordingIpc(context: IpcContext): void {
     const extract = managed?.instance?.capabilities.streamExtraction;
     if (extract !== undefined) {
       try {
-        stream = await extract.extractStream(monitorId);
+        // ponytail: forward the Record dialog's stream type pick — VR-capable
+        // plugins (Dreamcam) switch between the 2D HLS and the VR bridge feed.
+        stream = await extract.extractStream(monitorId, {
+          streamType: startOptions.streamType,
+        });
       } catch {
         /* fall back to the live-check URL below */
       }

@@ -90,24 +90,29 @@ export default function PluginsPage() {
           <Reveal>
             <div>
               <p className="mb-3 text-sm font-semibold tracking-wide text-white/60 uppercase">
-                Write your own
+                Browse & build
               </p>
               <h2 className="text-3xl font-bold tracking-tight text-white">
-                Ship a site plugin in an afternoon
+                Every plugin in one place — or ship your own
               </h2>
               <p className="mt-4 text-lg leading-7 text-white/70">
-                The plugin SDK is a small, typed public API. Follow the guide,
-                implement four responsibilities, and every Rekordly user can
-                track your site.
+                See all site plugins Rekordly ships today in the marketplace, or
+                follow the guide and write one yourself: the plugin SDK is a
+                small, typed public API, and every Rekordly user can track your
+                site.
               </p>
               <div className="mt-8 flex flex-wrap gap-4">
+                <ShimmerLinkButton href="/marketplace" className="font-medium">
+                  Open the marketplace
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </ShimmerLinkButton>
                 <ShimmerLinkButton
+                  variant="outline"
                   href={site.pluginGuideUrl}
                   external
                   className="font-medium"
                 >
                   Plugin guide
-                  <ArrowRight className="ml-2 h-4 w-4" />
                 </ShimmerLinkButton>
                 <ShimmerLinkButton
                   variant="outline"

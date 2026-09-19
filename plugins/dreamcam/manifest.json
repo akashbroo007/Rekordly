@@ -18,5 +18,6 @@
     "health-check",
     "metadata"
   ],
-  "permissions": ["network", "cookies", "recording"]
+  "permissions": ["network", "cookies", "recording"],
+  "streamTypes": ["2d", "vr"]
 }

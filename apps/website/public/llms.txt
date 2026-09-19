@@ -13,9 +13,9 @@ personal, educational, and other noncommercial use under the PolyForm
 Noncommercial License 1.0.0; Pro is a one-time payment that removes
 live-recording limits; commercial use requires a separate license.
 
-Supported platforms: Chaturbate, Stripchat, BongaCams, CamSoda, MyFreeCams,
-Twitch, and YouTube — extensible to any site through the community plugin
-system and its typed SDK.
+Supported platforms: Twitch, YouTube, Kick, Chaturbate, Stripchat, BongaCams,
+CamSoda, MyFreeCams, and Dreamcam — extensible to any site through the community
+plugin system and its typed SDK.
 
 ## Main pages
 
@@ -24,6 +24,8 @@ system and its typed SDK.
 - [Download](https://rekordly.in/download): installer and portable builds for Windows 10/11
 - [Pricing](https://rekordly.in/pricing): free tier, $29 one-time Pro license, commercial licensing
 - [Plugins](https://rekordly.in/plugins): the plugin system and how to build a site plugin
+- [Plugin Marketplace](https://rekordly.in/marketplace): browse all site plugins and request support for a new site
+- [Adult live stream recording](https://rekordly.in/adult-stream-recording): using Rekordly to monitor and automatically record live streams from supported live-cam platforms
 - [Blog](https://rekordly.in/blog): guides and product notes
 - [Roadmap](https://rekordly.in/roadmap): shipped, in-progress, and planned work
 - [Contact](https://rekordly.in/contact): bug reports, feature requests, and general inquiries

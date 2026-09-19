@@ -103,6 +103,39 @@ export const APP_SETTINGS_SCHEMA = z.object({
         .optional(),
     })
     .default({}),
+  /**
+   * Push notifications (Discord webhook / Telegram bot). Defaults at parse
+   * time so stored settings from older versions never fail validation.
+   */
+  pushNotifications: z
+    .object({
+      enabled: z.boolean().default(false),
+      notifyOnLive: z.boolean().default(true),
+      notifyOnRecordingStarted: z.boolean().default(true),
+      notifyOnCompleted: z.boolean().default(true),
+      notifyOnFailed: z.boolean().default(true),
+      notifyOnUploadCompleted: z.boolean().default(false),
+      discordWebhookUrl: z.string().default(''),
+      telegramBotToken: z.string().default(''),
+      telegramChatId: z.string().default(''),
+    })
+    .default({}),
+  /** Post-recording automation pipeline (tag → compress → move → upload → delete). */
+  autoActions: z
+    .object({
+      enabled: z.boolean().default(false),
+      tagNewRecordings: z.string().default(''),
+      compress: z
+        .object({
+          enabled: z.boolean().default(false),
+          minSizeMb: z.number().int().min(0).max(1_000_000).default(500),
+        })
+        .default({}),
+      moveToFolder: z.string().default(''),
+      uploadProviderId: z.string().default(''),
+      deleteAfterUpload: z.boolean().default(false),
+    })
+    .default({}),
 });
 
 export type AppSettings = z.infer<typeof APP_SETTINGS_SCHEMA>;
@@ -182,6 +215,25 @@ export class SettingsService {
       recordingCompression: 'balanced',
       licenseKey: null,
       uploadProviders: { defaultProvider: 'gofile' },
+      pushNotifications: {
+        enabled: false,
+        notifyOnLive: true,
+        notifyOnRecordingStarted: true,
+        notifyOnCompleted: true,
+        notifyOnFailed: true,
+        notifyOnUploadCompleted: false,
+        discordWebhookUrl: '',
+        telegramBotToken: '',
+        telegramChatId: '',
+      },
+      autoActions: {
+        enabled: false,
+        tagNewRecordings: '',
+        compress: { enabled: false, minSizeMb: 500 },
+        moveToFolder: '',
+        uploadProviderId: '',
+        deleteAfterUpload: false,
+      },
     };
     const result = APP_SETTINGS_SCHEMA.safeParse(this.deps.config.getAll());
     if (result.success) {

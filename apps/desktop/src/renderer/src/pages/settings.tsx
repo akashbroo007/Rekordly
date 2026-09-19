@@ -23,6 +23,8 @@ import {
   Cloud,
   Trash2,
   Bug,
+  Send,
+  Workflow,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button, Dialog, DialogContent, EmptyState, Input, PageContainer, SectionHeader, Select, Skeleton, Switch } from '@rekordly/ui';
@@ -67,6 +69,7 @@ type SettingsTab =
   | 'cloud-storage'
   | 'plugins'
   | 'notifications'
+  | 'automation'
   | 'performance'
   | 'developer'
   | 'bug-report'
@@ -83,6 +86,7 @@ const SETTINGS_TABS: { id: SettingsTab; label: string; icon: typeof Settings }[]
   { id: 'cloud-storage', label: 'Cloud Storage', icon: Cloud },
   { id: 'plugins', label: 'Plugins', icon: Puzzle },
   { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'automation', label: 'Automation', icon: Workflow },
   { id: 'performance', label: 'Performance', icon: Gauge },
   { id: 'developer', label: 'Developer', icon: Code },
   { id: 'bug-report', label: 'Bug Report', icon: Bug },
@@ -600,6 +604,8 @@ function SettingsForm({
 
       {activeTab === 'cloud-storage' && <CloudStorageSettings draft={draft} patch={patch} />}
 
+      {activeTab === 'automation' && <AutomationSettings draft={draft} patch={patch} />}
+
       {activeTab === 'plugins' && (
         <div className="flex flex-col gap-4">
           <div className="rounded-sm border border-border bg-surface p-4">
@@ -688,6 +694,8 @@ function SettingsForm({
             value={draft.toastDurationMs}
             onChange={(event) => patch({ toastDurationMs: Number(event.target.value) })}
           />
+
+          <PushNotificationsSection draft={draft} patch={patch} />
         </div>
       )}
 
@@ -974,3 +982,362 @@ function LowResourceSection({
     </>
   );
 }
+
+/** ponytail: push notifications (Discord webhook + Telegram bot) — get
+ * "X is live, recording started" on your phone. Lives inside the
+ * Notifications tab; includes a live test button for both channels. */
+function PushNotificationsSection({
+  draft,
+  patch,
+}: {
+  draft: AppSettings;
+  patch: (partial: Partial<AppSettings>) => void;
+}) {
+  const pushToast = useToastStore((state) => state.push);
+  const prefs = draft.pushNotifications;
+  const [testing, setTesting] = useState(false);
+
+  const patchPush = (partial: Partial<AppSettings['pushNotifications']>): void => {
+    patch({ pushNotifications: { ...prefs, ...partial } });
+  };
+
+  const configured =
+    prefs.discordWebhookUrl.trim() !== '' || (prefs.telegramBotToken.trim() !== '' && prefs.telegramChatId.trim() !== '');
+
+  /** Asks the bot for its recent messages and fills in the numeric chat id. */
+  const detectChat = useMutation({
+    mutationFn: () => window.desktop.push.detectTelegramChatId(prefs.telegramBotToken.trim()),
+    onSuccess: (ids) => {
+      if (ids.length === 0) {
+        pushToast({
+          level: 'warn',
+          title: 'No chat found yet',
+          message: 'Open your bot in Telegram, press Start / send it any message, then try again.',
+        });
+        return;
+      }
+      const id = ids[0]!;
+      if (prefs.telegramChatId.trim() !== id) patchPush({ telegramChatId: id });
+      pushToast({
+        level: 'info',
+        title: 'Chat ID detected',
+        message:
+          ids.length === 1
+            ? `Filled in ${id} from your recent message to the bot.`
+            : `Filled in the most recent chat (${id}). Other candidates: ${ids.slice(1).join(', ')}.`,
+      });
+    },
+    onError: (error: unknown) => {
+      pushToast({
+        level: 'error',
+        title: 'Detection failed',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+    },
+  });
+
+  const sendTest = useMutation({
+    mutationFn: () => window.desktop.push.test(),
+    onSuccess: (result) => {
+      const lines: string[] = [];
+      if (result.discord.ok) lines.push('✅ Discord delivered.');
+      else if (result.discord.error !== 'not configured') lines.push(`❌ Discord: ${result.discord.error}`);
+      if (result.telegram.ok) lines.push('✅ Telegram delivered.');
+      else if (result.telegram.error !== 'not configured') lines.push(`❌ Telegram: ${result.telegram.error}`);
+      if (lines.length === 0) {
+        pushToast({
+          level: 'warn',
+          title: 'Nothing to test',
+          message: 'Enter a Discord webhook URL or a Telegram bot token + chat ID first.',
+        });
+      } else if (lines.every((line) => line.startsWith('✅'))) {
+        pushToast({ level: 'info', title: 'Test sent', message: lines.join(' ') });
+      } else {
+        pushToast({ level: 'error', title: 'Test failed', message: lines.join(' ') });
+      }
+    },
+    onError: (error: unknown) => {
+      pushToast({
+        level: 'error',
+        title: 'Test failed',
+        message: error instanceof Error ? error.message : 'Unknown error',
+      });
+    },
+  });
+
+  return (
+    <div className="flex flex-col gap-4 rounded-sm border border-border bg-surface p-4">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Send size={14} className="text-primary" />
+            Push to phone (Discord / Telegram)
+          </p>
+          <p className="mt-1 text-xs text-foreground-muted">
+            Get notified on your phone when a creator goes live or a recording starts, finishes, or fails.
+          </p>
+        </div>
+        <Switch
+          checked={prefs.enabled}
+          onCheckedChange={(checked) => patchPush({ enabled: checked })}
+          aria-label="Push notifications"
+        />
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex items-center justify-between gap-4 rounded-sm border border-border px-3 py-2.5">
+          <div>
+            <p className="text-sm font-medium text-foreground">Creator went live</p>
+            <p className="text-xs text-foreground-muted">Push when a tracked creator starts streaming.</p>
+          </div>
+          <Switch
+            checked={prefs.notifyOnLive}
+            onCheckedChange={(checked) => patchPush({ notifyOnLive: checked })}
+            aria-label="Notify on live"
+          />
+        </div>
+        <div className="flex items-center justify-between gap-4 rounded-sm border border-border px-3 py-2.5">
+          <div>
+            <p className="text-sm font-medium text-foreground">Recording started</p>
+            <p className="text-xs text-foreground-muted">Push when a recording begins.</p>
+          </div>
+          <Switch
+            checked={prefs.notifyOnRecordingStarted}
+            onCheckedChange={(checked) => patchPush({ notifyOnRecordingStarted: checked })}
+            aria-label="Notify on recording started"
+          />
+        </div>
+        <div className="flex items-center justify-between gap-4 rounded-sm border border-border px-3 py-2.5">
+          <div>
+            <p className="text-sm font-medium text-foreground">Recording saved</p>
+            <p className="text-xs text-foreground-muted">Push when a recording finishes successfully.</p>
+          </div>
+          <Switch
+            checked={prefs.notifyOnCompleted}
+            onCheckedChange={(checked) => patchPush({ notifyOnCompleted: checked })}
+            aria-label="Notify on completed"
+          />
+        </div>
+        <div className="flex items-center justify-between gap-4 rounded-sm border border-border px-3 py-2.5">
+          <div>
+            <p className="text-sm font-medium text-foreground">Recording failed</p>
+            <p className="text-xs text-foreground-muted">Push when a recording fails.</p>
+          </div>
+          <Switch
+            checked={prefs.notifyOnFailed}
+            onCheckedChange={(checked) => patchPush({ notifyOnFailed: checked })}
+            aria-label="Notify on failed"
+          />
+        </div>
+        <div className="flex items-center justify-between gap-4 rounded-sm border border-border px-3 py-2.5 sm:col-span-2">
+          <div>
+            <p className="text-sm font-medium text-foreground">Upload finished</p>
+            <p className="text-xs text-foreground-muted">Push when a cloud upload completes.</p>
+          </div>
+          <Switch
+            checked={prefs.notifyOnUploadCompleted}
+            onCheckedChange={(checked) => patchPush({ notifyOnUploadCompleted: checked })}
+            aria-label="Notify on upload completed"
+          />
+        </div>
+      </div>
+
+      <Input
+        label="Discord webhook URL"
+        hint="Server Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL. Leave empty to disable."
+        placeholder="https://discord.com/api/webhooks/…"
+        value={prefs.discordWebhookUrl}
+        onChange={(event) => patchPush({ discordWebhookUrl: event.target.value })}
+      />
+
+      <div className="rounded-sm border border-border bg-background px-3 py-2.5 text-xs text-foreground-muted">
+        <p className="font-medium text-foreground">Setting up Telegram (3 steps)</p>
+        <ol className="mt-1 list-inside list-decimal space-y-0.5">
+          <li>
+            Create a bot with <span className="text-foreground">@BotFather</span> and paste its token in the first field
+            below.
+          </li>
+          <li>
+            Open your new bot in Telegram (search its username) and press <span className="text-foreground">Start</span>{' '}
+            or send it any message — it cannot write to you until you do this once.
+          </li>
+          <li>
+            Click <span className="text-foreground">“Detect chat ID automatically”</span> under the second field — or
+            message <span className="text-foreground">@userinfobot</span> and paste the numeric ID it replies with.
+            Your chat ID is a number like 123456789; a bot @username never works here.
+          </li>
+        </ol>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Input
+          label="Telegram bot token"
+          hint="Create a bot with @BotFather and paste its token here."
+          placeholder="123456789:AA…"
+          value={prefs.telegramBotToken}
+          onChange={(event) => patchPush({ telegramBotToken: event.target.value })}
+        />
+        <div>
+          <Input
+            label="Telegram chat ID"
+            hint="Your numeric user ID (from @userinfobot) — NOT your @username and not the bot's name."
+            placeholder="e.g. 123456789"
+            value={prefs.telegramChatId}
+            onChange={(event) => patchPush({ telegramChatId: event.target.value })}
+          />
+          <button
+            type="button"
+            className="mt-1.5 text-xs font-medium text-primary hover:underline disabled:opacity-50"
+            disabled={prefs.telegramBotToken.trim() === '' || detectChat.isPending}
+            onClick={() => detectChat.mutate()}
+          >
+            {detectChat.isPending ? 'Detecting…' : 'Detect chat ID automatically'}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={!configured}
+          loading={testing || sendTest.isPending}
+          onClick={() => {
+            setTesting(true);
+            // Save first so the main process tests the just-entered values.
+            // Works with the master switch off: a test should always be runnable.
+            window.desktop.settings
+              .set({ pushNotifications: { ...prefs } })
+              .then(() => sendTest.mutate())
+              .catch((error: unknown) =>
+                pushToast({
+                  level: 'error',
+                  title: 'Save failed',
+                  message: error instanceof Error ? error.message : 'Could not save settings',
+                }),
+              )
+              .finally(() => setTesting(false));
+          }}
+        >
+          <Send size={14} />
+          Send test notification
+        </Button>
+        <p className="text-xs text-foreground-muted">
+          Saves the current values, then sends a test message to each configured channel.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** ponytail: post-recording automation — the ordered pipeline applied to
+ * every finished recording: tag → compress → move → upload → delete. */
+function AutomationSettings({
+  draft,
+  patch,
+}: {
+  draft: AppSettings;
+  patch: (partial: Partial<AppSettings>) => void;
+}) {
+  const auto = draft.autoActions;
+
+  const patchAuto = (partial: Partial<AppSettings['autoActions']>): void => {
+    patch({ autoActions: { ...auto, ...partial } });
+  };
+
+  const patchCompress = (partial: Partial<AppSettings['autoActions']['compress']>): void => {
+    patchAuto({ compress: { ...auto.compress, ...partial } });
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-4 rounded-sm border border-border bg-surface px-3 py-2.5">
+        <div>
+          <p className="text-sm font-medium text-foreground">Enable post-recording automation</p>
+          <p className="text-xs text-foreground-muted">
+            Runs on every finished recording, in order: tag → compress → move → upload → delete after upload.
+          </p>
+        </div>
+        <Switch
+          checked={auto.enabled}
+          onCheckedChange={(checked) => patchAuto({ enabled: checked })}
+          aria-label="Enable automation"
+        />
+      </div>
+
+      <Input
+        label="Tag new recordings"
+        hint="Automatically adds this tag in the Library (created if needed). Leave empty to skip."
+        placeholder="e.g. auto-recorded"
+        value={auto.tagNewRecordings}
+        onChange={(event) => patchAuto({ tagNewRecordings: event.target.value })}
+      />
+
+      <div className="rounded-sm border border-border bg-surface p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-foreground">Compress finished recordings</p>
+            <p className="mt-1 text-xs text-foreground-muted">
+              Re-encodes to 720p to save space. Only runs when it actually makes the file smaller; the original is kept if it fails.
+            </p>
+          </div>
+          <Switch
+            checked={auto.compress.enabled}
+            onCheckedChange={(checked) => patchCompress({ enabled: checked })}
+            aria-label="Compress recordings"
+          />
+        </div>
+        {auto.compress.enabled && (
+          <div className="mt-3">
+            <Input
+              label="Only compress files larger than (MB)"
+              hint="Smaller files are left untouched."
+              type="number"
+              value={String(auto.compress.minSizeMb)}
+              onChange={(event) => {
+                const parsed = Number.parseInt(event.target.value, 10);
+                patchCompress({ minSizeMb: Number.isNaN(parsed) ? 0 : Math.max(0, parsed) });
+              }}
+            />
+          </div>
+        )}
+      </div>
+
+      <Input
+        label="Move finished recordings to"
+        hint="Folder the file is moved into after recording (created if needed). Leave empty to skip."
+        placeholder="D:/Rekordly/Organized"
+        value={auto.moveToFolder}
+        onChange={(event) => patchAuto({ moveToFolder: event.target.value })}
+      />
+
+      <Select
+        label="Upload finished recordings to"
+        hint="Queues a cloud upload for every finished recording. Requires the provider's credentials in Cloud Storage. Leave empty to skip."
+        options={[
+          { value: '', label: 'Do not upload automatically' },
+          { value: 'gofile', label: 'Gofile' },
+          { value: 'catbox', label: 'Catbox' },
+          { value: 'mixdrop', label: 'MixDrop' },
+          { value: 'google-drive', label: 'Google Drive' },
+        ]}
+        value={auto.uploadProviderId}
+        onChange={(event) => patchAuto({ uploadProviderId: event.target.value })}
+      />
+
+      <div className="flex items-center justify-between gap-4 rounded-sm border border-border bg-surface px-3 py-2.5">
+        <div>
+          <p className="text-sm font-medium text-foreground">Delete local file after upload</p>
+          <p className="text-xs text-foreground-muted">
+            Removes the local copy once its upload completes. The Library entry is kept. Requires an upload provider above.
+          </p>
+        </div>
+        <Switch
+          checked={auto.deleteAfterUpload}
+          onCheckedChange={(checked) => patchAuto({ deleteAfterUpload: checked })}
+          aria-label="Delete after upload"
+        />
+      </div>
+    </div>
+  );
+}
+

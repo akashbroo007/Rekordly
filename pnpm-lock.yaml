@@ -327,6 +327,16 @@ importers:
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
 
+  plugins/kick:
+    dependencies:
+      playwright-core:
+        specifier: ^1.58.1
+        version: 1.62.1
+    devDependencies:
+      '@rekordly/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+
   plugins/myfreecams:
     devDependencies:
       '@rekordly/plugin-sdk':

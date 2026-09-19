@@ -29,6 +29,12 @@ export interface StreamMetadata {
   category?: string;
   tags?: string[];
   resolution?: string;
+  /**
+   * ponytail: the variant this StreamObject carries ('2d', 'vr', …) —
+   * plugin-defined, mirrors manifest.streamTypes. Persisted to the Library
+   * row so the player can offer VR projection/stereo controls.
+   */
+  streamType?: string;
   [key: string]: unknown;
 }
 

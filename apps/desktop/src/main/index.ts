@@ -31,6 +31,11 @@ import {
   StorageService,
   DownloadManager,
   UploadService,
+  PushNotifier,
+  TelegramCommandService,
+  isActiveJobStatus,
+  AutomationService,
+  FfmpegService,
   GofileProvider,
   CatboxProvider,
   MixDropProvider,
@@ -349,6 +354,116 @@ async function bootstrap(): Promise<void> {
   // inside GateNotifier keep repeat hits from nagging).
   const gateNotifier = new GateNotifier({ notifications, logger });
 
+  // Push notifications to phone/chat apps (Discord webhook + Telegram bot).
+  // Settings are read live per send — changes apply without a restart.
+  const push = new PushNotifier({
+    logger,
+    getSettings: () => settings.getAll().pushNotifications,
+    onSendFailure: (channel, error) => {
+      notifications.send({
+        level: 'warn',
+        title: `Push notification failed (${channel})`,
+        message: `Could not deliver to ${channel}: ${error} — check Settings → Notifications.`,
+      });
+    },
+  });
+
+  // ponytail: shared "record this creator now" used by BOTH the renderer's
+  // Record dialog (via IPC) and Telegram button taps — one implementation so  // plugin extraction, FK-safe creator ids and duplicate guards stay in sync.
+  const startRecordingForCreator: (creatorDbId: string, options: {
+    quality?: string;
+    durationMinutes?: number;
+    segmentMinutes?: number;
+    streamType?: string;
+  }) => Promise<string> = async (creatorDbId, startOptions) => {
+    const creator = creatorRepo.get(creatorDbId);
+    if (creator === undefined) throw new Error('Creator not found');
+    const monitorId = `${creator.pluginId}:${creator.externalId}`;
+    const managed = pluginManager.get(creator.pluginId);
+    const jobs = monitoring.getJobs();
+    const job = jobs.find((j) => j.creatorId === monitorId);
+    let lastResult = job?.lastResult;
+    const liveDetection = managed?.instance?.capabilities.liveDetection;
+    if (lastResult?.streamUrl === undefined) {
+      if (liveDetection === undefined) {
+        throw new Error(`${creator.displayName} is not live or has no stream URL`);
+      }
+      const status = await liveDetection.getLiveStatus(monitorId);
+      if (!status.isLive) {
+        throw new Error(`${creator.displayName} is not live or has no stream URL`);
+      }
+      lastResult = {
+        isLive: true,
+        title: status.title,
+        thumbnail: status.thumbnail,
+        viewerCount: status.viewerCount,
+        streamUrl: status.streamUrl,
+        startedAt: status.startedAt,
+        checkedAt: new Date().toISOString(),
+        durationMs: 0,
+      };
+    }
+    let stream: StreamObject | null = null;
+    const extract = managed?.instance?.capabilities.streamExtraction;
+    if (extract !== undefined) {
+      try {
+        stream = await extract.extractStream(monitorId, { streamType: startOptions.streamType });
+      } catch {
+        /* fall back to the live-check URL below */
+      }
+    }
+    if (stream === null) {
+      if (lastResult.streamUrl === undefined) {
+        throw new Error(`${creator.displayName} is not live or has no stream URL`);
+      }
+      stream = {
+        creatorId: creator.id,
+        creatorName: creator.displayName,
+        platformId: job?.pluginId ?? creator.pluginId,
+        title: lastResult.title ?? `${creator.displayName} live`,
+        streamUrl: lastResult.streamUrl,
+        thumbnail: lastResult.thumbnail,
+        startedAt: lastResult.startedAt,
+      };
+    } else {
+      stream = { ...stream, creatorId: creator.id, creatorName: creator.displayName };
+    }
+    // Duplicate guard — same as the auto-record path.
+    const ACTIVE_STATUSES = ['queued', 'preparing', 'recording', 'paused', 'stopping'];
+    const hasActive = recording
+        .getJobs()
+      .some(
+        (j) => ACTIVE_STATUSES.includes(j.status) && j.creatorId !== null && j.creatorId === creator.id,
+      );
+    if (hasActive) {
+      throw new Error(`${creator.displayName} already has an active recording.`);
+    }
+    return recording.startRecording(stream, startOptions);
+  };
+
+  // ponytail: Telegram two-way control — button taps on the bot's pushes can
+  // start (with the full Record-dialog option wizard) and stop/pause/resume
+  // recordings. Only listens to the configured chat; no token = inert.
+  const telegramCommands = new TelegramCommandService({
+    logger,
+    getSettings: () => settings.getAll().pushNotifications,
+    getAllowedChatIds: () => [settings.getAll().pushNotifications.telegramChatId],
+    // Remote control buttons are Pro-only — notifications stay free. Read
+    // live so activating/deactivating a license applies to the next push.
+    isPro: () => getEntitlements(entitlementsSource.getLicenseStatus()).isPro,
+    startRecording: (target, options) => startRecordingForCreator(target.creatorDbId, options),
+    findActiveJob: (creatorDbId) => {
+      const job = recording
+        .getJobs()
+        .find((j) => j.creatorId === creatorDbId && isActiveJobStatus(j.status));
+      return job !== undefined ? { jobId: job.id, status: job.status, title: job.title } : undefined;
+    },
+    pauseRecording: (jobId) => recording.pauseRecording(jobId),
+    resumeRecording: (jobId) => recording.resumeRecording(jobId),
+    stopRecording: (jobId) => recording.cancelRecording(jobId),
+  });
+  telegramCommands.start();
+
   // ponytail: embedded secure proxy (Tor). Reachability of a cam site is a
   // USER-network property (ISP/DNS blocks are regional), so routing is a
   // per-creator opt-in (`creators.use_proxy`, Add/Edit dialog) — the service
@@ -559,7 +674,9 @@ async function bootstrap(): Promise<void> {
       } catch (err) {
         logger.warn({ jobId: job.id, err }, 'live check failed during resume — attempting extraction');
       }
-      return await extraction.extractStream(identifier);
+      // ponytail: re-extractions must stay on the variant the user picked —
+      // a resumed VR recording would otherwise come back as 2D.
+      return await extraction.extractStream(identifier, { streamType: job.streamType ?? undefined });
     },
   });
 
@@ -675,9 +792,36 @@ async function bootstrap(): Promise<void> {
   };
   syncCredentialProviders();
   settings.onChanged(() => syncCredentialProviders());
+
+  // ponytail: post-recording automation pipeline (tag → compress → move →
+  // upload → delete-after-upload). Runs in the background on every finished
+  // recording; failures are logged and pushed, never fatal.
+  const ffmpeg = new FfmpegService();
+  const automation = new AutomationService({
+    repo: recordingRepo,
+    ffmpeg,
+    uploads,
+    push,
+    logger,
+    getSettings: () => settings.getAll().autoActions,
+    // Low-Resource Mode keeps a single pipeline slot — no parallel ffmpeg.
+    maxConcurrent: 1,
+  });
   // ponytail: a changed upload concurrency limit (or Low-Resource toggle)
   // must wake the queue so waiting uploads start under the new limit.
   settings.onChanged(() => uploads.notifyLimitsChanged());
+
+  // Push notification when a cloud upload finishes (link included when the
+  // provider returns one — e.g. Gofile/Catbox).
+  uploads.on('upload-completed', ({ uploadId }) => {
+    const item = uploads.getUpload(uploadId);
+    if (item === undefined) return;
+    push.uploadCompleted(
+      item.destinationPath ?? item.sourcePath,
+      item.providerId,
+      item.destinationPath?.startsWith('http') === true ? item.destinationPath : undefined,
+    );
+  });
 
   const storage = new StorageService({
     repo: recordingRepo,
@@ -823,6 +967,27 @@ async function bootstrap(): Promise<void> {
       pluginId !== undefined && externalId !== undefined
         ? creatorRepo.getByExternal(pluginId, externalId)
         : undefined;
+
+    // Push notification fires for any tracked creator going live — the
+    // auto-record opt-in below must not gate "X is live" pushes. The text is
+    // honest about auto-record state, and Telegram gets interactive
+    // Record/Stop buttons driven by TelegramCommandService.
+    if (tracked !== undefined) {
+      const autoRecord = tracked.autoRecord && !settingsNow.autoRecordPaused;
+      push.creatorLive(tracked.displayName, tracked.pluginId, {
+        autoRecord,
+      });
+      void telegramCommands
+        .sendLiveMessage({
+          creatorName: tracked.displayName,
+          platformId: tracked.pluginId,
+          title: event.data?.title,
+          autoRecord,
+          creatorDbId: tracked.id,
+        })
+        .catch((err) => logger.debug?.({ error: err }, 'telegram live push failed'));
+    }
+
     if (tracked === undefined || !tracked.autoRecord) return;
 
     void (async () => {
@@ -840,6 +1005,8 @@ async function bootstrap(): Promise<void> {
               data: { creatorId: event.creatorId, freeBytes },
             });
             logger.warn({ creatorId: event.creatorId, freeBytes }, 'auto-record skipped — disk guardrail');
+            // Re-arm the live edge so a later check retries once space frees up.
+            monitoring.rearmLive(event.creatorId!);
             return;
           }
         } catch (err) {
@@ -859,7 +1026,12 @@ async function bootstrap(): Promise<void> {
         // ponytail: bounded concurrency — see extractionSlots above.
         const releaseSlot = await extractionSlots.acquire();
         try {
-          stream = await extract.extractStream(event.creatorId!);
+          stream = await extract.extractStream(event.creatorId!, {
+            // ponytail: no per-creator stream type for auto-record yet — the
+            // plugin's own default (its "Preferred stream type" setting)
+            // applies. The hint stays undefined here by design.
+            streamType: undefined,
+          });
         } catch (err) {
           logger.warn({ creatorId: event.creatorId, error: err }, 'extractStream failed for auto-record');
         } finally {
@@ -874,6 +1046,8 @@ async function bootstrap(): Promise<void> {
             message: `${tracked.displayName} went live, but the stream could not be extracted.`,
             data: { creatorId: event.creatorId },
           });
+          // Re-arm: the next monitoring poll retries extraction for this session.
+          monitoring.rearmLive(event.creatorId!);
           return;
         }
         stream = {
@@ -904,6 +1078,9 @@ async function bootstrap(): Promise<void> {
       }
       await recording.startRecording(stream, {
         quality: tracked.autoRecordQuality ?? 'best',
+        // ponytail: persist which variant the plugin chose so segment chains
+        // and resumes re-request the same one.
+        streamType: stream.metadata?.streamType,
         segmentMinutes: settingsNow.autoRecordSegmentMinutes > 0 ? settingsNow.autoRecordSegmentMinutes : undefined,
       });
       notifications.send({
@@ -920,6 +1097,8 @@ async function bootstrap(): Promise<void> {
         message: err instanceof Error ? err.message : 'Unknown error',
         data: { creatorId: event.creatorId },
       });
+      // Re-arm the live edge so the next poll retries the failed auto-record.
+      if (event.creatorId !== undefined) monitoring.rearmLive(event.creatorId);
     });
   });
 
@@ -950,7 +1129,7 @@ async function bootstrap(): Promise<void> {
     if (event.type !== 'recording-segment-finished') return;
     const stream = event.data?.['stream'] as StreamObject | undefined;
     const opts = event.data?.['options'] as
-      | { quality?: string; segmentMinutes?: number }
+      | { quality?: string; segmentMinutes?: number; streamType?: string }
       | undefined;
     if (stream === undefined || opts === undefined) return;
     if (settings.getAll().autoRecordPaused) return;
@@ -992,7 +1171,9 @@ async function bootstrap(): Promise<void> {
         return;
       }
 
-      const startOpts = { quality: opts.quality, segmentMinutes: opts.segmentMinutes };
+      // ponytail: keep the stream variant across segment chains — a VR pick
+      // must not silently degrade to 2D on the next part.
+      const startOpts = { quality: opts.quality, segmentMinutes: opts.segmentMinutes, streamType: opts.streamType };
       try {
         await reExtractAndStart(tracked, monitorId, managed, startOpts);
       } catch (err) {
@@ -1009,16 +1190,62 @@ async function bootstrap(): Promise<void> {
     });
   });
 
+  // Push notifications (Discord/Telegram) + post-recording automation
+  // pipeline, driven off the recording event stream.
+  // ponytail: "recording started" push with Pause/Resume/Stop buttons — the
+  // user can control an active capture from Telegram. Also feeds the
+  // previously-dead notifyOnRecordingStarted setting.
+  recording.on('event', (event) => {
+    if (event.type !== 'recording-started') return;
+    const job = recording.getJobs().find((j) => j.id === event.jobId);
+    if (job === undefined) return;
+    // recording_jobs has no creator name column — resolve via the tracked row.
+    const creatorRow =
+      job.creatorId !== null && job.creatorId !== undefined ? creatorRepo.get(job.creatorId) : undefined;
+    const name = creatorRow?.displayName ?? job.title;
+    push.recordingStarted(name, job.title);
+    if (creatorRow !== undefined) {
+      void telegramCommands
+        .sendRecordingStartedMessage({
+          creatorName: name,
+          title: job.title,
+          jobId: job.id,
+          creatorDbId: creatorRow.id,
+        })
+        .catch((err) => logger.debug?.({ error: err }, 'telegram recording-started push failed'));
+    }
+  });
+
+  recording.on('event', (event) => {
+    if (event.type !== 'recording-completed' && event.type !== 'recording-failed') return;
+    const jobId = event.jobId;
+    const job = jobId !== undefined ? recording.getJobs().find((j) => j.id === jobId) : undefined;
+    const jobTitle = job?.title ?? 'Recording';
+
+    if (event.type === 'recording-completed') {
+      const size = event.recordingId !== undefined
+        ? recordingRepo.getRecording(event.recordingId)?.sizeBytes ?? undefined
+        : undefined;
+      push.recordingCompleted(jobTitle, jobTitle, size);
+      // Post-recording automation — only for successful finishes.
+      if (event.recordingId !== undefined) {
+        automation.onRecordingCompleted(event.recordingId);
+      }
+    } else {
+      push.recordingFailed(jobTitle, jobTitle, event.error ?? 'unknown error');
+    }
+  });
+
   /** Re-resolve a live stream through the plugin and start the next segment. */
   async function reExtractAndStart(
     tracked: { id: string; displayName: string },
     monitorId: string,
     managed: ReturnType<typeof pluginManager.get>,
-    startOpts: { quality?: string; segmentMinutes?: number },
+    startOpts: { quality?: string; segmentMinutes?: number; streamType?: string },
   ): Promise<string> {
     const extract = managed?.instance?.capabilities.streamExtraction;
     if (extract === undefined) throw new Error('Plugin has no stream extraction');
-    let fresh = await extract.extractStream(monitorId);
+    let fresh = await extract.extractStream(monitorId, { streamType: startOpts.streamType });
     fresh = { ...fresh, creatorId: tracked.id, creatorName: tracked.displayName };
     return recording.startRecording(fresh, startOpts);
   }
@@ -1054,6 +1281,8 @@ async function bootstrap(): Promise<void> {
     downloads,
     uploads,
     storage,
+    push,
+    automation,
     jobs,
     hardware,
     processMonitor,

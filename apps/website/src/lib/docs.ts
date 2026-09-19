@@ -7,7 +7,11 @@ import recordingDownloadsMd from "../content/docs/recording-downloads.md?raw";
 import blockedNetworksMd from "../content/docs/blocked-networks.md?raw";
 import libraryAnalyticsMd from "../content/docs/library-analytics.md?raw";
 import editorMd from "../content/docs/editor.md?raw";
+import vrMd from "../content/docs/vr.md?raw";
 import cloudUploadsMd from "../content/docs/cloud-uploads.md?raw";
+import pushNotificationsMd from "../content/docs/push-notifications.md?raw";
+import remoteControlMd from "../content/docs/remote-control.md?raw";
+import autoActionsMd from "../content/docs/auto-actions.md?raw";
 import desktopIntegrationMd from "../content/docs/desktop-integration.md?raw";
 import platformsMd from "../content/docs/platforms.md?raw";
 import pluginsMd from "../content/docs/plugins.md?raw";
@@ -110,12 +114,44 @@ export const docGroups: DocGroup[] = [
         content: editorMd,
       },
       {
+        slug: "vr",
+        title: "VR Playback & Recording",
+        group: "Features",
+        description:
+          "Record VR (3D) cam shows and watch them with the built-in look-around player — drag to look, wheel to zoom.",
+        content: vrMd,
+      },
+      {
         slug: "cloud-uploads",
         title: "Cloud Uploads",
         group: "Features",
         description:
           "Push finished recordings to Gofile, Catbox, MixDrop, or Google Drive.",
         content: cloudUploadsMd,
+      },
+      {
+        slug: "auto-actions",
+        title: "Post-Recording Automation",
+        group: "Features",
+        description:
+          "A background pipeline for every finished recording: tag → compress → move → upload → delete.",
+        content: autoActionsMd,
+      },
+      {
+        slug: "push-notifications",
+        title: "Push Notifications",
+        group: "Features",
+        description:
+          "Get pinged on Discord or Telegram when a creator goes live or a recording starts, finishes, or fails.",
+        content: pushNotificationsMd,
+      },
+      {
+        slug: "remote-control",
+        title: "Remote Control",
+        group: "Features",
+        description:
+          "Drive Rekordly from Telegram buttons: start, pause, and stop recordings from your phone. A Pro feature — notifications stay free.",
+        content: remoteControlMd,
       },
       {
         slug: "desktop-integration",

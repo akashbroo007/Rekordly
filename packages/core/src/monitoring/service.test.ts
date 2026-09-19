@@ -95,9 +95,15 @@ describe('MonitoringService degraded (unknown) checks', () => {
   );
 
   it(
-    'still finalizes on a definitive offline answer (recordings SHOULD stop then)',
+    'a definitive offline answer for a never-live creator stays silent (edge, not level)',
     { timeout: 20_000 },
     async () => {
+      // ponytail: with edge detection, creator-offline fires only on the
+      // live→offline transition. A creator whose first check is already
+      // offline has no transition — the app's stopForCreator path keyed on
+      // this event only matters for creators that were live anyway. (The
+      // old level-based emission here was what caused the Telegram/Discord
+      // status spam alongside creator-live.)
       const { service } = makeHarness({ isLive: false });
       const events: Array<{ type: string }> = [];
       service.on('event', (e) => {
@@ -107,7 +113,8 @@ describe('MonitoringService degraded (unknown) checks', () => {
       service.addCreator('bongacams:model2', 'bongacams', 300_000);
       await new Promise((r) => setTimeout(r, 5_600));
       await service.stop();
-      expect(events.filter((e) => e.type === 'creator-offline')).toHaveLength(1);
+      expect(events.filter((e) => e.type === 'creator-offline')).toHaveLength(0);
+      expect(events.filter((e) => e.type === 'creator-live')).toHaveLength(0);
     },
   );
 });

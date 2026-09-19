@@ -92,6 +92,22 @@ const comparisonGroups: ComparisonGroup[] = [
     ],
   },
   {
+    group: "Notifications & control",
+    rows: [
+      {
+        capability: "Push notifications (Discord / Telegram)",
+        free: true,
+        pro: true,
+      },
+      {
+        capability:
+          "Remote control from Telegram (record, pause, resume, stop from chat)",
+        free: "—",
+        pro: true,
+      },
+    ],
+  },
+  {
     group: "Extras",
     rows: [
       {
@@ -144,7 +160,7 @@ function FreeProComparison() {
       <SectionHeading
         eyebrow="Free & Pro"
         title="Every feature, side by side"
-        description="The free tier is permanent — not a trial — and it already covers the whole pipeline. Every Pro difference is a live-recording limit."
+        description="The free tier is permanent — not a trial — and it already covers the whole pipeline. Pro removes the live-recording limits and adds remote control from Telegram."
       />
       <Reveal className="mx-auto mt-12 max-w-4xl">
         <div className="overflow-x-auto rounded-xl border border-white/10 bg-white/[0.02]">
@@ -179,9 +195,9 @@ function FreeProComparison() {
 
         <p className="mt-4 text-xs leading-6 text-white/50">
           The Download Manager is never limited — a 3-hour VOD downloads in
-          full on the free tier. Pro's unlimited recording, concurrency, and
-          auto-record apply to personal use; commercial use requires a separate
-          commercial license.
+          full on the free tier. Pro's unlimited recording, concurrency,
+          auto-record, and Telegram remote control apply to personal use;
+          commercial use requires a separate commercial license.
         </p>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">

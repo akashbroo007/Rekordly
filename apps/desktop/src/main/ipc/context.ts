@@ -18,6 +18,8 @@ import type {
   ProcessMonitorService,
   NetworkMonitorService,
   TorService,
+  PushNotifier,
+  AutomationService,
 } from '@rekordly/core';
 
 export interface IpcContext {
@@ -40,6 +42,10 @@ export interface IpcContext {
   networkMonitor?: NetworkMonitorService;
   /** Embedded secure proxy (Tor) — status/retry/probe surface. */
   proxy?: TorService;
+  /** Discord/Telegram push notifications. */
+  push: PushNotifier;
+  /** Post-recording automation pipeline. */
+  automation: AutomationService;
   logRepo: LogRepo;
   creatorRepo: CreatorRepo;
   recordingRepo: RecordingRepo;

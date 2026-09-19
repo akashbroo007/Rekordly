@@ -11,6 +11,8 @@ export interface RecordingJobRecord {
   platformId: string;
   thumbnail?: string | null;
   quality?: string | null;
+  /** ponytail: stream variant picked at start ('vr'/'2d') — kept for re-extractions. */
+  streamType?: string | null;
   status: string;
   attempts: number;
   maxAttempts: number;
@@ -41,6 +43,8 @@ export interface RecordingRecord {
   status: string;
   quality?: string | null;
   resolution?: string | null;
+  /** ponytail: stream variant ('vr'/'2d') — drives the player's VR controls. */
+  streamType?: string | null;
   sizeBytes?: number | null;
   durationSeconds?: number | null;
   videoCodec?: string | null;

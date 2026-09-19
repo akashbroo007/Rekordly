@@ -1,17 +1,20 @@
 # Supported Platforms
 
-Rekordly supports the following sites out of the box:
+Rekordly supports the following sites out of the box (Stripchat and Dreamcam including VR cams):
 
-| Site       | Live detection | Recording | Downloads |
-| ---------- | :------------: | :-------: | :-------: |
-| Chaturbate |       ✓        |     ✓     |     ✓     |
-| Stripchat  |       ✓        |     ✓     |     ✓     |
-| BongaCams  |       ✓        |     ✓     |     —     |
-| CamSoda    |       ✓        |     ✓     |     —     |
-| MyFreeCams |       ✓        |     ✓     |     —     |
-| Dreamcam   |       ✓        |     ✓     |     —     |
-| Twitch     |       ✓        |     ✓     |     ✓     |
-| YouTube    |       ✓        |     ✓     |     ✓     |
+| Site       | Live detection | Recording | Downloads | VR (3D) |
+| ---------- | :------------: | :-------: | :-------: | :-----: |
+| Twitch     |       ✓        |     ✓     |     ✓     |    —    |
+| YouTube    |       ✓        |     ✓     |     ✓     |    —    |
+| Kick       |       ✓        |     ✓     |     ✓     |    —    |
+| Chaturbate |       ✓        |     ✓     |     ✓     |    —    |
+| Stripchat  |       ✓        |     ✓     |     ✓     |    ✓    |
+| BongaCams  |       ✓        |     ✓     |     —     |    —    |
+| CamSoda    |       ✓        |     ✓     |     —     |    —    |
+| MyFreeCams |       ✓        |     ✓     |     —     |    —    |
+| Dreamcam   |       ✓        |     ✓     |     —     |    ✓    |
+
+Stripchat and Dreamcam recordings can capture the **VR (3D) stereoscopic feed** and play it back in the built-in look-around player — see [VR Playback & Recording](vr).
 
 ## Blocked networks
 

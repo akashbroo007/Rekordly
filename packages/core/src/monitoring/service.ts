@@ -32,6 +32,17 @@ export interface MonitoringServiceOptions {
  */
 const UNKNOWN_CHECK_RETRY_MS = 60_000;
 
+/**
+ * ponytail: creator-live is an EDGE event, not a level. The first version
+ * emitted it on EVERY successful check while a creator stayed live — with a
+ * 10–30s interval the user got a "X is LIVE" Telegram/Discord push every
+ * poll. This set tracks monitor ids whose last definitive check was live so
+ * the event fires only on the offline→live transition (and creator-offline
+ * only on live→offline). Call `rearmLive()` when a live creator's action
+ * failed (auto-record could not start) so the NEXT check re-emits and the
+ * pipeline self-heals without spamming in between.
+ */
+
 export interface MonitoringServiceEvents {
   event: [event: MonitoringEvent];
 }
@@ -53,6 +64,8 @@ export class MonitoringService extends EventEmitter<MonitoringServiceEvents> {
   private baseIntervalMs: number;
   private running = false;
   private checkDurations: number[] = [];
+  /** Monitor ids whose last definitive check was live (edge detection). */
+  private readonly liveIds = new Set<string>();
 
   constructor(options: MonitoringServiceOptions) {
     super();
@@ -188,10 +201,24 @@ export class MonitoringService extends EventEmitter<MonitoringServiceEvents> {
     if (job === undefined) return false;
 
     this.queue.removeByCreatorId(creatorId);
+    this.liveIds.delete(creatorId);
     this.repo.remove(job.id);
     this.emitStats();
     this.logger.info({ jobId: job.id, creatorId }, 'monitoring job removed');
     return true;
+  }
+
+  /**
+   * Forces the NEXT check of this creator to re-emit `creator-live` even if
+   * the monitor currently considers them live. Used by the host when an
+   * auto-record attempt fails (no stream URL, disk full, extraction error):
+   * without a re-arm the edge detector would stay silent on subsequent
+   * checks and the pipeline would never retry for this live session.
+   */
+  rearmLive(creatorId: string): void {
+    if (this.liveIds.delete(creatorId)) {
+      this.logger.debug({ creatorId }, 'live edge re-armed — next check re-emits creator-live');
+    }
   }
 
   pauseCreator(creatorId: string): boolean {
@@ -330,6 +357,8 @@ export class MonitoringService extends EventEmitter<MonitoringServiceEvents> {
         durationMs,
       };
 
+      const wasLive = this.liveIds.has(job.creatorId);
+
       this.queue.recordCheck(job.id, checkResult);
       this.repo.setLastCheck(job.id, JSON.stringify(checkResult), durationMs, job.nextCheckAt);
 
@@ -338,27 +367,34 @@ export class MonitoringService extends EventEmitter<MonitoringServiceEvents> {
         this.checkDurations = this.checkDurations.slice(-100);
       }
 
+      // ponytail: emit only on state TRANSITIONS — see liveIds above.
       if (result.isLive) {
-        this.emitEvent({
-          type: 'creator-live',
-          creatorId: job.creatorId,
-          pluginId: job.pluginId,
-          jobId: job.id,
-          isLive: true,
-          data: checkResult,
-          timestamp: new Date().toISOString(),
-        });
         this.repo.setState(job.id, 'live');
+        if (!wasLive) {
+          this.liveIds.add(job.creatorId);
+          this.emitEvent({
+            type: 'creator-live',
+            creatorId: job.creatorId,
+            pluginId: job.pluginId,
+            jobId: job.id,
+            isLive: true,
+            data: checkResult,
+            timestamp: new Date().toISOString(),
+          });
+        }
       } else {
-        this.emitEvent({
-          type: 'creator-offline',
-          creatorId: job.creatorId,
-          pluginId: job.pluginId,
-          jobId: job.id,
-          isLive: false,
-          timestamp: new Date().toISOString(),
-        });
         this.repo.setState(job.id, 'offline');
+        if (wasLive) {
+          this.liveIds.delete(job.creatorId);
+          this.emitEvent({
+            type: 'creator-offline',
+            creatorId: job.creatorId,
+            pluginId: job.pluginId,
+            jobId: job.id,
+            isLive: false,
+            timestamp: new Date().toISOString(),
+          });
+        }
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -406,6 +442,14 @@ export class MonitoringService extends EventEmitter<MonitoringServiceEvents> {
         updatedAt: record.updatedAt,
       };
       this.queue.add(job);
+      // Seed the edge-detection set from persisted state so a live creator
+      // doesn't re-announce on the first post-restart check. A stale 'live'
+      // that has actually gone offline self-corrects: the next definitive
+      // check sees isLive=false while seeded — live→offline edge emits once,
+      // which is correct behavior anyway.
+      if (state === 'live') {
+        this.liveIds.add(record.creatorId);
+      }
     }
     this.logger.info({ count: persisted.length }, 'restored monitoring jobs');
   }

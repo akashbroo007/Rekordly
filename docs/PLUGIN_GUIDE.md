@@ -27,7 +27,7 @@ If an SDK improvement is needed, implement it in a platform-agnostic way.
 
 # Target Platform
 
-dreamcam.com
+kick.com
 
 ---
 

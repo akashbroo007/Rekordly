@@ -1401,6 +1401,7 @@ function RecentRecordings() {
         posterPath={playing?.thumbnailPath ?? null}
         recordingId={playing?.id ?? null}
         fps={playing?.fps ?? null}
+        streamType={playing?.streamType ?? null}
         open={playing !== null}
         onOpenChange={(v) => {
           if (!v) setPlaying(null);

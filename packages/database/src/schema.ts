@@ -157,6 +157,11 @@ export const recordingJobs = sqliteTable(
     platformId: text('platform_id').notNull().default(''),
     thumbnail: text('thumbnail'),
     quality: text('quality'),
+    /**
+     * ponytail: stream variant picked at start ('vr'/'2d') — re-extractions
+     * (resume, segment chain) must re-request the SAME variant.
+     */
+    streamType: text('stream_type'),
     status: text('status').notNull(),
     attempts: integer('attempts').notNull().default(0),
     maxAttempts: integer('max_attempts').notNull().default(3),
@@ -196,6 +201,11 @@ export const recordings = sqliteTable(
     status: text('status').notNull(),
     quality: text('quality'),
     resolution: text('resolution'),
+    /**
+     * ponytail: plugin-declared stream variant captured here ('vr', '2d')
+     * — the player reads it to auto-enable VR projection/stereo controls.
+     */
+    streamType: text('stream_type'),
     sizeBytes: integer('size_bytes'),
     durationSeconds: integer('duration_seconds'),
     videoCodec: text('video_codec'),

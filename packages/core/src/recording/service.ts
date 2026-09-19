@@ -177,6 +177,13 @@ export interface StartRecordingOptions {
    * path whose `.partN.mp4` siblings this session appends to.
    */
   resumeFrom?: string;
+  /**
+   * ponytail: stream variant hint ('vr'/'2d', plugin-defined) forwarded to
+   * `extractStream` on re-extraction (resume, segment chain) so a mid-session
+   * re-resolve re-requests the SAME variant the user picked. Also persisted
+   * on the job row so the host's resolveStream can honor it.
+   */
+  streamType?: string;
 }
 
 /**
@@ -490,6 +497,7 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
       platformId: stream.platformId,
       thumbnail: stream.thumbnail,
       quality: options.quality ?? this.settings.defaultQuality,
+      streamType: options.streamType ?? stream.metadata?.streamType ?? null,
       status: 'preparing',
       attempts: 0,
       maxAttempts: this.settings.retryCount,
@@ -982,6 +990,33 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
             'adopted orphaned recording process',
           );
           adopted++;
+        } else if (
+          job.filePath !== null &&
+          job.filePath !== undefined &&
+          job.filePath !== '' &&
+          (await fileExists(job.filePath)) &&
+          (await stat(job.filePath)).size > 0
+        ) {
+          // ponytail: crash recovery — the process died with the app, but a
+          // partial capture survived on disk. Park it in 'paused' (not
+          // 'failed') so Resume keeps working: continueIntoNewPart re-resolves
+          // the stream and appends into a numbered part, merging everything
+          // back into one file when the capture ends. If the broadcast is
+          // gone, resume fails gracefully with STREAM_OFFLINE and the partial
+          // stays salvageable.
+          this.repo.updateJob(job.id, {
+            status: 'paused',
+            error: 'App restarted while the recording was active — resume to continue into a new part.',
+            speed: 0,
+            eta: 0,
+          });
+          this.notifications.send({
+            level: 'warn',
+            title: 'Recording interrupted',
+            message: `${job.title} was interrupted by the restart — a partial capture was kept. Press Resume to continue it (while the stream is still live).`,
+            data: { jobId: job.id },
+          });
+          this.logger.info({ jobId: job.id }, 'interrupted recording parked as resumable (partial kept)');
         } else {
           this.repo.updateJob(job.id, {
             status: 'failed',
@@ -1955,6 +1990,10 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
       thumbnailPath: undefined,
       status,
       quality: qualityOverride ?? jobRecord?.quality ?? this.settings.defaultQuality,
+      // ponytail: VR recordings must surface in the player with projection/
+      // stereo controls — carry the plugin's stream variant ('vr'/'2d')
+      // onto the Library row (null for plain 2D captures).
+      streamType: stream.metadata?.streamType ?? null,
       resolution: undefined,
       sizeBytes: stat_.size,
       durationSeconds: undefined,

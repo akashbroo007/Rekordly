@@ -272,6 +272,31 @@ CaptureGem operates on a **freemium subscription model**:
 | Plugin/extension system | No (hardcoded) | Yes (full SDK) | **Rekordly** |
 | Generic URL download | No | Yes (yt-dlp) | **Rekordly** |
 
+#### Planned: Generic Streaming Platform Plugins (15+)
+
+Beyond cam sites, Rekordly plans generic live-streaming platform plugins built on the same Plugin SDK:
+
+1. Kick
+2. Rumble
+3. Trovo
+4. DLive
+5. Picarto
+6. Piczel.tv
+7. Bigo Live
+8. TikTok Live
+9. Dailymotion
+10. Bilibili
+11. Huya
+12. Nimo TV
+13. SOOP (formerly AfreecaTV)
+14. Chzzk (Naver)
+15. TwitCasting
+16. Mildom
+17. Facebook Gaming
+18. VK Play Live
+19. Owncast
+20. Steam Broadcasting
+
 ### 4.3 UX & Management
 
 | Feature | CaptureGem | Rekordly | Winner |

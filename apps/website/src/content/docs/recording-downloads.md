@@ -8,6 +8,7 @@ Rekordly's capture engine is powered by **vendored yt-dlp + ffmpeg** — both sh
 - **Auto-Record** — hands-off capture with safety rails (see [Auto-Record](auto-record)).
 - **Segment splitting** — split long sessions into parts every N minutes.
 - **Crash recovery** — interrupted recordings are reconciled on next launch.
+- **VR (3D) capture** — record the stereoscopic fisheye feed on VR-capable sites (see [VR Playback & Recording](vr)).
 
 ## Downloads
 

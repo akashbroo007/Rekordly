@@ -30,7 +30,7 @@ const GENERIC_GROUPS: SiteGroup[] = [
     sites: ['Any direct .mp4 / .mkv / .webm / .mov URL', 'Podcast feeds & CDN media', 'HLS (.m3u8) streams'],
   },
   {
-    label: 'Adult platforms',
+    label: 'Other supported platforms',
     icon: Video,
     sites: ['Pornhub', 'XVideos', 'xHamster', 'SpankBang', 'RedGifs', 'PornTrex', 'ThisVid', 'Motherless'],
   },

@@ -661,6 +661,7 @@ export function LibraryPage() {
           posterPath={playerRecording.thumbnailPath}
           recordingId={playerRecording.id}
           fps={playerRecording.fps ?? null}
+          streamType={playerRecording.streamType ?? null}
           initialEditing={playerEditing}
           previousRecording={previousRecording}
           nextRecording={nextRecording}

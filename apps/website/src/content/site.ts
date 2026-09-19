@@ -20,14 +20,15 @@ export const site = {
 export const navLinks = [
   { label: "Features", href: "/features" },
   { label: "Docs", href: "/docs" },
+  { label: "Marketplace", href: "/marketplace" },
   { label: "Download", href: "/download" },
-  { label: "Plugins", href: "/plugins" },
   { label: "Pricing", href: "/pricing" },
 ] as const;
 
 /** Secondary links live in the footer (and the mobile menu), not the navbar. */
 export const secondaryNavLinks = [
   { label: "Blog", href: "/blog" },
+  { label: "Plugins", href: "/plugins" },
   { label: "Roadmap", href: "/roadmap" },
   { label: "Contact", href: "/contact" },
 ] as const;
@@ -101,6 +102,11 @@ export const features = [
       "Trim, cut out sections, and combine recordings without leaving the app. A filmstrip-and-waveform timeline with one-frame stepping, silence detection, audio-only MP3/M4A extraction, and non-destructive exports — the original is never modified.",
   },
   {
+    title: "VR Recording & Playback",
+    description:
+      "Record VR (3D) shows from Dreamcam and Stripchat and watch them in the built-in look-around player — drag to look, wheel to zoom, just like the site's own VR player.",
+  },
+  {
     title: "Cloud Uploads",
     description:
       "Push finished recordings straight to the cloud. Built-in providers include Gofile, Catbox, MixDrop, and Google Drive — each with its own credential handling.",
@@ -109,6 +115,21 @@ export const features = [
     title: "Desktop Integration",
     description:
       "System tray with live status, close-to-tray mode, launch at startup, native notifications, dark and light themes, and a low-resource mode for weaker machines.",
+  },
+  {
+    title: "Push Notifications",
+    description:
+      "Get pinged on your phone the moment a creator goes live or a recording starts, finishes, or fails — via Discord or Telegram. Fire-and-forget delivery that never delays a recording.",
+  },
+  {
+    title: "Remote Control (Pro)",
+    description:
+      "With Pro, the Telegram push becomes a control surface: start a recording with one tap — defaults or the full options wizard — and pause, resume, or stop a running capture straight from your phone.",
+  },
+  {
+    title: "Post-Recording Automation",
+    description:
+      "A background pipeline for every finished capture: tag → compress → move → upload → delete. Each step optional, failures never block the rest, and your library entry always survives.",
   },
 ] as const;
 
@@ -136,21 +157,22 @@ export const safetyRails = [
 ] as const;
 
 export const platforms = [
-  { name: "Chaturbate", live: true, recording: true, downloads: true },
-  { name: "Stripchat", live: true, recording: true, downloads: true },
-  { name: "BongaCams", live: true, recording: true, downloads: false },
-  { name: "CamSoda", live: true, recording: true, downloads: false },
-  { name: "MyFreeCams", live: true, recording: true, downloads: false },
-  { name: "Dreamcam", live: true, recording: true, downloads: false },
-  { name: "Twitch", live: true, recording: true, downloads: true },
-  { name: "YouTube", live: true, recording: true, downloads: true },
+  { name: "Twitch", live: true, recording: true, downloads: true, vr: false },
+  { name: "YouTube", live: true, recording: true, downloads: true, vr: false },
+  { name: "Kick", live: true, recording: true, downloads: true, vr: false },
+  { name: "Chaturbate", live: true, recording: true, downloads: true, vr: false },
+  { name: "Stripchat", live: true, recording: true, downloads: true, vr: true },
+  { name: "BongaCams", live: true, recording: true, downloads: false, vr: false },
+  { name: "CamSoda", live: true, recording: true, downloads: false, vr: false },
+  { name: "MyFreeCams", live: true, recording: true, downloads: false, vr: false },
+  { name: "Dreamcam", live: true, recording: true, downloads: false, vr: true },
 ] as const;
 
 export const faqs = [
   {
     question: "Is Rekordly really free?",
     answer:
-      "Yes — for personal, educational, and other noncommercial use, under the PolyForm Noncommercial license. The free tier includes unlimited creator monitoring, unlimited downloads, and full access to the library and plugins. Live recordings are capped at 15 minutes, up to 5 at a time, with auto-record on 2 creators — Rekordly Pro removes those limits for people who record everything. Companies and other commercial users need a paid commercial license — see the License page or contact us.",
+      "Yes — for personal, educational, and other noncommercial use, under the PolyForm Noncommercial license. The free tier includes unlimited creator monitoring, unlimited downloads, push notifications via Discord or Telegram, and full access to the library and plugins. Live recordings are capped at 15 minutes, up to 5 at a time, with auto-record on 2 creators — Rekordly Pro removes those limits for people who record everything and adds remote control from Telegram. Companies and other commercial users need a paid commercial license — see the License page or contact us.",
   },
   {
     question: "Do I need to install ffmpeg or yt-dlp?",
@@ -160,7 +182,7 @@ export const faqs = [
   {
     question: "Which platforms are supported?",
     answer:
-      "Chaturbate, Stripchat, BongaCams, CamSoda, MyFreeCams, Dreamcam, Twitch, and YouTube are supported out of the box for live detection and recording — Dreamcam including VR (3D) shows. New sites can be added as plugins without touching the core app.",
+      "Twitch, YouTube, Kick, Chaturbate, Stripchat, BongaCams, CamSoda, MyFreeCams, and Dreamcam are supported out of the box for live detection and recording — Dreamcam including VR (3D) shows. New sites can be added as plugins without touching the core app.",
   },
   {
     question: "My ISP blocks one of the sites — can I still record?",
@@ -243,8 +265,20 @@ export const roadmap: RoadmapGroup[] = [
       {
         title: "Bundled site plugins",
         description:
-          "Chaturbate, Stripchat, Twitch, YouTube, BongaCams, CamSoda, MyFreeCams, and Dreamcam — each with live detection, auto-record, and manual recording, plus VR (3D) capture on Dreamcam.",
+          "Twitch, YouTube, Kick, Chaturbate, Stripchat, BongaCams, CamSoda, MyFreeCams, and Dreamcam — each with live detection, auto-record, and manual recording, plus VR (3D) capture on Dreamcam and Stripchat.",
         target: "0.1.0",
+      },
+      {
+        title: "Push notifications & Telegram remote control",
+        description:
+          "Discord and Telegram pushes for live events and recordings — fire-and-forget, free on every tier. Pro adds interactive control: record, pause, resume, and stop from the Telegram buttons.",
+        target: "0.1.x",
+      },
+      {
+        title: "Post-recording automation",
+        description:
+          "A background pipeline for every finished capture: tag → compress → move → upload → delete. Each step optional, failures never block the rest.",
+        target: "0.1.x",
       },
       {
         title: "Built-in video editor",
@@ -299,9 +333,9 @@ export const roadmap: RoadmapGroup[] = [
         target: "1.1",
       },
       {
-        title: "Notification integrations",
+        title: "Generic webhook delivery",
         description:
-          "Push recording events to Discord, Telegram, and generic webhooks.",
+          "Push recording events to any HTTP endpoint — Discord and Telegram are already shipped.",
         target: "1.1",
       },
       {

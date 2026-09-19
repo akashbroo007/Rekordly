@@ -225,10 +225,14 @@ async function buildStreamObject(
   identifier: string,
   broadcast: Broadcast,
   usedProxy: boolean,
+  streamTypeHint?: string,
 ): Promise<StreamObject> {
   const nickname = broadcast.modelNickname ?? nicknameOf(identifier);
   const streams = resolveStreamUrls(broadcast);
-  const prefer = getPreferVr();
+  // ponytail: the Record dialog's per-recording pick wins; the plugin-level
+  // "Preferred stream type" setting stays the default when no hint arrives
+  // (auto-record, live checks, older host versions).
+  const prefer = streamTypeHint === 'vr' || streamTypeHint === '2d' ? streamTypeHint : getPreferVr();
   const displayName = broadcast.modelNickname ?? nickname;
 
   let streamUrl: string | undefined;
@@ -343,7 +347,10 @@ async function buildStreamObject(
       category: isVr ? 'Dreamcam VR' : 'Dreamcam',
       tags: isVr ? ['live', 'vr', '3d'] : ['live'],
       resolution,
-      streamType: isVr ? 'video3D' : 'video2D',
+      // ponytail: the player auto-enables VR view when the Library row's
+      // streamType is 'vr' — this previously said 'video3D', which never
+      // matched, so Dreamcam VR recordings opened as flat video.
+      streamType: isVr ? 'vr' : '2d',
       viewers: broadcast.broadcastMembersCount,
       durationSeconds: broadcast.broadcastDurationSec,
     },
@@ -462,9 +469,11 @@ const plugin: Plugin = {
     },
 
     streamExtraction: {
-      async extractStream(identifier): Promise<StreamObject> {
+      async extractStream(identifier, hints): Promise<StreamObject> {
         const nickname = nicknameOf(identifier);
-        ctx?.logger.debug(`dreamcam: extracting stream for ${nickname}`);
+        ctx?.logger.debug(
+          `dreamcam: extracting stream for ${nickname}${hints?.streamType !== undefined ? ` (type: ${hints.streamType})` : ''}`,
+        );
         const { broadcast, usedProxy } = await fetchBroadcastSmart(identifier, nickname);
         if (broadcast === null) {
           throw new Error(`Creator ${nickname} not found on Dreamcam`);
@@ -472,7 +481,7 @@ const plugin: Plugin = {
         if (!isWatchable(broadcast)) {
           throw new Error(`${nickname} is not live`);
         }
-        return buildStreamObject(identifier, broadcast, usedProxy);
+        return buildStreamObject(identifier, broadcast, usedProxy, hints?.streamType);
       },
     },
 

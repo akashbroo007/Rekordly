@@ -16,6 +16,7 @@ export function toPluginInfo(managed: ManagedPlugin): PluginInfoDto {
     minAppVersion: manifest.minAppVersion,
     state: managed.status.state,
     enabled: managed.record.enabled,
+    streamTypes: manifest.streamTypes,
     capabilities: manifest.capabilities,
     permissionsRequested: manifest.permissions,
     permissionsGranted: managed.record.permissionsGranted,

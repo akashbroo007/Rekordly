@@ -205,6 +205,11 @@ export const IPC_CHANNELS = {
   uploadsConnectGoogleDrive: 'uploads:connect-google-drive',
   uploadsEvent: 'uploads:event',
 
+  pushTest: 'push:test',
+  pushDetectTelegramChatId: 'push:detect-telegram-chat-id',
+
+  automationRunForRecording: 'automation:run-for-recording',
+
   // --- Storage (Phase 9) ---
   storageGetStats: 'storage:get-stats',
   storageScan: 'storage:scan',
@@ -402,6 +407,61 @@ export interface AppSettings {
   recordingCompression: 'quality' | 'balanced' | 'size';
   /** Upload provider configuration (credentials, defaults). */
   uploadProviders: UploadProvidersSettings;
+  /**
+   * Push notifications to phone/chat apps — "X is live, recording started"
+   * on the user's phone. Discord webhook and/or Telegram bot chat.
+   */
+  pushNotifications: PushNotificationsSettings;
+  /**
+   * Post-recording automation: a simple ordered pipeline applied to every
+   * finished recording — tag it, compress it, move it, upload it, delete it.
+   */
+  autoActions: AutoActionsSettings;
+}
+
+export interface PushNotificationsSettings {
+  /** Master switch for all push channels. */
+  enabled: boolean;
+  /** Push when a monitored creator goes live. */
+  notifyOnLive: boolean;
+  /** Push when a recording starts (auto or manual). */
+  notifyOnRecordingStarted: boolean;
+  /** Push when a recording finishes successfully. */
+  notifyOnCompleted: boolean;
+  /** Push when a recording fails. */
+  notifyOnFailed: boolean;
+  /** Push when a cloud upload finishes. */
+  notifyOnUploadCompleted: boolean;
+  /** Discord incoming-webhook URL. Empty = channel disabled. */
+  discordWebhookUrl: string;
+  /** Telegram bot token from @BotFather. Empty = channel disabled. */
+  telegramBotToken: string;
+  /** Telegram chat id (@userinfobot, or the numeric id from a test push). */
+  telegramChatId: string;
+}
+
+/**
+ * Post-recording automation. Steps run in a fixed, safe order:
+ * tag → compress → move → upload → delete-after-upload.
+ * Every step is independently optional.
+ */
+export interface AutoActionsSettings {
+  /** Master switch — nothing runs when false. */
+  enabled: boolean;
+  /** Automatically add this tag to new recordings (empty = skip). */
+  tagNewRecordings: string;
+  /** Re-encode finished recordings to save space (0 = skip). */
+  compress: {
+    enabled: boolean;
+    /** Only compress files larger than this (MB). */
+    minSizeMb: number;
+  };
+  /** Move finished recordings into this folder (empty = skip). */
+  moveToFolder: string;
+  /** Upload every finished recording to this provider id (empty = skip). */
+  uploadProviderId: string;
+  /** Delete the local file once its upload completes (needs an upload target). */
+  deleteAfterUpload: boolean;
 }
 
 export interface UploadProvidersSettings {
@@ -474,6 +534,8 @@ export interface PluginInfoDto {
   minAppVersion: string;
   state: PluginStateDto;
   enabled: boolean;
+  /** Declared stream variants (e.g. ["2d","vr"]) — >1 renders the Record dialog's stream type dropdown. */
+  streamTypes?: string[];
   capabilities: string[];
   permissionsRequested: string[];
   permissionsGranted: string[];
@@ -684,6 +746,8 @@ export interface RecordingDto {
   status: string;
   quality?: string | null;
   resolution?: string | null;
+  /** ponytail: stream variant ('vr'/'2d') — drives the player's VR controls. */
+  streamType?: string | null;
   sizeBytes?: number | null;
   durationSeconds?: number | null;
   videoCodec?: string | null;
@@ -1334,7 +1398,13 @@ export interface DesktopApi {
     start(stream: StreamObject): Promise<string>;
     startForCreator(
       creatorId: string,
-      options?: { durationMinutes?: number; quality?: string; segmentMinutes?: number },
+      options?: {
+        durationMinutes?: number;
+        quality?: string;
+        segmentMinutes?: number;
+        /** ponytail: per-recording stream variant pick (plugin-defined, e.g. 'vr'). */
+        streamType?: string;
+      },
     ): Promise<string>;
     pause(jobId: string): Promise<void>;
     resume(jobId: string): Promise<void>;
@@ -1400,5 +1470,25 @@ export interface DesktopApi {
     cleanup(options: { cache?: boolean; temp?: boolean; logs?: boolean }): Promise<void>;
     getLargestRecordings(limit: number): Promise<{ id: string; title: string; sizeBytes: number; filePath: string }[]>;
     getLargestFolders(limit: number): Promise<{ path: string; sizeBytes: number; fileCount: number }[]>;
+  };
+  push: {
+    /**
+     * Sends a test message through every configured push channel.
+     * Runs even when the master switch is off; per-channel results carry
+     * the failure reason so the UI can show exactly what went wrong.
+     */
+    test(): Promise<{
+      discord: { ok: boolean; error?: string };
+      telegram: { ok: boolean; error?: string };
+    }>;
+    /**
+     * Reads the bot's recent Telegram messages and returns the chat ids
+     * seen, most recent first ("Detect chat ID" in Settings).
+     */
+    detectTelegramChatId(token: string): Promise<string[]>;
+  };
+  automation: {
+    /** Manually runs the automation pipeline for one recording. */
+    runForRecording(recordingId: string): Promise<{ ran: string[]; errors: string[] }>;
   };
 }

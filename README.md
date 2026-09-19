@@ -66,6 +66,8 @@ commercial license.
 | Auto-record creators             | Up to 2                       | Unlimited                    |
 | Concurrent live recordings       | Up to 5                       | Unlimited                    |
 | Live recording length            | Up to 15 minutes per recording| Unlimited                    |
+| Push notifications (Discord / Telegram) | Yes                    | Yes                          |
+| Remote control from Telegram     | —                             | Yes                          |
 | Manual video/VOD downloads       | Unlimited                     | Unlimited                    |
 | Long-form video downloads        | Yes                           | Yes                          |
 | Local library                    | Yes                           | Yes                          |
@@ -123,6 +125,16 @@ Push finished recordings to the cloud with built-in providers:
 | Catbox      | Optional user hash           |
 | MixDrop     | Email + API key              |
 | Google Drive| OAuth client + refresh token |
+
+### Remote Control (Telegram — Pro)
+
+Notifications are free for everyone; [Rekordly Pro](https://rekordly.in/pricing) turns the Telegram push into a control surface:
+
+- **One-tap recording** — "creator went live" pushes carry Record buttons, with defaults or the full options wizard (quality, duration, segment split)
+- **Pause / Resume / Stop** — drive a running capture straight from the chat
+- **Chat allowlisting** — only your configured Telegram chat can issue commands; nothing is exposed on your network
+
+Discord pushes are delivered via one-way webhooks and stay notification-only.
 
 ### Desktop Integration
 
@@ -196,6 +208,7 @@ pnpm package     # build the Windows installer + portable exe
    downloads run to completion regardless of length.
 5. **Library** — browse, tag, favorite, and organize everything you've captured.
 6. **Uploads** — send finished files to Gofile, Catbox, MixDrop, or Google Drive.
+7. **Remote control** (Pro) — start, pause, and stop recordings from the Telegram buttons on your phone.
 
 ---
 
@@ -205,20 +218,21 @@ Platform support can differ per capability — a site may support live
 detection and automatic recording but not generic downloads, or vice versa.
 The table below reflects what each bundled plugin currently implements.
 
-| Site       | Live detection | Auto-record | Manual recording | Downloads |
-| ---------- | :------------: | :---------: | :--------------: | :-------: |
-| Chaturbate |       ✓        |      ✓      |        ✓         |     ✓     |
-| Stripchat  |       ✓        |      ✓      |        ✓         |     ✓     |
-| Twitch     |       ✓        |      ✓      |        ✓         |     ✓     |
-| YouTube    |       ✓        |      ✓      |        ✓         |     ✓     |
-| BongaCams  |       ✓        |      ✓      |        ✓         |     —     |
-| CamSoda    |       ✓        |      ✓      |        ✓         |     —     |
-| MyFreeCams |       ✓        |      ✓      |        ✓         |     —     |
-| Dreamcam   |       ✓        |      ✓      |        ✓         |     —     |
+| Site       | Live detection | Auto-record | Manual recording | Downloads | VR (3D) |
+| ---------- | :------------: | :---------: | :--------------: | :-------: | :-----: |
+| Twitch     |       ✓        |      ✓      |        ✓         |     ✓     |    —    |
+| YouTube    |       ✓        |      ✓      |        ✓         |     ✓     |    —    |
+| Kick       |       ✓        |      ✓      |        ✓         |     ✓     |    —    |
+| Chaturbate |       ✓        |      ✓      |        ✓         |     ✓     |    —    |
+| Stripchat  |       ✓        |      ✓      |        ✓         |     ✓     |    ✓    |
+| BongaCams  |       ✓        |      ✓      |        ✓         |     —     |    —    |
+| CamSoda    |       ✓        |      ✓      |        ✓         |     —     |    —    |
+| MyFreeCams |       ✓        |      ✓      |        ✓         |     —     |    —    |
+| Dreamcam   |       ✓        |      ✓      |        ✓         |     —     |    ✓    |
 
-The Dreamcam plugin also supports **VR (3D) shows** — the stereoscopic feed is
-bridged to a local HLS playlist and recorded like any other stream, with a
-per-creator preference for VR, 2D, or auto.
+The Dreamcam and Stripchat plugins also support **VR (3D) shows** — the
+stereoscopic feed is bridged to a local HLS playlist and recorded like any
+other stream, with a per-creator preference for VR, 2D, or auto.
 
 Want another site — or better support for an existing one?
 See [Writing a plugin](docs/PLUGIN_GUIDE.md).

@@ -4,7 +4,7 @@ import { platforms } from "../../content/site";
 export function PlatformMatrix() {
   return (
     <div className="overflow-x-auto rounded-xl border border-white/10 bg-white/[0.02]">
-      <table className="w-full min-w-[540px] border-collapse text-left text-sm">
+      <table className="w-full min-w-[620px] border-collapse text-left text-sm">
         <thead>
           <tr className="text-white/60">
             <th className="px-4 py-3.5 font-semibold sm:px-5 sm:py-4">Site</th>
@@ -16,6 +16,9 @@ export function PlatformMatrix() {
             </th>
             <th className="px-4 py-3.5 text-center font-semibold sm:px-5 sm:py-4">
               Downloads
+            </th>
+            <th className="px-4 py-3.5 text-center font-semibold sm:px-5 sm:py-4">
+              VR (3D)
             </th>
           </tr>
         </thead>
@@ -33,6 +36,7 @@ export function PlatformMatrix() {
                   platform.live,
                   platform.recording,
                   platform.downloads,
+                  platform.vr,
                 ] as const
               ).map((supported, i) => (
                 <td

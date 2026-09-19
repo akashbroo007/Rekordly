@@ -19,6 +19,13 @@ export const PLUGIN_MANIFEST_SCHEMA = z.object({
   minAppVersion: z.string().regex(SEMVER, 'minAppVersion must be semver (x.y.z)'),
   capabilities: z.array(z.string()).default([]),
   permissions: z.array(z.string()).default([]),
+  /**
+   * ponytail: stream variants the site can broadcast, e.g. ["2d", "vr"] for
+   * Dreamcam. Declaring more than one lets the Record dialog offer a stream
+   * type dropdown; the host passes the user's pick to extractStream as a
+   * hint. Absent = the plugin always yields one implicit stream type.
+   */
+  streamTypes: z.array(z.string().min(1)).optional(),
 });
 
 export type PluginManifest = z.infer<typeof PLUGIN_MANIFEST_SCHEMA>;

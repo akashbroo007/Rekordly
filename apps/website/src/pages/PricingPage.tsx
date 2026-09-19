@@ -18,6 +18,7 @@ const freeFeatures = [
   "Live recordings up to 15 minutes each",
   "Unlimited manual downloads — no duration limit on normal VOD downloads",
   "Local library, cloud uploads, Secure Proxy",
+  "Push notifications (Discord / Telegram)",
   "Community plugins",
   "No account, no telemetry, local-first",
 ];
@@ -26,6 +27,7 @@ const proFeatures = [
   "Unlimited auto-record creators",
   "Unlimited simultaneous recordings",
   "Unlimited recording length",
+  "Remote control from Telegram — record, pause, and stop recordings from chat",
   "Everything in Free — no features removed",
   "One payment — lifetime license",
   "7-day free trial, no account needed",

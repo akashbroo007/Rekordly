@@ -134,7 +134,7 @@ function Platforms() {
     <Section>
       <SectionHeading
         eyebrow="Supported platforms"
-        title="Seven sites out of the box, infinitely extensible"
+        title="Eight sites out of the box, infinitely extensible"
         description="Site support ships as plugins with capability detection, health checks, and per-plugin settings — new sites can be added without touching the core app."
       />
       <div className="mx-auto mt-16 max-w-3xl">
@@ -241,6 +241,7 @@ function ProductModel() {
         "Up to 5 simultaneous live recordings, 15 minutes each",
         "Unlimited normal video/VOD downloads",
         "Local library",
+        "Push notifications (Discord / Telegram)",
         "Community plugins",
       ],
       cta: { label: "Download free", href: "/download" },
@@ -257,6 +258,7 @@ function ProductModel() {
         "Unlimited auto-recording creators",
         "Unlimited simultaneous recordings",
         "Unlimited recording length",
+        "Remote control from Telegram",
         "Everything in Free — no features removed",
         "7-day free trial available",
       ],
@@ -285,7 +287,7 @@ function ProductModel() {
       <SectionHeading
         eyebrow="Free & Pro"
         title="Free for personal use. Pro for power users."
-        description="Rekordly is source-available and free for personal, educational, and other noncommercial use. Pro removes the live-recording limits; commercial use requires a separate commercial license."
+        description="Rekordly is source-available and free for personal, educational, and other noncommercial use. Pro removes the live-recording limits and adds remote control from Telegram; commercial use requires a separate commercial license."
       />
       <div className="mx-auto mt-12 grid max-w-5xl grid-cols-1 gap-6 md:grid-cols-3">
         {tiers.map((tier, index) => (

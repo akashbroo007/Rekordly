@@ -11,6 +11,10 @@ It was built around one simple observation: streams worth watching are often liv
 - **Recording & Downloads** — capture streams with bundled yt-dlp + ffmpeg, or paste any supported URL to download VODs and clips.
 - **Library & Analytics** — a searchable library with tags, collections, favorites, notes, plus dashboards for recording stats and storage usage.
 - **Cloud Uploads** — push finished recordings to Gofile, Catbox, MixDrop, or Google Drive.
+- **Post-Recording Automation** — a background pipeline applied to every finished capture: tag → compress → move → upload → delete.
+- **Push Notifications** — Discord or Telegram pings the moment a creator goes live or a recording starts, finishes, or fails.
+- **Remote Control (Pro)** — start, pause, and stop recordings from interactive buttons on the Telegram push.
+- **VR Recording & Playback** — record VR (3D) shows from Dreamcam and Stripchat and watch them in the built-in look-around player.
 - **Desktop Integration** — system tray with live status, native notifications, themes, and a low-resource mode.
 
 ## How it works end to end
@@ -21,6 +25,8 @@ It was built around one simple observation: streams worth watching are often liv
 4. **Downloads** — paste any supported URL to download VODs or clips.
 5. **Library** — browse, tag, favorite, and organize everything you've captured.
 6. **Uploads** — send finished files to Gofile, Catbox, MixDrop, or Google Drive.
+7. **Automation** (optional) — let Auto Actions tag, compress, move, upload, and clean up every finished recording for you.
+8. **Stay in the loop** — get Discord/Telegram pings for live events, recordings, and uploads — and with Pro, drive recordings from the Telegram buttons.
 
 ## Under the hood
 

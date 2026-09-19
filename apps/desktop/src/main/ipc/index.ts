@@ -14,6 +14,7 @@ import { registerLibraryIpc } from './library';
 import { registerDownloadsIpc } from './downloads';
 import { registerUploadsIpc } from './uploads';
 import { registerStorageIpc } from './storage';
+import { registerPushIpc } from './push';
 import type { IpcContext } from './context';
 
 /** Registers every typed IPC handler; call once during bootstrap. */
@@ -34,6 +35,7 @@ export function registerIpcHandlers(context: IpcContext): void {
   registerDownloadsIpc(context);
   registerUploadsIpc(context);
   registerStorageIpc(context);
+  registerPushIpc(context);
 }
 
 export type { IpcContext };

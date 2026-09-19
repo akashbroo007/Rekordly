@@ -504,6 +504,16 @@ export function RecordDialog({
   // ponytail: '' means single file; otherwise split into parts every N min.
   const [segment, setSegment] = useState('');
 
+  // ponytail: stream variant pick (VR-capable plugins). The dropdown only
+  // renders when the plugin's manifest declares multiple streamTypes; 'auto'
+  // defers to the plugin's own default.
+  const { data: plugins } = useQuery({
+    queryKey: ['plugins'],
+    queryFn: () => window.desktop.plugins.list(),
+  });
+  const pluginStreamTypes = plugins?.find((p) => p.id === creator.pluginId)?.streamTypes ?? [];
+  const [streamType, setStreamType] = useState('auto');
+
   const startRecording = useMutation({
     mutationFn: () =>
       window.desktop.recording.startForCreator(creator.id, {
@@ -512,6 +522,7 @@ export function RecordDialog({
         durationMinutes: segment !== '' ? undefined : duration === '' ? undefined : Number(duration),
         quality,
         segmentMinutes: segment === '' ? undefined : Number(segment),
+        streamType: streamType === 'auto' ? undefined : streamType,
       }),
     onSuccess: () => {
       pushToast({ level: 'info', title: 'Recording started', message: `Recording ${creator.displayName}.` });
@@ -526,6 +537,21 @@ export function RecordDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent title={`Record ${creator.displayName}`} description="Configure and start recording.">
         <div className="space-y-4">
+          {pluginStreamTypes.length > 1 && (
+            <Select
+              label="Stream type"
+              hint="VR (3D) records the stereoscopic feed and plays back with VR controls in the player."
+              value={streamType}
+              onChange={(e) => setStreamType(e.target.value)}
+              options={[
+                { value: 'auto', label: 'Auto (site default)' },
+                ...pluginStreamTypes.map((t) => ({
+                  value: t,
+                  label: t === 'vr' ? 'VR (3D)' : t === '2d' ? '2D (flat HD)' : t,
+                })),
+              ]}
+            />
+          )}
           <Select
             label="Quality"
             value={quality}

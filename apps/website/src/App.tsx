@@ -11,8 +11,12 @@ const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
 const BlogIndexPage = lazy(() => import("./pages/BlogIndexPage"));
 const BlogPostPage = lazy(() => import("./pages/BlogPostPage"));
 const PluginsPage = lazy(() => import("./pages/PluginsPage"));
+const MarketplacePage = lazy(() => import("./pages/MarketplacePage"));
 const DownloadPage = lazy(() => import("./pages/DownloadPage"));
 const PricingPage = lazy(() => import("./pages/PricingPage"));
+const AdultStreamRecordingPage = lazy(
+  () => import("./pages/AdultStreamRecordingPage"),
+);
 const ContactPage = lazy(() => import("./pages/ContactPage"));
 const RoadmapPage = lazy(() => import("./pages/RoadmapPage"));
 const TermsPage = lazy(() => import("./pages/legal/TermsPage"));
@@ -77,6 +81,14 @@ export default function App() {
             }
           />
           <Route
+            path="/marketplace"
+            element={
+              <Lazy>
+                <MarketplacePage />
+              </Lazy>
+            }
+          />
+          <Route
             path="/download"
             element={
               <Lazy>
@@ -89,6 +101,14 @@ export default function App() {
             element={
               <Lazy>
                 <PricingPage />
+              </Lazy>
+            }
+          />
+          <Route
+            path="/adult-stream-recording"
+            element={
+              <Lazy>
+                <AdultStreamRecordingPage />
               </Lazy>
             }
           />

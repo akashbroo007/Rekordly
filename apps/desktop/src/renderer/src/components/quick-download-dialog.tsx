@@ -135,7 +135,7 @@ export function QuickDownloadDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         title="Quick Download"
-        description="Models that are live right now. Pick one to start recording instantly."
+        description="Creators that are live right now. Pick one to start recording instantly."
         className="max-w-lg"
       >
         <div className="space-y-3">
@@ -151,7 +151,7 @@ export function QuickDownloadDialog({
           <div className="flex gap-2">
             <Input
               className="flex-1"
-              placeholder="Search live models..."
+              placeholder="Search live creators..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -194,8 +194,8 @@ export function QuickDownloadDialog({
           ) : liveCreators.length === 0 ? (
             <EmptyState
               icon={Radio}
-              title="No models are live right now"
-              description="When a monitored model goes live it will appear here for instant download."
+              title="No creators are live right now"
+              description="When a monitored creator goes live it will appear here for instant download."
             />
           ) : (
             <div className="max-h-80 space-y-2 overflow-y-auto pr-1">

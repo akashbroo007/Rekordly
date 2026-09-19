@@ -77,7 +77,16 @@ export interface PluginCapabilities {
   };
   streamExtraction?: {
     /** `identifier` is the creator id previously returned by creatorSearch. */
-    extractStream(identifier: string): Promise<StreamObject>;
+    /**
+     * ponytail: `hints.streamType` carries the user's per-recording pick
+     * from the Record dialog's stream type dropdown (only rendered for
+     * plugins whose manifest declares multiple `streamTypes`). Values are
+     * plugin-defined strings — Dreamcam uses 'vr' | '2d' | 'auto'. The hint
+     * is advisory: plugins must fall back to their configured default when
+     * it is absent or unknown, and may ignore it when the show offers no
+     * choice.
+     */
+    extractStream(identifier: string, hints?: { streamType?: string }): Promise<StreamObject>;
   };
   settings?: PluginSettingsCapability;
   healthCheck?: {
