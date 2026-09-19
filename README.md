@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="apps/desktop/resources/icons/icon-256x256px.png" width="128" alt="Rekordly logo">
+<img src="apps/desktop/resources/icons/icon-256x256px.png?v=2" width="128" alt="Rekordly logo">
 
 # Rekordly
 
