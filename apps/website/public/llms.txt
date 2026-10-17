@@ -10,8 +10,7 @@ searchable local library. Recording is a lossless straight copy powered by
 bundled yt-dlp and ffmpeg — nothing else to install. The app is local-first:
 no account, no telemetry, all data stays in SQLite on your machine. Free for
 personal, educational, and other noncommercial use under the PolyForm
-Noncommercial License 1.0.0; Pro is a one-time payment that removes
-live-recording limits; commercial use requires a separate license.
+Noncommercial License 1.0.0; commercial use requires a separate license.
 
 Supported platforms: Twitch, YouTube, Kick, Chaturbate, Stripchat, BongaCams,
 CamSoda, MyFreeCams, and Dreamcam — extensible to any site through the community
@@ -20,9 +19,8 @@ plugin system and its typed SDK.
 ## Main pages
 
 - [Home](https://rekordly.in/): product overview, features, FAQ, and download links
-- [Features](https://rekordly.in/features): every feature in detail with a Free vs Pro comparison
+- [Features](https://rekordly.in/features): every feature in detail
 - [Download](https://rekordly.in/download): installer and portable builds for Windows 10/11
-- [Pricing](https://rekordly.in/pricing): free tier, $29 one-time Pro license, commercial licensing
 - [Plugins](https://rekordly.in/plugins): the plugin system and how to build a site plugin
 - [Plugin Marketplace](https://rekordly.in/marketplace): browse all site plugins and request support for a new site
 - [Adult live stream recording](https://rekordly.in/adult-stream-recording): using Rekordly to monitor and automatically record live streams from supported live-cam platforms

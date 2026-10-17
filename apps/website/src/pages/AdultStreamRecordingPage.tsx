@@ -36,7 +36,7 @@ const pageFaqs = [
   {
     question: "Is it free?",
     answer:
-      "Rekordly is free for personal, educational, and other noncommercial use. The free tier includes unlimited creator monitoring and unlimited downloads; live recordings are capped at 15 minutes, up to 5 at a time, with auto-record on 2 creators. Rekordly Pro is a one-time payment that removes those limits.",
+      "Rekordly is free for personal, educational, and other noncommercial use, under the PolyForm Noncommercial license. Everything is included — unlimited creator monitoring, unlimited live recordings, and unlimited downloads. Commercial use requires a separate commercial license.",
   },
   {
     question: "Is recording streams allowed?",

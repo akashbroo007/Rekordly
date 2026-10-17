@@ -61,7 +61,7 @@ const specRows = [
   { label: "Storage", values: ["HDD or SSD", "SSD", "SSD"] },
   {
     label: "Concurrent recordings",
-    values: ["1", "Up to 5 (free)", "10–30 (Pro)"],
+    values: ["1", "2–3", "10–30"],
   },
   { label: "Concurrent downloads", values: ["1", "3", "Up to 10"] },
   { label: "Live site checks", values: ["2 at a time", "5 at a time", "5 at a time"] },
@@ -127,11 +127,11 @@ function SystemRequirements() {
         </div>
         <p className="mt-4 text-xs leading-6 text-white/50">
           Recording is a straight copy — never a live transcode — so disk writes
-          happen at stream bitrate. The free tier caps live recordings at 5
-          concurrent (15 minutes each); the Download Manager has no duration
-          limits on normal video/VOD downloads. Pro removes the live-recording
-          caps. Rekordly detects your hardware on first launch and suggests the
-          right mode for you.
+          happen at stream bitrate, and the number of simultaneous recordings
+          is bounded only by your hardware, not the app. The Download Manager
+          has no duration limits on normal video/VOD downloads. Rekordly
+          detects your hardware on first launch and suggests the right mode
+          for you.
         </p>
         <div className="mt-6 flex flex-wrap gap-4">
           <ShimmerLinkButton
@@ -141,13 +141,6 @@ function SystemRequirements() {
           >
             Performance troubleshooting
             <ArrowRight className="ml-2 h-4 w-4" />
-          </ShimmerLinkButton>
-          <ShimmerLinkButton
-            variant="ghost"
-            href="/pricing"
-            className="font-medium"
-          >
-            See what Pro unlocks
           </ShimmerLinkButton>
         </div>
       </Reveal>

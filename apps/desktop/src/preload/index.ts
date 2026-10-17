@@ -27,6 +27,8 @@ const desktopApi: DesktopApi = {
     saveImage: (request) => ipcRenderer.invoke(IPC_CHANNELS.appSaveImage, request),
     getMediaInfo: (request) => ipcRenderer.invoke(IPC_CHANNELS.appGetMediaInfo, request),
     findSubtitle: (request) => ipcRenderer.invoke(IPC_CHANNELS.appFindSubtitle, request),
+    pickSubtitle: () => ipcRenderer.invoke(IPC_CHANNELS.appPickSubtitle),
+    probeNetworkStream: (request) => ipcRenderer.invoke(IPC_CHANNELS.appProbeNetworkStream, request),
   },
   windowControls: {
     minimize: () => ipcRenderer.invoke(IPC_CHANNELS.windowMinimize),
@@ -54,11 +56,6 @@ const desktopApi: DesktopApi = {
     validate: (values) => ipcRenderer.invoke(IPC_CHANNELS.settingsValidate, values),
     importFromFile: () => ipcRenderer.invoke(IPC_CHANNELS.settingsImport),
     exportToFile: () => ipcRenderer.invoke(IPC_CHANNELS.settingsExport),
-  },
-  license: {
-    getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.licenseGetStatus),
-    activate: (key) => ipcRenderer.invoke(IPC_CHANNELS.licenseActivate, key),
-    deactivate: () => ipcRenderer.invoke(IPC_CHANNELS.licenseDeactivate),
   },
   plugins: {
     list: () => ipcRenderer.invoke(IPC_CHANNELS.pluginsList),

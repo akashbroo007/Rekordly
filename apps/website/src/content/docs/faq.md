@@ -2,7 +2,7 @@
 
 ## Is Rekordly really free?
 
-Yes — for personal, educational, and other noncommercial use. Rekordly is source-available software under the [PolyForm Noncommercial license](license). The free tier includes unlimited creator monitoring, unlimited downloads, and full access to the library and plugins — it is a permanent tier, not a trial. Live recordings are capped at 15 minutes, up to 5 at a time, with auto-record on your first 2 creators. [Rekordly Pro](https://rekordly.in/pricing) removes those limits. Companies and other commercial users need a paid commercial license — contact [hello@rekordly.in](mailto:hello@rekordly.in). The vendored yt-dlp and ffmpeg binaries keep their own licenses.
+Yes — for personal, educational, and other noncommercial use. Rekordly is source-available software under the [PolyForm Noncommercial license](license). Everything is included: unlimited creator monitoring, unlimited live recordings, unlimited downloads, push notifications with remote control from Telegram, and full access to the library and plugins. Companies and other commercial users need a paid commercial license — contact [hello@rekordly.in](mailto:hello@rekordly.in). The vendored yt-dlp and ffmpeg binaries keep their own licenses.
 
 ## Do I need to install ffmpeg or yt-dlp?
 

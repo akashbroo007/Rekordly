@@ -13,7 +13,6 @@ const BlogPostPage = lazy(() => import("./pages/BlogPostPage"));
 const PluginsPage = lazy(() => import("./pages/PluginsPage"));
 const MarketplacePage = lazy(() => import("./pages/MarketplacePage"));
 const DownloadPage = lazy(() => import("./pages/DownloadPage"));
-const PricingPage = lazy(() => import("./pages/PricingPage"));
 const AdultStreamRecordingPage = lazy(
   () => import("./pages/AdultStreamRecordingPage"),
 );
@@ -93,14 +92,6 @@ export default function App() {
             element={
               <Lazy>
                 <DownloadPage />
-              </Lazy>
-            }
-          />
-          <Route
-            path="/pricing"
-            element={
-              <Lazy>
-                <PricingPage />
               </Lazy>
             }
           />

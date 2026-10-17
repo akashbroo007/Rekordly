@@ -66,6 +66,12 @@ export class MonitoringService extends EventEmitter<MonitoringServiceEvents> {
   private checkDurations: number[] = [];
   /** Monitor ids whose last definitive check was live (edge detection). */
   private readonly liveIds = new Set<string>();
+  /**
+   * ponytail: per-creator throttle for creator-live re-emissions during
+   * degraded (unknown) checks — one auto-record attempt per retry window
+   * so a flapping network doesn't spam extractStream every poll.
+   */
+  private readonly degradedLiveAttemptAt = new Map<string, number>();
 
   constructor(options: MonitoringServiceOptions) {
     super();
@@ -202,6 +208,7 @@ export class MonitoringService extends EventEmitter<MonitoringServiceEvents> {
 
     this.queue.removeByCreatorId(creatorId);
     this.liveIds.delete(creatorId);
+    this.degradedLiveAttemptAt.delete(creatorId);
     this.repo.remove(job.id);
     this.emitStats();
     this.logger.info({ jobId: job.id, creatorId }, 'monitoring job removed');
@@ -219,6 +226,7 @@ export class MonitoringService extends EventEmitter<MonitoringServiceEvents> {
     if (this.liveIds.delete(creatorId)) {
       this.logger.debug({ creatorId }, 'live edge re-armed — next check re-emits creator-live');
     }
+    this.degradedLiveAttemptAt.delete(creatorId);
   }
 
   pauseCreator(creatorId: string): boolean {
@@ -324,6 +332,15 @@ export class MonitoringService extends EventEmitter<MonitoringServiceEvents> {
         const current = this.queue.get(job.id);
         if (current !== undefined) {
           const retryMs = Math.min(current.intervalMs, UNKNOWN_CHECK_RETRY_MS);
+          // ponytail: AUTO-RECORD SELF-HEAL — a transport failure is neither
+          // live nor ended, but if the creator is (almost certainly) live the
+          // auto-record pipeline must still fire. Previously a live creator
+          // whose checks kept failing (ECONNRESET, TLS resets, throttling)
+          // never emitted creator-live, so auto-record stayed silent for the
+          // ENTIRE session until one clean check happened to land. Emit a
+          // retryable creator-live now (lastKnownLive from the plugin's
+          // best-effort belief), throttled to one attempt per retry window
+          // so flapping networks don't spam extractStream.
           current.lastCheckAt = Date.now();
           current.nextCheckAt = Date.now() + retryMs;
           current.updatedAt = new Date().toISOString();
@@ -337,6 +354,35 @@ export class MonitoringService extends EventEmitter<MonitoringServiceEvents> {
             lastCheckAt: current.lastCheckAt,
             state: 'queued',
           });
+          if (result.lastKnownLive === true) {
+            const now = Date.now();
+            if (now >= (this.degradedLiveAttemptAt.get(job.creatorId) ?? 0)) {
+              this.degradedLiveAttemptAt.set(job.creatorId, now + UNKNOWN_CHECK_RETRY_MS);
+              this.logger.info(
+                { creatorId: job.creatorId, retryMs },
+                'monitoring check degraded — creator believed live, retrying auto-record pipeline',
+              );
+              this.emitEvent({
+                type: 'creator-live',
+                creatorId: job.creatorId,
+                pluginId: job.pluginId,
+                jobId: job.id,
+                isLive: true,
+                retryable: true,
+                data: {
+                  isLive: true,
+                  title: current.lastResult?.title,
+                  thumbnail: current.lastResult?.thumbnail,
+                  viewerCount: current.lastResult?.viewerCount,
+                  streamUrl: current.lastResult?.streamUrl,
+                  startedAt: current.lastResult?.startedAt,
+                  checkedAt: new Date().toISOString(),
+                  durationMs,
+                },
+                timestamp: new Date().toISOString(),
+              });
+            }
+          }
           this.logger.info(
             { creatorId: job.creatorId, durationMs, retryMs },
             'monitoring check degraded (site unreachable) — state kept, retrying soon',

@@ -34,7 +34,6 @@ use, paid for commercial use.
 
 ## Table of Contents
 
-- [Free & Pro](#free--pro)
 - [Features](#features)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
@@ -48,37 +47,16 @@ use, paid for commercial use.
 
 ---
 
-## Free & Pro
+## License Model
 
-Rekordly is **free for personal, educational, and other noncommercial use**.
-The free tier is a permanent tier, not a trial: unlimited creator monitoring,
-unlimited downloads, and full access to the local library, cloud uploads,
-and the plugin system.
+Rekordly is **free for personal, educational, and other noncommercial use** —
+everything is included with no feature caps: unlimited creator monitoring,
+unlimited simultaneous live recordings at unlimited length, unlimited
+downloads, remote control from Telegram, plus full access to the local
+library, cloud uploads, and the plugin system.
 
-[Rekordly Pro](https://rekordly.in/pricing) removes the automatic-recording
-limits for people who record everything. Commercial use requires a separate
+Commercial use requires a separate
 commercial license.
-
-| Capability                       | Free                          | Pro                          |
-| -------------------------------- | ----------------------------- | ---------------------------- |
-| Monitor creators                 | Unlimited                     | Unlimited                    |
-| Add creators                     | Unlimited                     | Unlimited                    |
-| Auto-record creators             | Up to 2                       | Unlimited                    |
-| Concurrent live recordings       | Up to 5                       | Unlimited                    |
-| Live recording length            | Up to 15 minutes per recording| Unlimited                    |
-| Push notifications (Discord / Telegram) | Yes                    | Yes                          |
-| Remote control from Telegram     | —                             | Yes                          |
-| Manual video/VOD downloads       | Unlimited                     | Unlimited                    |
-| Long-form video downloads        | Yes                           | Yes                          |
-| Local library                    | Yes                           | Yes                          |
-| Community plugins                | Yes                           | Yes                          |
-| Commercial use                   | Requires a commercial license | Requires a commercial license|
-
-> **Download Manager and Auto-Recording are separate workflows.** The
-> Download Manager is designed for downloading supported non-live videos,
-> VODs, and clips and does not impose an artificial duration limit on normal
-> downloads — a 45-minute or 3-hour video downloads in full on the free tier.
-> The live-recording caps above apply to recording live streams only.
 
 ---
 
@@ -126,9 +104,9 @@ Push finished recordings to the cloud with built-in providers:
 | MixDrop     | Email + API key              |
 | Google Drive| OAuth client + refresh token |
 
-### Remote Control (Telegram — Pro)
+### Remote Control (Telegram)
 
-Notifications are free for everyone; [Rekordly Pro](https://rekordly.in/pricing) turns the Telegram push into a control surface:
+The Telegram push is a control surface, included for everyone:
 
 - **One-tap recording** — "creator went live" pushes carry Record buttons, with defaults or the full options wizard (quality, duration, segment split)
 - **Pause / Resume / Stop** — drive a running capture straight from the chat
@@ -208,7 +186,7 @@ pnpm package     # build the Windows installer + portable exe
    downloads run to completion regardless of length.
 5. **Library** — browse, tag, favorite, and organize everything you've captured.
 6. **Uploads** — send finished files to Gofile, Catbox, MixDrop, or Google Drive.
-7. **Remote control** (Pro) — start, pause, and stop recordings from the Telegram buttons on your phone.
+7. **Remote control** — start, pause, and stop recordings from the Telegram buttons on your phone.
 
 ---
 
@@ -319,9 +297,8 @@ inspect how it works, contribute improvements, and build plugins for
 platforms we do not support yet.
 
 At the same time, keeping the project sustainable matters. The official
-Rekordly distribution is supported through Pro features and commercial
-licensing, which fund ongoing development of the core app and the plugin
-ecosystem.
+Rekordly distribution is supported through commercial licensing, which
+funds ongoing development of the core app and the plugin ecosystem.
 
 Because Rekordly is source available, you are free to inspect and modify the
 code within the license terms. Modified builds are not official Rekordly
@@ -341,8 +318,6 @@ within the permissions granted by the license.
 - **Commercial use** is not granted by the PolyForm Noncommercial license
   and requires a separate commercial license from Rekordly — contact
   [hello@rekordly.in](mailto:hello@rekordly.in).
-- Rekordly Pro removes the live-recording limits for personal use and is
-  available at [rekordly.in/pricing](https://rekordly.in/pricing).
 
 Rekordly is source-available under the PolyForm Noncommercial License —
 free for personal, educational, and other noncommercial use; commercial

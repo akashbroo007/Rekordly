@@ -161,6 +161,8 @@ Contains
 - Contracts
 - Plugin lifecycle
 - Capability system
+- Shared helpers (`ProxyRegistry` for long-lived resources, `extractViewerCount`
+  for platform-agnostic live viewer counts)
 
 Used by every plugin.
 

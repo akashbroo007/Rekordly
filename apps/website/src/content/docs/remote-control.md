@@ -2,7 +2,7 @@
 
 Rekordly's push notifications tell you what's happening — **Remote Control** lets you *do* something about it. When a tracked creator goes live, the Telegram push arrives with buttons attached: tap **Record** and the capture starts on your PC, wherever you are.
 
-Remote control works over **Telegram** and is a [Rekordly Pro](https://rekordly.in/pricing) feature. Push notifications themselves stay free for everyone.
+Remote control works over **Telegram** and is included for everyone, free. Push notifications themselves stay free as well.
 
 ## What you can control
 
@@ -17,23 +17,12 @@ A few behaviors worth knowing:
 - **Menus expire** — if you open the options wizard and don't finish it, tapping an old button tells you so; just tap *Record with options…* again.
 - **Feedback is instant** — every button tap is acknowledged in the chat ("Recording paused.", "Recording started (job …)."), and errors surface as a short alert instead of failing silently.
 
-## What's free vs Pro
-
-| | Free | Pro |
-| --- | --- | --- |
-| Push notifications (Discord + Telegram) | ✓ | ✓ |
-| Record / options wizard / Pause / Resume / Stop buttons | — | ✓ |
-
-On the free tier, pushes arrive as plain text — a live push tells you to open the app to record, and includes a **⭐ Get Pro** button that opens the pricing page. Tapping a control button on an older message is answered with the upgrade hint rather than executed.
-
-The gate is checked live: activating or deactivating a license takes effect on the next push, with no restart.
-
 ## Setting it up
 
 1. Configure Telegram pushes — see [Push Notifications](push-notifications#setting-up-telegram) for the @BotFather bot token and chat ID steps.
-2. That's it. On Pro, the buttons appear automatically on every live and recording push — there is no separate remote-control switch.
+2. That's it. The buttons appear automatically on every live and recording push — there is no separate remote-control switch.
 
-If you already had Telegram pushes configured, buttons show up the next time a creator goes live after Pro is active.
+If you already had Telegram pushes configured, buttons show up on the next live or recording push.
 
 ## Security
 

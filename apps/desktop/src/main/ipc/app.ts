@@ -1,4 +1,4 @@
-import { ipcMain, app, BrowserWindow, shell, clipboard, nativeImage, dialog, type IpcMainInvokeEvent } from 'electron';
+import { ipcMain, app, BrowserWindow, shell, clipboard, nativeImage, dialog, net, type IpcMainInvokeEvent } from 'electron';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rm, statfs, writeFile } from 'node:fs/promises';
@@ -9,15 +9,29 @@ import type {
   AppCopyImageRequestDto,
   AppExtractFrameRequestDto,
   AppExtractFrameResultDto,
+  AppPickSubtitleResultDto,
   AppSaveImageRequestDto,
   AppSaveImageResultDto,
   AppSubtitleResultDto,
+  NetworkStreamProbeDto,
 } from '@rekordly/shared';
 import type { IpcContext } from './context';
 import type { ProcessMonitorService, NetworkMonitorService } from '@rekordly/core';
-import { FfmpegService } from '@rekordly/core';
+import { FfmpegService, isDirectMediaType, isLiveHlsPlaylist, looksLikeDash, looksLikeHls, toWebVtt } from '@rekordly/core';
 
 const ALLOWED_LEVELS: readonly LogEntry['level'][] = ['debug', 'info', 'warn', 'error', 'fatal'];
+
+/**
+ * ponytail: UA used for network-stream probes and the sf-media relay.
+ * Stripping the "Electron/…" token matters — many cam-site CDNs 403 any UA
+ * that isn't a mainstream browser (Cam4's edge 403s `Rekordly Media Player`).
+ */
+function browserUserAgent(): string {
+  const chromeMajor = process.versions.chrome?.split('.')[0] ?? '';
+  return chromeMajor === ''
+    ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+    : `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeMajor}.0.0.0 Safari/537.36`;
+}
 
 function isLogEntry(value: unknown): value is LogEntry {
   if (typeof value !== 'object' || value === null) {
@@ -174,8 +188,9 @@ export function registerAppIpc({
     return shell.openPath(targetPath);
   });
 
-  // ponytail: gate CTAs (Upgrade to Pro) open in the default browser —
-  // renderers cannot shell out themselves, and only http/https is allowed.
+  // ponytail: renderers cannot shell out themselves; opening external pages
+  // (bug report, docs, GitHub) goes through this handler and only http/https
+  // is allowed.
   ipcMain.handle(IPC_CHANNELS.appOpenUrl, (event, url: unknown) => {
     if (!trusted(event)) {
       throw new Error('Unauthorized IPC caller');
@@ -298,6 +313,146 @@ export function registerAppIpc({
       return { dataUrl: `data:text/vtt;base64,${Buffer.from(vtt, 'utf8').toString('base64')}` };
     }
     return null;
+  });
+
+  // Subtitle upload — native picker; .srt/.ass/.ssa are normalized to WebVTT
+  // so the player's <track> element can render them directly.
+  ipcMain.handle(IPC_CHANNELS.appPickSubtitle, async (event): Promise<AppPickSubtitleResultDto> => {
+    if (!trusted(event)) {
+      throw new Error('Unauthorized IPC caller');
+    }
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showOpenDialog(win ?? new BrowserWindow({ show: false }), {
+      title: 'Open subtitle file',
+      properties: ['openFile'],
+      filters: [
+        { name: 'Subtitles', extensions: ['srt', 'vtt', 'ass', 'ssa'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return { canceled: true };
+    }
+    const filePath = result.filePaths[0]!;
+    const fileName = filePath.split(/[\\/]/).pop() ?? 'subtitle.vtt';
+    const content = await readFile(filePath, 'utf8');
+    const vtt = toWebVtt(fileName, content);
+    if (vtt === null) {
+      throw new Error(`Could not parse subtitle file: ${fileName}`);
+    }
+    logger.debug({ fileName }, 'subtitle uploaded');
+    return {
+      canceled: false,
+      fileName,
+      dataUrl: `data:text/vtt;base64,${Buffer.from(vtt, 'utf8').toString('base64')}`,
+      converted: !fileName.toLowerCase().endsWith('.vtt'),
+    };
+  });
+
+  // Network stream probe — VLC-style "Open Network Stream" support. A HEAD
+  // (falling back to GET) tells the player whether to use hls.js (MSE) or the
+  // plain <video> element, and whether the stream is live.
+  ipcMain.handle(IPC_CHANNELS.appProbeNetworkStream, async (event, request: unknown): Promise<NetworkStreamProbeDto> => {
+    if (!trusted(event)) {
+      throw new Error('Unauthorized IPC caller');
+    }
+    const req = (typeof request === 'object' && request !== null ? request : {}) as { url?: unknown };
+    if (typeof req.url !== 'string' || req.url.length === 0 || req.url.length > 2000) {
+      throw new Error('Invalid URL');
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(req.url);
+    } catch {
+      throw new Error('Invalid URL');
+    }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      throw new Error('Only http/https URLs can be played');
+    }
+
+    // ponytail: probe with browser-realistic headers AND the Chromium network
+    // stack. Node's fetch (undici) presents a non-Chrome TLS fingerprint that
+    // cam-site CDNs JA3-block — verified: this URL 403s even plain curl with
+    // a perfect Chrome UA. net.fetch goes through Chromium (same stack as the
+    // player), so the ClientHello/header order match a real browser.
+    const headers: Record<string, string> = {
+      'User-Agent': browserUserAgent(),
+      Accept: '*/*',
+      'Accept-Language': 'en-US,en;q=0.9',
+    };
+    let response: Response;
+    try {
+      response = await net.fetch(parsed.toString(), {
+        method: 'HEAD',
+        headers,
+        referrer: `${parsed.protocol}//${parsed.host}/`,
+        redirect: 'follow',
+        signal: AbortSignal.timeout(10_000),
+        credentials: 'include',
+      });
+      // Some servers 405/501 HEAD — retry with a range GET (1 byte).
+      if (response.status >= 400) {
+        response = await net.fetch(parsed.toString(), {
+          method: 'GET',
+          headers: { ...headers, Range: 'bytes=0-1' },
+          referrer: `${parsed.protocol}//${parsed.host}/`,
+          redirect: 'follow',
+          signal: AbortSignal.timeout(10_000),
+          credentials: 'include',
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.warn({ url: parsed.toString(), error: message }, 'network stream probe failed');
+      throw new Error(`Could not reach the stream URL: ${message}`);
+    }
+    // ponytail: an HTTP 4xx/5xx no longer blocks playback — this probe is
+    // only a hint. The player's relay rides the same Chromium stack (TLS
+    // fingerprint, session cookies), so let it retry for real; classify
+    // best-effort from the URL and whatever headers came back.
+    if (response.status >= 400) {
+      logger.warn(
+        { url: parsed.toString(), status: response.status },
+        'network stream probe rejected — attempting playback anyway',
+      );
+    }
+
+    const contentType = response.headers.get('content-type');
+    const finalUrl = response.url || parsed.toString();
+    let body: string | null = null;
+    if (looksLikeHls(finalUrl, contentType) || (contentType !== null && /text\//i.test(contentType))) {
+      try {
+        body = await response.text();
+      } catch {
+        body = null;
+      }
+    }
+
+    if (looksLikeDash(finalUrl, contentType)) {
+      throw new Error('DASH (.mpd) streams are not supported yet — use an HLS (.m3u8) or direct URL.');
+    }
+    if (looksLikeHls(finalUrl, contentType, body)) {
+      return {
+        engine: 'hls',
+        title: finalUrl.split('/').pop()?.split('?')[0] || undefined,
+        live: body !== null ? isLiveHlsPlaylist(body) : undefined,
+        contentType: contentType ?? undefined,
+      };
+    }
+    if (isDirectMediaType(contentType)) {
+      return {
+        engine: 'direct',
+        title: finalUrl.split('/').pop()?.split('?')[0] || undefined,
+        contentType: contentType ?? undefined,
+      };
+    }
+    // Unknown content type — let the <video> element try (many CDNs serve
+    // generic octet-stream for direct files).
+    return {
+      engine: 'direct',
+      title: finalUrl.split('/').pop()?.split('?')[0] || undefined,
+      contentType: contentType ?? undefined,
+    };
   });
 
   ipcMain.handle(IPC_CHANNELS.windowMinimize, (event) => {

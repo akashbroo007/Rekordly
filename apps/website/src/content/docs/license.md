@@ -7,10 +7,9 @@ Rekordly is **source-available** software licensed under the
 
 - **Free for personal use.** Individuals can download, use, modify, and
   share Rekordly for free for personal, educational, and other
-  noncommercial purposes — no account, no telemetry. The free tier includes
-  unlimited creator monitoring and unlimited downloads;
-  [Rekordly Pro](https://rekordly.in/pricing) removes the live-recording
-  limits for personal use.
+  noncommercial purposes — no account, no telemetry. Everything is
+  included: unlimited creator monitoring, unlimited live recordings, and
+  unlimited downloads.
 - **Source code is visible.** Anyone can read, fork, and contribute to
   the code on GitHub.
 - **Commercial use requires a paid license.** Companies, businesses, and

@@ -150,7 +150,7 @@ export const docGroups: DocGroup[] = [
         title: "Remote Control",
         group: "Features",
         description:
-          "Drive Rekordly from Telegram buttons: start, pause, and stop recordings from your phone. A Pro feature — notifications stay free.",
+          "Drive Rekordly from Telegram buttons: start, pause, and stop recordings from your phone.",
         content: remoteControlMd,
       },
       {

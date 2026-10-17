@@ -4,18 +4,12 @@ import { ScreenshotFrame } from "../components/showcase/ScreenshotFrame";
 import { FeatureCard } from "../components/shared/FeatureCard";
 import { ShimmerLinkButton } from "../components/hero/ShimmerButton";
 import { Reveal } from "../components/shared/Reveal";
-import { useCurrency } from "../lib/CurrencyContext";
 import { features, safetyRails, site } from "../content/site";
 import { useSeo } from "../lib/seo";
 
-const BUY_URL = "https://buy.polar.sh/rekordly-pro";
-
-type Cell = string | true;
-
 interface ComparisonRow {
   capability: string;
-  free: Cell;
-  pro: Cell;
+  included: string | true;
 }
 
 interface ComparisonGroup {
@@ -29,18 +23,15 @@ const comparisonGroups: ComparisonGroup[] = [
     rows: [
       {
         capability: "Creator monitoring",
-        free: "Unlimited",
-        pro: "Unlimited",
+        included: "Unlimited",
       },
       {
         capability: "Creators you can add",
-        free: "Unlimited",
-        pro: "Unlimited",
+        included: "Unlimited",
       },
       {
         capability: "Live status dashboard (status, viewer counts, titles)",
-        free: true,
-        pro: true,
+        included: true,
       },
     ],
   },
@@ -49,24 +40,20 @@ const comparisonGroups: ComparisonGroup[] = [
     rows: [
       {
         capability: "Auto-record creators",
-        free: "Up to 2",
-        pro: "Unlimited",
+        included: "Unlimited",
       },
       {
         capability: "Simultaneous live recordings",
-        free: "Up to 5",
-        pro: "Unlimited",
+        included: "Unlimited",
       },
       {
         capability: "Live recording length",
-        free: "15 min per recording",
-        pro: "Unlimited",
+        included: "Unlimited",
       },
       {
         capability:
           "Safety rails (pause switch, disk guardrail, segments, crash recovery)",
-        free: true,
-        pro: true,
+        included: true,
       },
     ],
   },
@@ -75,19 +62,16 @@ const comparisonGroups: ComparisonGroup[] = [
     rows: [
       {
         capability: "Download Manager (VODs & clips)",
-        free: "Unlimited",
-        pro: "Unlimited",
+        included: "Unlimited",
       },
       {
         capability: "Duration limit on normal downloads",
-        free: "None",
-        pro: "None",
+        included: "None",
       },
       {
         capability:
           "Audio-only (MP3) extraction, pause/resume, priorities, bandwidth limits",
-        free: true,
-        pro: true,
+        included: true,
       },
     ],
   },
@@ -96,14 +80,12 @@ const comparisonGroups: ComparisonGroup[] = [
     rows: [
       {
         capability: "Push notifications (Discord / Telegram)",
-        free: true,
-        pro: true,
+        included: true,
       },
       {
         capability:
           "Remote control from Telegram (record, pause, resume, stop from chat)",
-        free: "—",
-        pro: true,
+        included: true,
       },
     ],
   },
@@ -112,76 +94,58 @@ const comparisonGroups: ComparisonGroup[] = [
     rows: [
       {
         capability: "Secure Proxy + Cloudflare WARP support",
-        free: true,
-        pro: true,
+        included: true,
       },
       {
         capability: "Local library & analytics",
-        free: true,
-        pro: true,
+        included: true,
       },
       {
         capability: "Cloud uploads (Gofile, Catbox, MixDrop, Google Drive)",
-        free: true,
-        pro: true,
+        included: true,
       },
       {
         capability:
           "Desktop integration (tray, notifications, themes, low-resource mode)",
-        free: true,
-        pro: true,
+        included: true,
       },
       {
         capability: "Community plugins & Plugin SDK",
-        free: true,
-        pro: true,
+        included: true,
       },
       {
         capability: "Commercial use",
-        free: "Requires commercial license",
-        pro: "Requires commercial license",
+        included: "Requires commercial license",
       },
     ],
   },
 ];
 
-function ComparisonCell({ value }: { value: Cell }) {
+function ComparisonCell({ value }: { value: string | true }) {
   if (value === true) {
     return <Check className="mx-auto h-4 w-4 text-white" aria-hidden="true" />;
   }
   return <span className="text-white/80">{value}</span>;
 }
 
-function FreeProComparison() {
-  const { format } = useCurrency();
-
+function FeatureComparison() {
   return (
     <Section className="border-t border-white/10">
       <SectionHeading
-        eyebrow="Free & Pro"
+        eyebrow="Everything included"
         title="Every feature, side by side"
-        description="The free tier is permanent — not a trial — and it already covers the whole pipeline. Pro removes the live-recording limits and adds remote control from Telegram."
+        description="One free app, the whole pipeline. No tiers, no locked features — every capability below is in the standard download."
       />
       <Reveal className="mx-auto mt-12 max-w-4xl">
         <div className="overflow-x-auto rounded-xl border border-white/10 bg-white/[0.02]">
-          <table className="w-full min-w-[560px] border-collapse text-left text-sm">
+          <table className="w-full min-w-[480px] border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-white/10">
-                <th className="w-1/2 px-5 py-4 text-xs font-semibold tracking-wider text-white/50 uppercase">
+                <th className="w-2/3 px-5 py-4 text-xs font-semibold tracking-wider text-white/50 uppercase">
                   Capability
                 </th>
                 <th className="px-5 py-4 text-center text-xs font-semibold tracking-wider text-white/50 uppercase">
-                  Free
-                </th>
-                <th className="px-5 py-4 text-center">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="text-xs font-semibold tracking-wider text-primary uppercase">
-                      Pro
-                    </span>
-                    <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-black">
-                      Most popular
-                    </span>
-                  </span>
+                  Included
                 </th>
               </tr>
             </thead>
@@ -194,33 +158,24 @@ function FreeProComparison() {
         </div>
 
         <p className="mt-4 text-xs leading-6 text-white/50">
-          The Download Manager is never limited — a 3-hour VOD downloads in
-          full on the free tier. Pro's unlimited recording, concurrency,
-          auto-record, and Telegram remote control apply to personal use;
-          commercial use requires a separate commercial license.
+          Nothing is metered — a 3-hour live stream records in full, and a
+          3-hour VOD downloads in full. All included features apply to
+          personal use; commercial use requires a separate commercial license.
         </p>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
           <ShimmerLinkButton
-            href={BUY_URL}
-            external
-            className="font-semibold shadow-lg shadow-white/10"
-          >
-            Get Pro — {format(29)} lifetime
-          </ShimmerLinkButton>
-          <ShimmerLinkButton
-            variant="outline"
             href="/download"
-            className="font-medium"
+            className="font-semibold shadow-lg shadow-white/10"
           >
             Download free
           </ShimmerLinkButton>
           <ShimmerLinkButton
             variant="ghost"
-            href="/pricing"
+            href="/docs/overview"
             className="font-medium"
           >
-            Full plan comparison
+            Read the docs
             <ArrowRight className="ml-2 h-4 w-4" />
           </ShimmerLinkButton>
         </div>
@@ -234,7 +189,7 @@ function GroupBlock({ group }: { group: ComparisonGroup }) {
     <>
       <tr>
         <td
-          colSpan={3}
+          colSpan={2}
           className="bg-white/[0.04] px-5 py-2.5 text-xs font-semibold tracking-wider text-white/60 uppercase"
         >
           {group.group}
@@ -251,10 +206,7 @@ function GroupBlock({ group }: { group: ComparisonGroup }) {
             {row.capability}
           </td>
           <td className="px-5 py-3.5 text-center">
-            <ComparisonCell value={row.free} />
-          </td>
-          <td className="px-5 py-3.5 text-center">
-            <ComparisonCell value={row.pro} />
+            <ComparisonCell value={row.included} />
           </td>
         </tr>
       ))}
@@ -294,7 +246,7 @@ export default function FeaturesPage() {
         </div>
       </Section>
 
-      <FreeProComparison />
+      <FeatureComparison />
 
       <Section className="border-y border-white/10 bg-[#050505]">
         <div className="grid grid-cols-1 gap-14 lg:grid-cols-2">

@@ -1,6 +1,5 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
-import { IPC_CHANNELS, AppError } from '@rekordly/shared';
-import { getEntitlements } from '@rekordly/core';
+import { IPC_CHANNELS } from '@rekordly/shared';
 import type { IpcContext } from './context';
 
 function trusted(event: IpcMainInvokeEvent, getWindow: IpcContext['getWindow']): void {
@@ -26,43 +25,6 @@ function latchProxyUsedFlag(context: IpcContext, enabled: boolean): void {
   } catch {
     /* flag write must never fail creator operations */
   }
-}
-
-/**
- * Pro tier gate: the free tier may keep auto-record enabled on a limited
- * number of creators. Disabling is always allowed; enabling past the limit
- * throws AUTO_RECORD_LIMIT (the UI toggle stays off and shows the upgrade
- * CTA). Creators already over the limit (e.g. downgraded after enabling)
- * are grandfathered — they keep recording until turned off by the user.
- */
-function enforceAutoRecordLimit(
-  context: IpcContext,
-  enabled: boolean,
-  apply: () => void,
-  newEnableCount = 1,
-): void {
-  const { creatorRepo, license } = context;
-  // Disabling is always allowed — the gate only limits new enables.
-  if (!enabled) {
-    apply();
-    return;
-  }
-  const limit = getEntitlements(license.getStatus()).maxAutoRecordCreators;
-  if (!Number.isFinite(limit)) {
-    apply();
-    return;
-  }
-  const enabledCount = creatorRepo.list().filter((c) => c.autoRecord).length;
-  if (enabledCount + newEnableCount > limit) {
-    context.gateNotifier.autoRecordLimitReached(enabledCount, limit);
-    throw new AppError({
-      code: 'AUTO_RECORD_LIMIT',
-      message: `Auto-record is already on for ${limit} creators — the free-tier maximum. Upgrade to Pro to add more.`,
-      recoverable: true,
-      details: { limit, enabledCount },
-    });
-  }
-  apply();
 }
 
 export function registerCreatorsIpc(context: IpcContext): void {
@@ -156,9 +118,7 @@ export function registerCreatorsIpc(context: IpcContext): void {
     trusted(event, getWindow);
     if (!isString(id)) throw new Error('Invalid creator id');
     if (typeof enabled !== 'boolean') throw new Error('Invalid autoRecord value');
-    enforceAutoRecordLimit(context, enabled, () => {
-      creatorRepo.setAutoRecord(id, enabled);
-    });
+    creatorRepo.setAutoRecord(id, enabled);
   });
 
   ipcMain.handle(IPC_CHANNELS.creatorsSetUseProxy, (event, id: unknown, enabled: unknown) => {
@@ -365,14 +325,7 @@ export function registerCreatorsIpc(context: IpcContext): void {
     trusted(event, getWindow);
     if (!Array.isArray(ids) || !ids.every(isString)) throw new Error('Invalid creator ids');
     if (typeof enabled !== 'boolean') throw new Error('Invalid autoRecord value');
-    enforceAutoRecordLimit(
-      context,
-      enabled,
-      () => {
-        creatorRepo.bulkSetAutoRecord(ids, enabled);
-      },
-      ids.filter((id) => creatorRepo.get(id)?.autoRecord !== true).length,
-    );
+    creatorRepo.bulkSetAutoRecord(ids, enabled);
   });
 
   ipcMain.handle(IPC_CHANNELS.creatorsBulkAddTag, (event, ids: unknown, tagId: unknown) => {

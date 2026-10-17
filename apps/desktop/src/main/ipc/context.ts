@@ -6,8 +6,6 @@ import type {
   NotificationService,
   PluginManager,
   SettingsService,
-  LicenseService,
-  GateNotifier,
   MonitoringService,
   RecordingService,
   DownloadManager,
@@ -27,8 +25,6 @@ export interface IpcContext {
   getWindow: () => BrowserWindow | null;
   dirs: AppDirs;
   settings: SettingsService;
-  license: LicenseService;
-  gateNotifier: GateNotifier;
   notifications: NotificationService;
   plugins: PluginManager;
   monitoring: MonitoringService;

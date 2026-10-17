@@ -13,6 +13,7 @@ import type {
   SettingDef,
   StreamObject,
 } from '@rekordly/plugin-sdk';
+import { extractViewerCount } from '@rekordly/plugin-sdk';
 import type { Agent } from 'node:http';
 import * as https from 'https';
 import * as http from 'http';
@@ -466,7 +467,7 @@ async function resolveBestVariantUrl(
 async function resolveStreamSmart(
   identifier: string,
   username: string,
-): Promise<{ url: string; variants: StreamVariant[]; usedProxy: boolean } | null> {
+): Promise<{ url: string; variants: StreamVariant[]; usedProxy: boolean; viewerCount?: number } | null> {
   const manifestResult = await fetchLiveManifestSmart(identifier, username);
   if (!manifestResult.ok) {
     if (manifestResult.notFound) {
@@ -499,7 +500,14 @@ async function resolveStreamSmart(
   // to a single "Best" entry, so the UI can show real resolutions/bitrates.
   const finalVariants = resolved.variants.length > 0 ? resolved.variants : variants;
   const bestUrl = resolved.variants.length > 0 ? resolved.url : best.url;
-  return { url: bestUrl, variants: finalVariants, usedProxy: manifestResult.usedProxy };
+  return {
+    url: bestUrl,
+    variants: finalVariants,
+    usedProxy: manifestResult.usedProxy,
+    // ponytail: generic viewer-count extraction over the manifest payload the
+    // check already fetched — surfaced only when the edge actually reports one.
+    viewerCount: extractViewerCount(manifestResult.info),
+  };
 }
 
 // ---- creator helpers -------------------------------------------------------
@@ -616,10 +624,10 @@ const plugin: Plugin = {
           return {
             isLive: true,
             title: `${username} is live`,
-            // ponytail: the manifest payload carries no live viewer count or
-            // room title — omit rather than show a wrong number (the UI only
-            // shows the count when the plugin provides one).
-            viewerCount: undefined,
+            // ponytail: generic viewer-count extraction over the manifest
+            // payload (see resolveStreamSmart) — surfaced only when the edge
+            // really reports one (the UI hides unknown counts).
+            viewerCount: resolved.viewerCount,
             streamUrl: resolved.url,
           };
         } catch (e) {

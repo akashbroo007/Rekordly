@@ -62,7 +62,7 @@ Every capture is organized with tags, collections, favorites, and notes. Use the
 
 ## Is it really free?
 
-Yes. Rekordly is free for personal, educational, and noncommercial use under the PolyForm Noncommercial license. The free tier includes unlimited monitoring and unlimited downloads; live recordings are capped at 15 minutes, up to 5 at a time, with auto-record on 2 creators. Pro removes those limits with a one-time payment — see the [pricing](/pricing) page for the comparison, or the [license docs](/docs/license) for the fine print.
+Yes. Rekordly is free for personal, educational, and noncommercial use under the PolyForm Noncommercial license. Everything is included — unlimited monitoring, unlimited live recordings, and unlimited downloads — with no features locked behind a paywall. Commercial use requires a paid commercial license; see the [license docs](/docs/license) for the fine print.
 
 ## Where to go next
 
@@ -97,7 +97,7 @@ Time zones guarantee that creators you care about are live when you cannot be. A
 
 ### 2. VODs are temporary
 
-Even when a recording survives, platforms treat VODs as disposable. The built-in [Download Manager](/docs/recording-downloads) grabs full VODs, clips, and highlights — with no duration limit on normal downloads, even on the free tier — powered by bundled yt-dlp and ffmpeg.
+Even when a recording survives, platforms treat VODs as disposable. The built-in [Download Manager](/docs/recording-downloads) grabs full VODs, clips, and highlights — with no duration limit on normal downloads — powered by bundled yt-dlp and ffmpeg.
 
 ### 3. Watching five streams means five tabs and zero archive
 
@@ -110,7 +110,7 @@ A naive "record when live" toggle can fill your disk overnight or hang on a cras
 ## What it is *not*
 
 - **Not a screen recorder.** Recording is a straight copy of the stream, so quality is lossless and CPU use stays low.
-- **Not a subscription.** The app is free for personal use under the PolyForm Noncommercial license; [Pro](/pricing) is a one-time payment, not a monthly fee.
+- **Not a subscription.** The app is entirely free for personal use under the PolyForm Noncommercial license — there is no paid tier to upgrade to, no monthly fee, and no locked features.
 - **Not cloud-based.** Creators, recordings, and the library database live in local SQLite on your machine. Nothing is uploaded unless you explicitly configure a [cloud provider](/docs/cloud-uploads).
 
 ## The 30-second test
@@ -141,7 +141,7 @@ Rekordly is a set-and-forget archiving tool. Add creators, enable [Auto-Record](
 
 **You:** You want every stream from five creators at full length, no caps.
 
-The free tier caps live recordings (15 minutes, 5 concurrent, auto-record on 2 creators) while keeping monitoring and downloads unlimited. If that is too tight, [Pro](/pricing) is a one-time payment that removes every live-recording limit — unlimited auto-record creators, unlimited concurrent recordings, unlimited length. No subscription; verification happens offline via a license key.
+There are no caps: every creator can auto-record, recordings run at full length with no concurrency limit. Set the segment splitting and the disk-space guardrail to match your storage, and the app handles marathons.
 
 ## 3. The plugin developer
 
@@ -163,7 +163,7 @@ The built-in Secure Proxy routes a blocked creator's traffic with one toggle; th
 
 ## What Rekordly is not for
 
-To be clear about boundaries: Rekordly is not for redistributing other people's content, and commercial use requires a [commercial license](/pricing). You are responsible for respecting the platforms you record from and the laws in your jurisdiction.
+To be clear about boundaries: Rekordly is not for redistributing other people's content, and commercial use requires a [commercial license](/docs/license). You are responsible for respecting the platforms you record from and the laws in your jurisdiction.
 
 ## Find your starting point
 

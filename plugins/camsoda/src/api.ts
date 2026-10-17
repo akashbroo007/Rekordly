@@ -16,6 +16,7 @@
  *    chat (status/subjectText), mode, stream (same shape as vtoken) and user
  *    (id, displayName, avatars, follower counts, tags, createdAt).
  */
+import { extractViewerCount } from '@rekordly/plugin-sdk';
 import { httpGet } from './http';
 
 const BASE = 'https://www.camsoda.com';
@@ -90,6 +91,12 @@ export interface RoomData {
 export interface VtokenResult {
   kind: 'live' | 'private' | 'offline' | 'not-found' | 'unknown';
   stream?: StreamInfo;
+  /**
+   * Live viewer count when the vtoken payload carries one (best-effort,
+   * generic extraction). Omitted when the payload has none — the UI hides
+   * the count instead of showing a wrong number.
+   */
+  viewers?: number;
 }
 
 /** True when a stream descriptor can actually be opened by the recorder. */
@@ -136,15 +143,16 @@ export async function fetchVtoken(username: string, logger?: (m: string) => void
     return { kind: 'unknown' };
   }
   const json = JSON.parse(res.body) as unknown;
+  const viewers = extractViewerCount(json);
   const message = str(json, 'message');
   if (message === 'No broadcaster found') {
     return { kind: 'not-found' };
   }
   const stream = parseStreamInfo(asRecord(json));
   if (!stream) return { kind: 'unknown' };
-  if (isRecordableStream(stream)) return { kind: 'live', stream };
-  if (stream.status === 'private') return { kind: 'private', stream };
-  return { kind: 'offline', stream };
+  if (isRecordableStream(stream)) return { kind: 'live', stream, viewers };
+  if (stream.status === 'private') return { kind: 'private', stream, viewers };
+  return { kind: 'offline', stream, viewers };
 }
 
 /**

@@ -1,4 +1,4 @@
-import { ArrowRight, Building2, Check, Download, Github, Plug, Star } from "lucide-react";
+import { ArrowRight, Check, Download, Github, Plug, Star } from "lucide-react";
 import { Hero } from "../components/hero/Hero";
 import { BeamsBackground } from "../components/hero/Beams";
 import { ShimmerLinkButton } from "../components/hero/ShimmerButton";
@@ -15,7 +15,6 @@ import {
   steps,
 } from "../content/site";
 import { Reveal } from "../components/shared/Reveal";
-import { useCurrency } from "../lib/CurrencyContext";
 import { useSeo, faqSchema, softwareAppSchema } from "../lib/seo";
 
 function HowItWorks() {
@@ -228,7 +227,6 @@ function Community() {
 }
 
 function ProductModel() {
-  const { format, currency } = useCurrency();
   const tiers = [
     {
       name: "Free",
@@ -237,32 +235,15 @@ function ProductModel() {
       features: [
         "Unlimited creator monitoring",
         "Unlimited creators",
-        "Auto-record up to 2 creators",
-        "Up to 5 simultaneous live recordings, 15 minutes each",
+        "Auto-record on every creator",
+        "Unlimited simultaneous live recordings",
         "Unlimited normal video/VOD downloads",
+        "Remote control from Telegram",
         "Local library",
         "Push notifications (Discord / Telegram)",
         "Community plugins",
       ],
       cta: { label: "Download free", href: "/download" },
-      external: false,
-    },
-    {
-      name: "Pro",
-      price: `${format(29)} one-time`,
-      note:
-        currency !== "USD"
-          ? "Lifetime license for personal use (charged as $29 USD)"
-          : "Lifetime license for personal use",
-      features: [
-        "Unlimited auto-recording creators",
-        "Unlimited simultaneous recordings",
-        "Unlimited recording length",
-        "Remote control from Telegram",
-        "Everything in Free — no features removed",
-        "7-day free trial available",
-      ],
-      cta: { label: "See Pro", href: "/pricing" },
       external: false,
     },
     {
@@ -285,11 +266,11 @@ function ProductModel() {
   return (
     <Section className="border-t border-white/10">
       <SectionHeading
-        eyebrow="Free & Pro"
-        title="Free for personal use. Pro for power users."
-        description="Rekordly is source-available and free for personal, educational, and other noncommercial use. Pro removes the live-recording limits and adds remote control from Telegram; commercial use requires a separate commercial license."
+        eyebrow="100% Free"
+        title="Everything included. No tiers."
+        description="Rekordly is source-available and free for personal, educational, and other noncommercial use — unlimited monitoring, recording, and downloads, with no features locked away. Commercial use requires a separate commercial license."
       />
-      <div className="mx-auto mt-12 grid max-w-5xl grid-cols-1 gap-6 md:grid-cols-3">
+      <div className="mx-auto mt-12 grid max-w-4xl grid-cols-1 gap-6 md:grid-cols-2">
         {tiers.map((tier, index) => (
           <Reveal key={tier.name} delay={index * 0.08} className="h-full">
             <div className="flex h-full flex-col rounded-xl border border-white/10 bg-white/[0.02] p-6">
@@ -326,17 +307,6 @@ function ProductModel() {
             </div>
           </Reveal>
         ))}
-      </div>
-      <div className="mt-8 flex justify-center">
-        <ShimmerLinkButton
-          variant="ghost"
-          href="/pricing"
-          className="font-medium"
-        >
-          <Building2 className="mr-2 h-4 w-4" />
-          Full plan comparison
-          <ArrowRight className="ml-2 h-4 w-4" />
-        </ShimmerLinkButton>
       </div>
     </Section>
   );

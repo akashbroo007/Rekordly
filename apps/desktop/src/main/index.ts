@@ -22,10 +22,6 @@ import {
   NotificationService,
   PluginManager,
   SettingsService,
-  LicenseService,
-  createEntitlementsSource,
-  getEntitlements,
-  GateNotifier,
   MonitoringService,
   RecordingService,
   StorageService,
@@ -344,15 +340,8 @@ async function bootstrap(): Promise<void> {
     defaultDownloadsDir: mediaDirs.downloads,
   });
 
-  // Pro tier: offline Ed25519 license verification. The private signing key
-  // never ships with the app; the public key is embedded in LicenseService.
-  const license = new LicenseService({ settings, logger });
-  const entitlementsSource = createEntitlementsSource(license);
   const bus = new EventBus<CoreEvents>();
   const notifications = new NotificationService({ logRepo, logger, bus });
-  // Gate hits become persistent bell entries + OS notifications (cooldowns
-  // inside GateNotifier keep repeat hits from nagging).
-  const gateNotifier = new GateNotifier({ notifications, logger });
 
   // Push notifications to phone/chat apps (Discord webhook + Telegram bot).
   // Settings are read live per send — changes apply without a restart.
@@ -448,9 +437,6 @@ async function bootstrap(): Promise<void> {
     logger,
     getSettings: () => settings.getAll().pushNotifications,
     getAllowedChatIds: () => [settings.getAll().pushNotifications.telegramChatId],
-    // Remote control buttons are Pro-only — notifications stay free. Read
-    // live so activating/deactivating a license applies to the next push.
-    isPro: () => getEntitlements(entitlementsSource.getLicenseStatus()).isPro,
     startRecording: (target, options) => startRecordingForCreator(target.creatorDbId, options),
     findActiveJob: (creatorDbId) => {
       const job = recording
@@ -556,22 +542,6 @@ async function bootstrap(): Promise<void> {
     }
   });
 
-  // Pro tier: trial lifecycle alerts — fire once per state change (boot and
-  // every activation/deactivation), never per gate hit.
-  const notifyTrialLifecycle = (): void => {
-    const status = license.getStatus();
-    gateNotifier.resetLatches();
-    if (status.tier === 'trial' && status.trialDaysLeft !== undefined) {
-      if (status.trialDaysLeft <= 1) {
-        gateNotifier.trialExpiring(status.trialDaysLeft);
-      }
-    } else if (status.expired) {
-      gateNotifier.trialExpired();
-    }
-  };
-  notifyTrialLifecycle();
-  license.onChanged(notifyTrialLifecycle);
-
   for (const type of [
     'loaded',
     'enabled',
@@ -626,10 +596,6 @@ async function bootstrap(): Promise<void> {
     // ponytail: Low-Resource Mode caps concurrent recordings to a single
     // slot and skips thumbnail generation (read live on every decision).
     isLowResourceMode: () => settings.getAll().lowResourceMode,
-    // Pro tier gates: live entitlements clamp concurrency and per-recording
-    // duration on the free tier (read live on every decision).
-    getEntitlements: () => getEntitlements(entitlementsSource.getLicenseStatus()),
-    getGateNotifier: () => gateNotifier,
     // ponytail: launch-time disk guard for the staggered-start pump (plan §9)
     // — reuses the existing Settings → Recording floor, so queued starts park
     // instead of filling the drive.
@@ -960,6 +926,16 @@ async function bootstrap(): Promise<void> {
     const settingsNow = settings.getAll();
     if (settingsNow.autoRecordPaused) return;
 
+    // ponytail: DEGRADED-CHECK RETRY — the monitoring service re-emits
+    // creator-live during unknown (site-unreachable) checks when the creator
+    // is believed live. The stream was not re-verified, so: no repeat
+    // "X is live" pushes, extraction failures stay quiet (a warn log), and
+    // every failed attempt re-arms the edge — the pipeline retries itself
+    // each retry window until a clean check lands. This is what makes
+    // auto-record fire for a live creator even while the site's transport
+    // keeps erroring (ECONNRESET / TLS resets).
+    const degradedRetry = event.retryable === true;
+
     // Resolve the tracked creator FIRST — auto-record requires the per-creator
     // opt-in; untracked creators (not in the DB) are never auto-recorded.
     const [pluginId, externalId] = (event.creatorId ?? '').split(':');
@@ -972,7 +948,7 @@ async function bootstrap(): Promise<void> {
     // auto-record opt-in below must not gate "X is live" pushes. The text is
     // honest about auto-record state, and Telegram gets interactive
     // Record/Stop buttons driven by TelegramCommandService.
-    if (tracked !== undefined) {
+    if (tracked !== undefined && !degradedRetry) {
       const autoRecord = tracked.autoRecord && !settingsNow.autoRecordPaused;
       push.creatorLive(tracked.displayName, tracked.pluginId, {
         autoRecord,
@@ -1040,12 +1016,22 @@ async function bootstrap(): Promise<void> {
       }
       if (stream === null) {
         if (event.data?.streamUrl === undefined) {
-          notifications.send({
-            level: 'warn',
-            title: 'Auto-record failed',
-            message: `${tracked.displayName} went live, but the stream could not be extracted.`,
-            data: { creatorId: event.creatorId },
-          });
+          // ponytail: degraded retries stay quiet — a notification per retry
+          // window would spam while the site is unreachable; the next check
+          // retries automatically.
+          if (degradedRetry) {
+            logger.warn(
+              { creatorId: event.creatorId },
+              'auto-record degraded retry — stream not extractable yet, will retry',
+            );
+          } else {
+            notifications.send({
+              level: 'warn',
+              title: 'Auto-record failed',
+              message: `${tracked.displayName} went live, but the stream could not be extracted.`,
+              data: { creatorId: event.creatorId },
+            });
+          }
           // Re-arm: the next monitoring poll retries extraction for this session.
           monitoring.rearmLive(event.creatorId!);
           return;
@@ -1091,12 +1077,17 @@ async function bootstrap(): Promise<void> {
       });
     })().catch((err) => {
       logger.error({ creatorId: event.creatorId, error: err }, 'auto-recording failed');
-      notifications.send({
-        level: 'error',
-        title: 'Auto-record failed',
-        message: err instanceof Error ? err.message : 'Unknown error',
-        data: { creatorId: event.creatorId },
-      });
+      // ponytail: degraded retries fail quietly — the retry loop already
+      // surfaces persistent problems via logs; a toast per attempt would
+      // spam on flaky networks.
+      if (!degradedRetry) {
+        notifications.send({
+          level: 'error',
+          title: 'Auto-record failed',
+          message: err instanceof Error ? err.message : 'Unknown error',
+          data: { creatorId: event.creatorId },
+        });
+      }
       // Re-arm the live edge so the next poll retries the failed auto-record.
       if (event.creatorId !== undefined) monitoring.rearmLive(event.creatorId);
     });
@@ -1272,8 +1263,6 @@ async function bootstrap(): Promise<void> {
     getWindow: () => mainWindow,
     dirs,
     settings,
-    license,
-    gateNotifier,
     notifications,
     plugins: pluginManager,
     monitoring,

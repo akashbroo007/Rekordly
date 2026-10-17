@@ -72,7 +72,6 @@ export function CreatorCard({
 }: CreatorCardProps) {
   const isLive = job?.state === 'live';
   const isIssue = job?.state === 'failed' || job?.state === 'paused' || job?.state === 'retrying';
-  const liveTitle = job?.lastResult?.title;
   const viewerCount = job?.lastResult?.viewerCount;
 
   const menuContent = (
@@ -324,12 +323,6 @@ export function CreatorCard({
           </div>
         </div>
       </div>
-
-      {isLive && liveTitle && (
-        <p className="line-clamp-1 rounded-sm bg-success/10 px-2 py-1 text-xs text-success" title={liveTitle}>
-          {liveTitle}
-        </p>
-      )}
 
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-1">

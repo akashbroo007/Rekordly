@@ -4,8 +4,6 @@ Auto-Record is the reason most people install Rekordly: an opt-in, per-creator s
 
 Recording while you sleep needs more than a naive toggle, so Auto-Record ships with four safety rails.
 
-> **Free tier:** Auto-Record works for up to **2 creators**, with up to **5 simultaneous live recordings** capped at **15 minutes** each. [Rekordly Pro](https://rekordly.in/pricing) removes all three caps.
-
 ## The safety rails
 
 ### Master pause switch

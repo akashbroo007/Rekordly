@@ -250,11 +250,10 @@ export function CreatorsPage() {
       clearSelection();
     },
     onError: (error) => {
-      // Pro tier gate: bulk enable past the free-tier limit.
       pushToast({
         level: 'warn',
-        title: 'Auto-record limit reached',
-        message: friendlyErrorMessage(error, 'Could not enable auto-record.'),
+        title: 'Could not enable auto-record',
+        message: friendlyErrorMessage(error, 'Something went wrong — please try again.'),
       });
     },
   });
@@ -312,12 +311,10 @@ export function CreatorsPage() {
     }
     confirmAutoRecord(creator.displayName, creator.autoRecordQuality ?? 'best', () => {
       window.desktop.creators.setAutoRecord(creator.id, true).catch((error: unknown) => {
-        // Pro tier gate: the free tier allows auto-record on a limited
-        // number of creators — surface the friendly upgrade nudge.
         pushToast({
           level: 'warn',
-          title: 'Auto-record limit reached',
-          message: friendlyErrorMessage(error, 'Could not enable auto-record.'),
+          title: 'Could not enable auto-record',
+          message: friendlyErrorMessage(error, 'Something went wrong — please try again.'),
         });
       });
       void queryClient.invalidateQueries({ queryKey: ['settings'] });

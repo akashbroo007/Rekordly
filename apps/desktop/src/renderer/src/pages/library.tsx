@@ -14,6 +14,7 @@ import {
   Pencil,
   Play,
   Plus,
+  Radio,
   RefreshCw,
   Scissors,
   Search,
@@ -50,11 +51,12 @@ import {
   Switch,
   Textarea,
 } from '@rekordly/ui';
-import type { RecordingDto, DownloadQueueItemDto, LibraryFiltersDto, LibrarySortDto } from '@rekordly/shared/contracts';
+import type { NetworkStreamProbeDto, RecordingDto, DownloadQueueItemDto, LibraryFiltersDto, LibrarySortDto } from '@rekordly/shared/contracts';
 import { useToastStore } from '../stores/toast-store';
 import { useDrilldownStore } from '../stores/drilldown-store';
 import { formatBytes, formatDuration } from '@rekordly/shared/format';
 import { toMediaUrl, VideoPlayerDialog, watchProgressFor } from '../components/video-player-dialog';
+import { NetworkStreamDialog } from '../components/network-stream-dialog';
 import { ConcatDialog } from '../components/editor/concat-dialog';
 
 type ViewMode = 'grid' | 'list' | 'compact' | 'details';
@@ -108,6 +110,9 @@ export function LibraryPage() {
   const [playerEditing, setPlayerEditing] = useState(false);
   const [concatOpen, setConcatOpen] = useState(false);
   const [playerDownload, setPlayerDownload] = useState<DownloadQueueItemDto | null>(null);
+  // ponytail: VLC-style network stream playback — probe result drives the player's engine.
+  const [networkStream, setNetworkStream] = useState<{ url: string; probe: NetworkStreamProbeDto } | null>(null);
+  const [networkDialogOpen, setNetworkDialogOpen] = useState(false);
   const [editNotes, setEditNotes] = useState<RecordingDto | null>(null);
   const [activeCollection, setActiveCollection] = useState<string>('');
   // ponytail: analytics drill-down — a one-shot date window pushed by the
@@ -318,49 +323,56 @@ export function LibraryPage() {
               ? 'Trimmed, cut, and combined clips — originals stay in Recordings.'
               : 'Browse completed video downloads.'
         }
-        actions={(tab === 'recordings' || tab === 'edited') ? (
+        actions={
           <div className="flex items-center gap-2">
-            {selectedIds.size > 0 && (
+            <Button variant="secondary" size="sm" onClick={() => setNetworkDialogOpen(true)}>
+              <Radio size={14} /> Network Stream
+            </Button>
+            {(tab === 'recordings' || tab === 'edited') && (
               <>
-                <span className="text-xs text-foreground-muted">{selectedIds.size} selected</span>
-                <Button variant="ghost" size="sm" onClick={() => bulkFavorite.mutate()}>
-                  <Heart size={14} /> Favorite
+                {selectedIds.size > 0 && (
+                  <>
+                    <span className="text-xs text-foreground-muted">{selectedIds.size} selected</span>
+                    <Button variant="ghost" size="sm" onClick={() => bulkFavorite.mutate()}>
+                      <Heart size={14} /> Favorite
+                    </Button>
+                    {selectedRecordings.length >= 2 && (
+                      <Button variant="ghost" size="sm" onClick={() => setConcatOpen(true)}>
+                        <Layers size={14} /> Combine
+                      </Button>
+                    )}
+                    <Button variant="danger" size="sm" onClick={() => bulkDelete.mutate()}>
+                      <Trash2 size={14} /> Delete
+                    </Button>
+                  </>
+                )}
+                <Button variant="secondary" size="sm" onClick={() => setTagsOpen(true)}>
+                  <Tags size={14} /> Tags
                 </Button>
-                {selectedRecordings.length >= 2 && (
-                  <Button variant="ghost" size="sm" onClick={() => setConcatOpen(true)}>
-                    <Layers size={14} /> Combine
+                <Button variant="secondary" size="sm" onClick={() => setCollectionsOpen(true)}>
+                  Collections
+                </Button>
+                {tab === 'recordings' && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={async () => {
+                      const result = await window.desktop.library.scanFolder();
+                      pushToast({
+                        level: result.errors.length > 0 ? 'warn' : 'info',
+                        title: 'Folder Scan Complete',
+                        message: `Imported ${result.imported} file(s), skipped ${result.skipped}.`,
+                      });
+                      void queryClient.invalidateQueries({ queryKey: ['library'] });
+                    }}
+                  >
+                    <FolderOpen size={14} /> Scan Folder
                   </Button>
                 )}
-                <Button variant="danger" size="sm" onClick={() => bulkDelete.mutate()}>
-                  <Trash2 size={14} /> Delete
-                </Button>
               </>
             )}
-            <Button variant="secondary" size="sm" onClick={() => setTagsOpen(true)}>
-              <Tags size={14} /> Tags
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => setCollectionsOpen(true)}>
-              Collections
-            </Button>
-            {tab === 'recordings' && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={async () => {
-                const result = await window.desktop.library.scanFolder();
-                pushToast({
-                  level: result.errors.length > 0 ? 'warn' : 'info',
-                  title: 'Folder Scan Complete',
-                  message: `Imported ${result.imported} file(s), skipped ${result.skipped}.`,
-                });
-                void queryClient.invalidateQueries({ queryKey: ['library'] });
-              }}
-            >
-              <FolderOpen size={14} /> Scan Folder
-            </Button>
-            )}
           </div>
-        ) : undefined}
+        }
       />
 
       {tab === 'downloads' && <DownloadsLibrary onPlay={setPlayerDownload} />}
@@ -703,6 +715,26 @@ export function LibraryPage() {
             setSelectedIds(new Set());
             setPlayerRecording(rec);
             setPlayerEditing(false);
+          }}
+        />
+      )}
+      {/* VLC-style network stream — opens the URL picker, then the player */}
+      <NetworkStreamDialog
+        open={networkDialogOpen}
+        onOpenChange={setNetworkDialogOpen}
+        onPlay={(url, probe) => setNetworkStream({ url, probe })}
+      />
+      {networkStream !== null && (
+        <VideoPlayerDialog
+          key={`net:${networkStream.url}`}
+          title={networkStream.probe.title ?? networkStream.url}
+          filePath=""
+          streamUrl={networkStream.url}
+          streamEngine={networkStream.probe.engine}
+          streamLive={networkStream.probe.live}
+          open
+          onOpenChange={(v) => {
+            if (!v) setNetworkStream(null);
           }}
         />
       )}

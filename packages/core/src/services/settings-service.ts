@@ -65,11 +65,6 @@ export const APP_SETTINGS_SCHEMA = z.object({
    * wiring — higher compression = smaller files, slightly lower quality.
    */
   recordingCompression: z.enum(['quality', 'balanced', 'size']),
-  /**
-   * Raw signed license token (LicenseService format). null = free tier.
-   * Not user-editable through the settings UI — set only via license:activate.
-   */
-  licenseKey: z.string().nullable().default(null),
   /** Upload provider configuration (credentials, defaults). */
   uploadProviders: z
     .object({
@@ -213,7 +208,6 @@ export class SettingsService {
       onboardingCompleted: false,
       secureProxyUsed: false,
       recordingCompression: 'balanced',
-      licenseKey: null,
       uploadProviders: { defaultProvider: 'gofile' },
       pushNotifications: {
         enabled: false,
@@ -301,11 +295,7 @@ export class SettingsService {
 
   exportToJson(): string {
     const settings = this.getAll();
-    // ponytail: the license token is a signed credential — strip it from
-    // human-readable exports so sharing a settings file never leaks it.
-    const { licenseKey: _omitted, ...exportable } = settings;
-    void _omitted;
-    return JSON.stringify(exportable, null, 2);
+    return JSON.stringify(settings, null, 2);
   }
 
   importFromJson(json: string): AppSettings {

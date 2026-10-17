@@ -12,6 +12,7 @@ import type {
   SettingDef,
   StreamObject,
 } from '@rekordly/plugin-sdk';
+import { extractViewerCount } from '@rekordly/plugin-sdk';
 import type { Agent } from 'node:http';
 import * as https from 'https';
 import * as http from 'http';
@@ -497,14 +498,15 @@ const plugin: Plugin = {
           ctx?.logger.debug(`bongacams: ${username} playlist up (${resolved.variants.length} variants)`);
           const performer = readPerformerData(room);
           const title = performer?.['displayName'];
-          // ponytail: BongaCams' AMF room data has no real viewer count —
-          // loversCount is the model's fan total, not live viewers, so reporting
-          // it would show a wildly wrong number (e.g. 8.5k fans as "viewers").
-          // Omit it; the UI only shows the count when the plugin provides one.
+          // ponytail: generic viewer-count extraction over the AMF room data
+          // the check already fetched. The helper ignores fan/follower keys
+          // (loversCount is the model's fan total, not live viewers — reporting
+          // it would show a wildly wrong number), so the count is only
+          // surfaced when the payload really carries one.
           return {
             isLive: true,
             title: typeof title === 'string' && title.length > 0 ? title : `${username} is live`,
-            viewerCount: undefined,
+            viewerCount: extractViewerCount(room),
             streamUrl: resolved.url,
           };
         } catch (e) {

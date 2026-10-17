@@ -138,11 +138,12 @@ async function findLiveVideo(idOrHandle: string): Promise<YtVideo | null> {
           ctx?.logger.warn(
             `youtube: live video lookup failed for ${probe.videoId}: ${e}`,
           );
-          return { id: probe.videoId };
+          return { id: probe.videoId, viewers: probe.viewers };
         }
       }
-      // no API key: the page's live marker is the only signal available
-      return { id: probe.videoId };
+      // no API key: the page's live marker is the only signal available —
+      // carry the page-parsed viewer count so the UI still shows one
+      return { id: probe.videoId, viewers: probe.viewers };
     }
     if (probe) return null; // page resolved to a non-live video -> offline
   } catch (e) {
@@ -242,12 +243,19 @@ const plugin: Plugin = {
           // needing the API key, so detection works even unconfigured
           const video = await findLiveVideo(raw);
           if (!video) return { isLive: false };
-          const viewers = video.liveStreamingDetails?.concurrentViewers;
+          // ponytail: prefer the Data API's concurrentViewers; when the check
+          // ran without an API key (free /live page probe), the page-parsed
+          // "watching now" count fills in.
+          const apiViewers = video.liveStreamingDetails?.concurrentViewers;
+          const viewerCount =
+            apiViewers != null && apiViewers !== '' && Number.isInteger(Number(apiViewers))
+              ? Number(apiViewers)
+              : video.viewers;
           return {
             isLive: true,
             title: video.snippet?.title ?? `${raw} is live`,
             thumbnail: pickThumb(video.snippet?.thumbnails),
-            viewerCount: viewers ? parseInt(viewers, 10) : undefined,
+            viewerCount,
             startedAt: video.liveStreamingDetails?.actualStartTime,
             streamUrl: `${WATCH_URL}${video.id}`,
           };

@@ -20,6 +20,8 @@ export const IPC_CHANNELS = {
   appSaveImage: 'app:save-image',
   appGetMediaInfo: 'app:get-media-info',
   appFindSubtitle: 'app:find-subtitle',
+  appPickSubtitle: 'app:pick-subtitle',
+  appProbeNetworkStream: 'app:probe-network-stream',
   logsWrite: 'logs:write',
   logsList: 'logs:list',
   windowMinimize: 'window:minimize',
@@ -34,10 +36,6 @@ export const IPC_CHANNELS = {
   settingsValidate: 'settings:validate',
   settingsImport: 'settings:import',
   settingsExport: 'settings:export',
-
-  licenseGetStatus: 'license:get-status',
-  licenseActivate: 'license:activate',
-  licenseDeactivate: 'license:deactivate',
 
   pluginsList: 'plugins:list',
   pluginsEnable: 'plugins:enable',
@@ -270,6 +268,28 @@ export interface AppMediaInfoDto {
 export interface AppSubtitleResultDto {
   /** `data:text/vtt;base64,…` — SRT sidecars are converted to VTT. */
   dataUrl: string;
+}
+
+/** Result of the user picking a subtitle file through the native open dialog. */
+export interface AppPickSubtitleResultDto {
+  canceled: boolean;
+  /** Original file name ("movie.en.srt") for the track label. */
+  fileName?: string;
+  /** `data:text/vtt;base64,…` — .srt/.ass/.vtt uploads are normalized to VTT. */
+  dataUrl?: string;
+  /** True when the file came in as a plain-text subtitle (converted client-side). */
+  converted?: boolean;
+}
+
+/** Player-side probe of a network stream URL (VLC "Open Network Stream"). */
+export interface NetworkStreamProbeDto {
+  /** 'hls' = .m3u8 playlist (needs the MSE player), 'direct' = plain progressive media. */
+  engine: 'hls' | 'direct';
+  title?: string;
+  /** True when the playlist/manifest looks like a live stream (EVENT playlist, no ENDLIST). */
+  live?: boolean;
+  /** MIME type of the probe response, when reported. */
+  contentType?: string;
 }
 
 export interface SystemStats {
@@ -802,16 +822,14 @@ export type RecordingEventTypeDto =
   | 'recording-finalized'
   | 'verification-started'
   | 'verification-completed'
-  | 'recording-segment-finished'
-  | 'recording-cap-warning'
-  | 'recording-cap-reached';
+  | 'recording-segment-finished';
 
 export interface RecordingEventDto {
   type: RecordingEventTypeDto;
   jobId?: string;
   recordingId?: string;
   error?: string;
-  /** Event-specific payload (e.g. minutesLeft for cap warnings). */
+  /** Event-specific payload for the emitting handler. */
   data?: Record<string, unknown>;
   timestamp: string;
 }
@@ -827,40 +845,6 @@ export interface RecordingSettingsDto {
   thumbnailEnabled: boolean;
   metadataEnabled: boolean;
   namingTemplate: string;
-}
-
-// --- License / Pro tier -----------------------------------------------------
-
-export type LicenseTierDto = 'free' | 'trial' | 'pro';
-
-export interface LicenseStatusDto {
-  /** Resolved tier: 'pro'/'trial' only when a valid (unexpired) license exists. */
-  tier: LicenseTierDto;
-  /** Email bound into the license key, when present. */
-  email?: string;
-  /** ISO expiry for trial keys; lifetime Pro has none. */
-  expiresAt?: string;
-  /** Whole days left on a trial (0 on the final day). */
-  trialDaysLeft?: number;
-  /** True when a key is stored but invalid/expired (shown in Settings). */
-  expired: boolean;
-  /** Entitlement limits for the resolved tier (drives UI display + gates). */
-  limits: LicenseLimitsDto;
-}
-
-export interface LicenseLimitsDto {
-  /** Max simultaneous recordings. Infinity serializes as null over IPC. */
-  maxConcurrent: number | null;
-  /** Max creators with auto-record enabled. null = unlimited. */
-  maxAutoRecordCreators: number | null;
-  /** Max minutes per recording. null = unlimited. */
-  maxRecordingMinutes: number | null;
-}
-
-export interface LicenseActivateResultDto {
-  ok: boolean;
-  status?: LicenseStatusDto;
-  error?: string;
 }
 
 // --- Dashboard --------------------------------------------------------------
@@ -1224,6 +1208,10 @@ export interface DesktopApi {
     getMediaInfo(request: { filePath: string }): Promise<AppMediaInfoDto>;
     /** Find a .srt/.vtt sidecar next to the video; returns a VTT data URL or null. */
     findSubtitle(request: { filePath: string }): Promise<AppSubtitleResultDto | null>;
+    /** Native file picker for subtitle uploads; returns a VTT data URL or canceled. */
+    pickSubtitle(): Promise<AppPickSubtitleResultDto>;
+    /** Head-HTTP probe of a stream URL — detects HLS playlists vs direct media + liveness. */
+    probeNetworkStream(request: { url: string }): Promise<NetworkStreamProbeDto>;
   };
   windowControls: {
     minimize(): Promise<void>;
@@ -1245,12 +1233,6 @@ export interface DesktopApi {
     importFromFile(): Promise<AppSettings | null>;
     /** Opens a save dialog; returns false on cancel. */
     exportToFile(): Promise<boolean>;
-  };
-  license: {
-    getStatus(): Promise<LicenseStatusDto>;
-    /** Activates a license/trial key; never throws — returns ok:false + error. */
-    activate(key: string): Promise<LicenseActivateResultDto>;
-    deactivate(): Promise<LicenseStatusDto>;
   };
   plugins: {
     list(): Promise<PluginInfoDto[]>;

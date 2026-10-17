@@ -23,8 +23,6 @@ import type {
 } from '@rekordly/shared';
 import type { RecordingRepo, RecordingJobRecord, RecordingRecord } from '@rekordly/database';
 import type { NotificationService } from '../services/notification-service';
-import type { Entitlements } from '../services/entitlements';
-import type { GateNotifier } from '../services/gate-notifier';
 import { YtDlpService, isPidAliveAsync, listRecorderProcessesAsync, parseQualityHeight } from './yt-dlp';
 import type { YtDlpProgress } from './yt-dlp';
 import { isDirectHlsUrl, requiresLiveTranscode } from './backend';
@@ -112,17 +110,6 @@ export interface RecordingServiceOptions {
    */
   getDerivativeCrf?: () => number;
   /**
-   * Pro tier gate: live entitlements read per scheduling decision. When the
-   * tier's concurrency limit is lower than the user setting, the effective
-   * cap is the minimum of the two (free tier clamps to 2).
-   */
-  getEntitlements?: () => Entitlements;
-  /**
-   * Pro tier gate notifications: persistent bell entry + OS notification on
-   * every gate hit (cooldown-managed inside GateNotifier).
-   */
-  getGateNotifier?: () => GateNotifier | undefined;
-  /**
    * ponytail: instant-end floor (see the capture loop). 0 disables the
    * check — fixture-backed tests with tiny media opt out; production uses
    * the default (15s).
@@ -201,8 +188,6 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
   private settings: RecordingSettings;
   private readonly resolveStream?: RecordingServiceOptions['resolveStream'];
   private readonly isLowResourceMode?: () => boolean;
-  private readonly getEntitlements?: () => Entitlements;
-  private readonly getGateNotifier?: () => GateNotifier | undefined;
   private readonly activeRecordings = new Map<string, AbortController>();
   /** Jobs currently being finalized because the live stream ended. */
   private readonly finalizingJobs = new Set<string>();
@@ -271,8 +256,6 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
     this.verifier = new FileVerifier();
     this.resolveStream = options.resolveStream;
     this.isLowResourceMode = options.isLowResourceMode;
-    this.getEntitlements = options.getEntitlements;
-    this.getGateNotifier = options.getGateNotifier;
     this.progressFlushMs = options.progressFlushMs ?? RecordingService.PROGRESS_FLUSH_MS;
     this.getMinFreeBytes = options.getMinFreeBytes;
     this.getDerivativeCrf = options.getDerivativeCrf;
@@ -322,38 +305,18 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
   // --- Lifecycle ------------------------------------------------------------
 
   /**
-   * Effective concurrency cap: Low-Resource Mode forces a single slot; the
-   * Pro-tier entitlement clamps the user setting on the free tier.
+   * Effective concurrency cap: Low-Resource Mode forces a single slot;
+   * otherwise the user setting governs.
    */
   private get effectiveMaxConcurrent(): number {
-    const entitlementCap = this.getEntitlements?.().maxConcurrent;
-    const base =
-      entitlementCap !== undefined
-        ? Math.min(this.settings.maxConcurrent, entitlementCap)
-        : this.settings.maxConcurrent;
+    const base = this.settings.maxConcurrent;
     return this.isLowResourceMode?.() === true ? Math.min(base, 1) : base;
   }
 
-  /**
-   * Pro tier: when the tier (not the user setting / low-resource mode) is
-   * the binding constraint, the refusal message doubles as the upgrade CTA
-   * and the hit is recorded as a persistent gate notification.
-   */
   private maxConcurrentError(): AppError {
-    const entitlementCap = this.getEntitlements?.().maxConcurrent;
-    const tierLimited =
-      entitlementCap !== undefined &&
-      Number.isFinite(entitlementCap) &&
-      entitlementCap < this.settings.maxConcurrent &&
-      this.isLowResourceMode?.() !== true;
-    if (tierLimited) {
-      this.getGateNotifier?.()?.concurrencyLimitReached(entitlementCap);
-    }
     return new AppError({
       code: 'MAX_CONCURRENT_RECORDINGS',
-      message: tierLimited
-        ? `You're already recording ${entitlementCap} streams — that's the free-tier maximum. Upgrade to Pro for unlimited recordings.`
-        : `Maximum concurrent recordings (${this.effectiveMaxConcurrent}) reached`,
+      message: `Maximum concurrent recordings (${this.effectiveMaxConcurrent}) reached`,
       recoverable: true,
     });
   }
@@ -1204,27 +1167,6 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
     stream: StreamObject,
     options: StartRecordingOptions = {},
   ): Promise<void> {
-    // Pro tier gate: clamp the per-recording duration to the tier cap. A
-    // user-requested longer duration (or none) is shortened on the free
-    // tier; Pro (Infinity) leaves options untouched.
-    const tierCapMinutes = this.getEntitlements?.().maxRecordingMinutes;
-    if (
-      tierCapMinutes !== undefined &&
-      Number.isFinite(tierCapMinutes) &&
-      (options.durationMinutes === undefined ||
-        options.durationMinutes <= 0 ||
-        options.durationMinutes > tierCapMinutes)
-    ) {
-      options = {
-        ...options,
-        durationMinutes: tierCapMinutes,
-        // ponytail: the free-tier cap must END the recording, not chain a
-        // new segment — segmentMinutes is suppressed so the cap-reached
-        // completion is final.
-        segmentMinutes: undefined,
-      };
-    }
-
     const controller = new AbortController();
     this.activeRecordings.set(jobId, controller);
     // plan §5: each pipeline run owns a fresh worker lifecycle starting QUEUED.
@@ -1272,22 +1214,6 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
           options.durationMinutes * 60 * 1000 + 15_000,
         );
         watchdog.unref?.();
-
-        // Pro tier: warn the user 2 minutes before the free-tier cap ends
-        // the recording, so the stop never comes as a surprise.
-        const warningMs = (options.durationMinutes - 2) * 60 * 1000;
-        if (warningMs > 0) {
-          const capWarning = setTimeout(() => {
-            this.emitEvent({
-              type: 'recording-cap-warning',
-              jobId,
-              data: { minutesLeft: 2 },
-              timestamp: new Date().toISOString(),
-            });
-            this.getGateNotifier?.()?.capWarning(jobId, stream.title, 2);
-          }, warningMs);
-          capWarning.unref?.();
-        }
       }
 
       // ponytail: segment-splitting watchdog — mirrors the duration watchdog
@@ -1685,30 +1611,6 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
         });
       }
 
-      // Pro tier: when the tier duration cap (not a user stop-after or a
-      // segment split) ended the recording, tell the UI so it can show the
-      // upgrade CTA. The file above is already finalized and playable.
-      const tierCapMinutes = this.getEntitlements?.().maxRecordingMinutes;
-      const capEndedByTier =
-        tierCapMinutes !== undefined &&
-        Number.isFinite(tierCapMinutes) &&
-        downloadResult.durationCapReached &&
-        !chainable &&
-        options.resumeFrom === undefined;
-      if (capEndedByTier) {
-        this.emitEvent({
-          type: 'recording-cap-reached',
-          jobId,
-          recordingId,
-          data: { minutes: tierCapMinutes },
-          timestamp: new Date().toISOString(),
-        });
-        this.getGateNotifier?.()?.capReached(
-          jobId,
-          stream.title,
-          tierCapMinutes,
-        );
-      }
     } catch (error) {
       // ponytail: a user pause stops the downloader and its pending download
       // promise rejects here. The row already says 'paused' — keep it that

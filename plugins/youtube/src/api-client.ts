@@ -1,3 +1,5 @@
+import { extractViewerCount } from '@rekordly/plugin-sdk';
+
 const API_BASE = 'https://www.googleapis.com/youtube/v3';
 
 export interface YtThumbnails {
@@ -36,6 +38,13 @@ export interface YtVideo {
     actualStartTime?: string;
     concurrentViewers?: string;
   };
+  /**
+   * Concurrent viewers parsed straight from the watch/live page HTML —
+   * only present on the minimal probe objects returned when the Data API
+   * key is missing or quota-exhausted (the API path carries
+   * `liveStreamingDetails.concurrentViewers` instead).
+   */
+  viewers?: number;
 }
 
 export interface YtSearchResultItem {
@@ -175,6 +184,8 @@ const BROWSER_HEADERS: Record<string, string> = {
 export interface LiveProbeResult {
   videoId: string;
   isLive: boolean;
+  /** Live "X watching now" figure parsed from the page (best-effort). */
+  viewers?: number;
 }
 
 export async function probeLivePage(
@@ -194,5 +205,13 @@ export async function probeLivePage(
   const htmlMatch = html.match(/"videoId":"([\w-]{11})"/);
   const videoId = urlMatch?.[1] ?? htmlMatch?.[1];
   if (!videoId) return null;
-  return { videoId, isLive: /"isLive"\s*:\s*true/.test(html) };
+  const isLive = /"isLive"\s*:\s*true/.test(html);
+  return {
+    videoId,
+    isLive,
+    // ponytail: live watch pages carry the concurrent viewer count as
+    // "X watching now" text in the player data — generic SDK extraction
+    // reads it for free, so the no-API-key path still reports a count.
+    viewers: isLive ? extractViewerCount(html) : undefined,
+  };
 }

@@ -41,9 +41,9 @@ Each event has its own toggle under **Settings → Notifications → Push to pho
 
 ## Remote control from Telegram
 
-On Telegram, pushes can do more than inform — with [Rekordly Pro](https://rekordly.in/pricing), live and recording pushes carry **interactive buttons**: start a recording (with defaults or the full options wizard), and pause, resume, or stop a running capture, all from the chat. Discord webhooks are one-way only, so buttons are a Telegram exclusive.
+On Telegram, pushes can do more than inform — live and recording pushes carry **interactive buttons**: start a recording (with defaults or the full options wizard), and pause, resume, or stop a running capture, all from the chat. Discord webhooks are one-way only, so buttons are a Telegram exclusive.
 
-Push notifications themselves are free for everyone; see [Remote Control](remote-control) for the full button list and security notes.
+Everything is included in the free app; see [Remote Control](remote-control) for the full button list and security notes.
 
 ## Test before you rely on it
 

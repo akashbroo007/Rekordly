@@ -1,6 +1,10 @@
 # Environment variables
 .env
 
+# Wrangler local dev secrets
+.dev.vars
+.wrangler/
+
 # Dependencies
 node_modules/
 

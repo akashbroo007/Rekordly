@@ -38,7 +38,10 @@ function cspPlugin(): Plugin {
         // without it the packaged app blocks every library thumbnail and
         // video (dev has no CSP, which is why this only broke in builds).
         "img-src 'self' data: blob: sf-media:; font-src 'self' data:; " +
-        "media-src 'self' sf-media:; connect-src 'self'";
+        // ponytail: hls.js fetches playlists/segments over the sf-media relay
+        // (XHR/fetch → connect-src) and feeds MSE buffers (media-src); its
+        // transmuxer runs in a web worker (worker-src blob:).
+        "media-src 'self' sf-media: blob:; connect-src 'self' sf-media:; worker-src 'self' blob:;"
       return html.replace(
         '<head>',
         `<head>\n    <meta http-equiv="Content-Security-Policy" content="${csp}" />`,

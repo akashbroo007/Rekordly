@@ -27,8 +27,7 @@ If an SDK improvement is needed, implement it in a platform-agnostic way.
 
 # Target Platform
 
-kick.com
-
+www.tango.me
 ---
 
 # Plugin Responsibilities
@@ -144,6 +143,35 @@ Reference implementation: `plugins/bongacams/src/index.ts` (`withSmartRoute`, `f
 
 ---
 
+# Viewer Count (global SDK helper)
+
+Every monitoring card in the desktop app shows the live viewer count — but only
+when the plugin reports one. The Plugin SDK ships a platform-agnostic extractor
+so you do NOT hand-roll a parser per platform and never omit the count by accident:
+
+1. **Import `extractViewerCount` from `@rekordly/plugin-sdk`** and run it over
+   ANY payload your live check already fetches (JSON bodies, SSR preloaded
+   state, HTML pages). It recognizes the field names all platforms use
+   (`viewer_count`, `num_viewers`, `concurrentViewers`, `viewers`,
+   `watching_now`, `connectionCount`, …), scans nested JSON (depth-limited),
+   and parses HTML attributes plus `1,234 watching`-style prose.
+2. **No extra network requests.** The count must come from a payload the check
+   already fetched — monitoring polls are hot; one small extra request per tick
+   per creator is a regression, not a feature.
+3. **If the payload carries no viewer field, omit `viewerCount`.** The UI hides
+   the count when it is absent — never report follower/fan totals as viewers.
+   The helper ignores follower-count-like keys (`loversCount`,
+   `followersCount`, …) and only accepts plausible integers (0..5,000,000),
+   so a fan total can never show up as "3.5K watching".
+4. **Wire it into `liveDetection.getLiveStatus`** on the payload the check
+   already has. Reference implementations: `plugins/camsoda/src/api.ts`
+   (vtoken payload), `plugins/bongacams/src/index.ts` (AMF room data),
+   `plugins/cam4/src/index.ts` (streamInfo), `plugins/streamate/src/index.ts`
+   and `plugins/jerkmate/src/index.ts` (live manifest). Unit tests:
+   `packages/plugin-sdk/src/viewer-count.test.ts`.
+
+---
+
 # Metadata
 
 Return as much metadata as possible, including:
@@ -153,7 +181,8 @@ Return as much metadata as possible, including:
 - Stream Title (if available)
 - Thumbnail
 - Stream Start Time
-- Viewer Count (if available)
+- Viewer Count (if available — extract with the global `extractViewerCount`
+  SDK helper from a payload the live check already fetches)
 - Categories/Tags (if available)
 - Available Qualities
 - Required Headers
@@ -222,6 +251,8 @@ Before completion:
 - Monitoring works.
 - Live detection works.
 - Stream extraction works.
+- Viewer count is surfaced via the global `extractViewerCount` SDK helper over
+  a payload the check already fetches — no extra requests, no follower totals.
 - Long-lived resources (if any) use `ProxyRegistry` keyed by stable model
   identity — burst-starting 3+ recordings kills none of them.
 - No core architecture violations.

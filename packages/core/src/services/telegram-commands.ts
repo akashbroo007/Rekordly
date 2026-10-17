@@ -7,21 +7,11 @@ import type { PushNotificationsSettings } from '@rekordly/shared';
  * one-way only (they cannot carry buttons), so interactive control is a
  * Telegram exclusive; Discord keeps the "open the app" text.
  *
- * Tiering: push NOTIFICATIONS are free for everyone, but the interactive
- * control buttons (Record / options wizard / Pause / Resume / Stop) are a
- * Rekordly Pro feature — free users get plain text pushes plus an upsell
- * button, and command taps from any chat are answered with the upgrade hint.
- * The gate is read live per message, so activating/deactivating a license
- * takes effect on the next push without a restart.
- *
  * Security: the bot only reacts to chats in `allowedChatIds` (the chat id the
  * user detected/configured). Any other chat gets ignored. A single poller
  * runs per app instance; every API call is timeout-bounded and failures are
  * logged, never thrown — chat control must never destabilize the app.
  */
-
-/** Where the upsell button sends free-tier users. */
-const PRO_PRICING_URL = 'https://rekordly.in/pricing';
 
 const POLL_TIMEOUT_S = 25; // long-poll window
 const POLL_ERROR_DELAY_MS = 5_000;
@@ -46,11 +36,6 @@ export interface TelegramCommandDeps {
   /** Security gate: only these chat ids may control the app. */
   getAllowedChatIds: () => string[];
   /**
-   * Live tier gate — remote control buttons are Pro-only (trial counts as
-   * Pro, same rule as the recording entitlements). Checked per message.
-   */
-  isPro: () => boolean;
-  /**
    * Starts a recording with the exact Record-dialog option surface.
    * Resolves the full creator row (name, plugin, monitor id) from target.
    */
@@ -70,7 +55,7 @@ export interface TelegramCommandDeps {
 interface InlineButton {
   text: string;
   callback_data?: string;
-  /** URL buttons (e.g. the Pro upsell) use `url` instead of callback data. */
+  /** URL buttons use `url` instead of callback data. */
   url?: string;
 }
 
@@ -153,25 +138,18 @@ export class TelegramCommandService {
   }): Promise<void> {
     const { token, chatIds } = this.resolveChannel();
     if (token === '' || chatIds.length === 0) return;
-    const pro = this.deps.isPro();
     const text =
       `🔴 ${input.creatorName} is LIVE on ${input.platformId}\n` +
       (input.title !== undefined && input.title !== '' ? `"${input.title}"\n` : '') +
       (input.autoRecord
         ? '⏺️ Recording started automatically.'
-        : pro
-          ? 'Tap Record to capture it from here.'
-          : 'Open the app to record — remote control from chat is a Pro feature.');
-    const keyboard: InlineButton[][] = !pro
-      ? input.autoRecord
-        ? []
-        : [[{ text: '⭐ Get Pro to record from chat', url: PRO_PRICING_URL }]]
-      : input.autoRecord
-        ? [[{ text: '⏹ Stop recording', callback_data: callback('stop', input.creatorDbId) }]]
-        : [
-            [{ text: '⏺️ Record (defaults)', callback_data: callback('rec', input.creatorDbId) }],
-            [{ text: '⚙️ Record with options…', callback_data: callback('opts', input.creatorDbId) }],
-          ];
+        : 'Tap Record to capture it from here.');
+    const keyboard: InlineButton[][] = input.autoRecord
+      ? [[{ text: '⏹ Stop recording', callback_data: callback('stop', input.creatorDbId) }]]
+      : [
+          [{ text: '⏺️ Record (defaults)', callback_data: callback('rec', input.creatorDbId) }],
+          [{ text: '⚙️ Record with options…', callback_data: callback('opts', input.creatorDbId) }],
+        ];
     await Promise.allSettled(
       chatIds.map((chatId) =>
         tgFetch(token, 'sendMessage', {
@@ -195,17 +173,14 @@ export class TelegramCommandService {
   }): Promise<void> {
     const { token, chatIds } = this.resolveChannel();
     if (token === '' || chatIds.length === 0) return;
-    // Pause/Resume/Stop are remote control — Pro only. Free users get the
-    // same plain notification text without buttons.
-    const keyboard: InlineButton[][] = this.deps.isPro()
-      ? [
-          [
-            { text: '⏸ Pause', callback_data: callback('pause', input.jobId) },
-            { text: '▶️ Resume', callback_data: callback('resume', input.jobId) },
-            { text: '⏹ Stop', callback_data: callback('stopjob', input.jobId) },
-          ],
-        ]
-      : [];
+    // Remote control buttons: pause/resume/stop straight from the push.
+    const keyboard: InlineButton[][] = [
+      [
+        { text: '⏸ Pause', callback_data: callback('pause', input.jobId) },
+        { text: '▶️ Resume', callback_data: callback('resume', input.jobId) },
+        { text: '⏹ Stop', callback_data: callback('stopjob', input.jobId) },
+      ],
+    ];
     await Promise.allSettled(
       chatIds.map((chatId) =>
         tgFetch(token, 'sendMessage', {
@@ -273,13 +248,6 @@ export class TelegramCommandService {
         () => undefined,
       );
 
-    // Tier gate: buttons on older pushes may outlive a license — answer with
-    // the upgrade hint instead of executing the command.
-    if (!this.deps.isPro()) {
-      this.logger.info({ chatId: chatKey }, 'telegram command ignored — remote control requires Pro');
-      await ack(`Remote control is a Rekordly Pro feature — see ${PRO_PRICING_URL}.`);
-      return;
-    }
     const allowed = new Set(this.deps.getAllowedChatIds().map((id) => id.trim()).filter((id) => id !== ''));
     const configured = this.deps
       .getSettings()

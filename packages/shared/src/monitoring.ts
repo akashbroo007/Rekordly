@@ -67,6 +67,13 @@ export interface MonitoringEvent {
   pluginId?: string;
   jobId?: string;
   isLive?: boolean;
+  /**
+   * ponytail: true on creator-live events re-emitted during DEGRADED
+   * (unknown) checks — the stream was not re-verified, so the host should
+   * treat the start as best-effort and swallow transient extraction errors
+   * quietly (the next degraded check re-arms another attempt).
+   */
+  retryable?: boolean;
   error?: string;
   data?: MonitoringCheckResult;
   /** Present on `stats-updated` events: snapshot of dashboard counters. */

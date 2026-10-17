@@ -699,16 +699,22 @@ function LiveNowStrip({ onQuickDownload }: { onQuickDownload: () => void }) {
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">{creator.displayName}</p>
-                    <p className="flex items-center gap-1 text-[11px] tabular-nums text-foreground-muted">
-                      <Eye size={11} />
-                      {result?.viewerCount != null ? formatViewerCount(result.viewerCount) : creator.pluginId}
-                    </p>
+                    {result?.viewerCount != null ? (
+                      <p className="flex items-center gap-1 text-[11px] tabular-nums text-foreground-muted">
+                        <Eye size={11} />
+                        {formatViewerCount(result.viewerCount)}
+                      </p>
+                    ) : (
+                      // ponytail: the platform has no viewer count (or the
+                      // payload didn't carry one) — show the platform name as
+                      // plain text, not an eye-icon "count".
+                      <p className="truncate text-[11px] text-foreground-muted">{creator.pluginId}</p>
+                    )}
                   </div>
                   <Badge variant="success" className="shrink-0">
                     LIVE
                   </Badge>
                 </div>
-                {result?.title && <p className="truncate text-[11px] text-foreground-secondary">{result.title}</p>}
                 <div className="mt-auto">
                   {isRecording ? (
                     <Badge variant="success" className="w-full justify-center py-1">

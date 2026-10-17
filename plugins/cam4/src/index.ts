@@ -13,6 +13,7 @@ import type {
   SettingDef,
   StreamObject,
 } from '@rekordly/plugin-sdk';
+import { extractViewerCount } from '@rekordly/plugin-sdk';
 import type { Agent } from 'node:http';
 import * as https from 'https';
 import * as http from 'http';
@@ -40,6 +41,14 @@ const PROFILE_INFO_ENDPOINT = (username: string): string =>
 
 // ponytail: cookie jar lives in memory only, reset on app restart
 let cookieJar: Record<string, string> = {};
+
+/**
+ * ponytail: last DEFINITIVE live answer per identifier (broadcast up / down).
+ * Used as the fallback `lastKnownLive` belief on degraded (transport-failed)
+ * checks so the host can still fire auto-record for a creator that was live
+ * when the network died. In-memory only — a restart simply relearns.
+ */
+const lastDefinitiveLive = new Map<string, boolean>();
 
 const SETTINGS_SCHEMA: Record<string, SettingDef> = {
   cookies: {
@@ -290,6 +299,8 @@ export interface StreamInfo {
   /** Signed HLS master playlist minted by the site — valid while live. */
   cdnUrl: string;
   canUseCdn: boolean;
+  /** Live viewer count when the streamInfo payload carries one (best-effort). */
+  viewerCount?: number;
 }
 
 export interface ProfileInfo {
@@ -434,7 +445,17 @@ export async function fetchStreamInfoSmart(
     // (same reading as the streamlink Cam4 plugin).
     return { ok: false, offline: true };
   }
-  return { ok: true, stream: { cdnUrl, canUseCdn }, usedProxy };
+  return {
+    ok: true,
+    stream: {
+      cdnUrl,
+      canUseCdn,
+      // ponytail: generic viewer-count extraction over the payload the check
+      // already fetched — no extra request. Surfaced only when present.
+      viewerCount: extractViewerCount(json),
+    },
+    usedProxy,
+  };
 }
 
 export async function fetchProfileInfoSmart(
@@ -667,16 +688,18 @@ const plugin: Plugin = {
           const resolved = await resolveStreamSmart(identifier, username);
           if (resolved === null) {
             ctx?.logger.debug(`cam4: ${username} broadcast down (204/no CDN) — offline`);
+            lastDefinitiveLive.set(identifier, false);
             return { isLive: false };
           }
+          lastDefinitiveLive.set(identifier, true);
           ctx?.logger.debug(`cam4: ${username} live (${resolved.variants.length + 1} encodings)`);
           return {
             isLive: true,
             title: `${username} is live`,
-            // ponytail: the REST payloads carry no live viewer count or room
-            // title — omit rather than show a wrong number (the UI only
-            // shows the count when the plugin provides one).
-            viewerCount: undefined,
+            // ponytail: generic viewer-count extraction over the streamInfo
+            // payload the check already fetched — surfaced only when the
+            // payload really carries one (the UI hides unknown counts).
+            viewerCount: resolved.stream.viewerCount,
             streamUrl: resolved.url,
           };
         } catch (e) {
@@ -687,10 +710,27 @@ const plugin: Plugin = {
           // stopForCreator: healthy recordings were finalized mid-capture
           // by a network blip. The host keeps the previous state and
           // retries instead.
+          //
+          // Best-effort liveness belief for the host: the cheap directory
+          // endpoint sometimes answers even when the stream endpoint fails,
+          // and the last definitive answer covers the rest. Without it the
+          // host NEVER fired auto-record for a live creator whose checks
+          // kept erroring (ECONNRESET / TLS resets) until one clean check
+          // happened to land.
+          let lastKnownLive = lastDefinitiveLive.get(identifier);
+          try {
+            const probe = await fetchPerformerSmart(identifier, username);
+            if (probe.info !== null) {
+              lastKnownLive = probe.info.online;
+              lastDefinitiveLive.set(identifier, probe.info.online);
+            }
+          } catch {
+            /* probe failed too — keep the cached belief */
+          }
           ctx?.logger.warn(
-            `cam4: ${username} check degraded (site unreachable) — host will retry: ${msg}`,
+            `cam4: ${username} check degraded (site unreachable) — host will retry: ${msg}${lastKnownLive === true ? ' (believed live)' : ''}`,
           );
-          return { isLive: false, unknown: true };
+          return { isLive: false, unknown: true, lastKnownLive };
         }
       },
     },

@@ -14,7 +14,6 @@ import {
   Gauge,
   Code,
   AlertTriangle,
-  BadgeCheck,
   FolderOpen,
   RefreshCw,
   ShieldCheck,
@@ -36,7 +35,6 @@ import { PrivacyPolicyContent } from '../components/settings/privacy-policy';
 import { TermsOfServiceContent } from '../components/settings/terms-of-service';
 import { SupportedSitesContent } from '../components/settings/supported-sites';
 import { CloudStorageSettings } from '../components/settings/cloud-storage-settings';
-import { LicenseSettings } from '../components/settings/license-settings';
 import { BugReportSettings } from '../components/settings/bug-report';
 
 
@@ -73,7 +71,6 @@ type SettingsTab =
   | 'performance'
   | 'developer'
   | 'bug-report'
-  | 'license'
   | 'privacy'
   | 'terms'
   | 'sites';
@@ -90,7 +87,6 @@ const SETTINGS_TABS: { id: SettingsTab; label: string; icon: typeof Settings }[]
   { id: 'performance', label: 'Performance', icon: Gauge },
   { id: 'developer', label: 'Developer', icon: Code },
   { id: 'bug-report', label: 'Bug Report', icon: Bug },
-  { id: 'license', label: 'License', icon: BadgeCheck },
   { id: 'privacy', label: 'Privacy Policy', icon: ShieldCheck },
   { id: 'terms', label: 'Terms of Service', icon: FileText },
   { id: 'sites', label: 'Supported Sites', icon: Globe },
@@ -835,8 +831,6 @@ function SettingsForm({
       {activeTab === 'sites' && <SupportedSitesContent />}
 
       {activeTab === 'bug-report' && <BugReportSettings />}
-
-      {activeTab === 'license' && <LicenseSettings />}
 
       {/* Save bar */}
       <div className="sticky bottom-0 z-10 mt-2 flex shrink-0 items-center justify-between gap-2 border-t border-border bg-canvas py-3">

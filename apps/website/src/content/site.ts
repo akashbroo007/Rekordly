@@ -22,7 +22,6 @@ export const navLinks = [
   { label: "Docs", href: "/docs" },
   { label: "Marketplace", href: "/marketplace" },
   { label: "Download", href: "/download" },
-  { label: "Pricing", href: "/pricing" },
 ] as const;
 
 /** Secondary links live in the footer (and the mobile menu), not the navbar. */
@@ -122,9 +121,9 @@ export const features = [
       "Get pinged on your phone the moment a creator goes live or a recording starts, finishes, or fails — via Discord or Telegram. Fire-and-forget delivery that never delays a recording.",
   },
   {
-    title: "Remote Control (Pro)",
+    title: "Remote Control via Telegram",
     description:
-      "With Pro, the Telegram push becomes a control surface: start a recording with one tap — defaults or the full options wizard — and pause, resume, or stop a running capture straight from your phone.",
+      "The Telegram push becomes a control surface: start a recording with one tap — defaults or the full options wizard — and pause, resume, or stop a running capture straight from your phone.",
   },
   {
     title: "Post-Recording Automation",
@@ -172,7 +171,7 @@ export const faqs = [
   {
     question: "Is Rekordly really free?",
     answer:
-      "Yes — for personal, educational, and other noncommercial use, under the PolyForm Noncommercial license. The free tier includes unlimited creator monitoring, unlimited downloads, push notifications via Discord or Telegram, and full access to the library and plugins. Live recordings are capped at 15 minutes, up to 5 at a time, with auto-record on 2 creators — Rekordly Pro removes those limits for people who record everything and adds remote control from Telegram. Companies and other commercial users need a paid commercial license — see the License page or contact us.",
+      "Yes — for personal, educational, and other noncommercial use, under the PolyForm Noncommercial license. Everything is included: unlimited creator monitoring, unlimited live recordings, unlimited downloads, push notifications with remote control via Telegram, and full access to the library and plugins. Companies and other commercial users need a paid commercial license — see the License page or contact us.",
   },
   {
     question: "Do I need to install ffmpeg or yt-dlp?",
@@ -271,7 +270,7 @@ export const roadmap: RoadmapGroup[] = [
       {
         title: "Push notifications & Telegram remote control",
         description:
-          "Discord and Telegram pushes for live events and recordings — fire-and-forget, free on every tier. Pro adds interactive control: record, pause, resume, and stop from the Telegram buttons.",
+          "Discord and Telegram pushes for live events and recordings — fire-and-forget, plus interactive control: record, pause, resume, and stop from the Telegram buttons.",
         target: "0.1.x",
       },
       {

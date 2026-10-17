@@ -222,6 +222,10 @@ const plugin: Plugin = {
                 isLive: true,
                 title: cached?.title ?? `${username} is live`,
                 thumbnail: cached?.thumbnailUrl ?? cached?.avatarUrl,
+                // ponytail: generic viewer-count extraction over the vtoken
+                // payload the check already fetched — no extra request. The
+                // UI only shows the count when the plugin provides one.
+                viewerCount: vtoken.viewers,
                 streamUrl,
               };
             }

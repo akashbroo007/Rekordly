@@ -39,4 +39,4 @@ When a tracked creator goes live, Rekordly can notify you through:
 
 Configure the first two under **Settings → Notifications**. Push channels (Discord webhook / Telegram bot) live in **Settings → Notifications → Push to phone** — see [Push Notifications](push-notifications).
 
-On Telegram, the "creator went live" push doubles as a remote control: [Pro](remote-control) users get **Record**, **Pause**, and **Stop** buttons right on the message, so a stream can be captured without ever opening the app.
+On Telegram, the "creator went live" push doubles as a remote control: **Record**, **Pause**, and **Stop** buttons appear right on the message, so a stream can be captured without ever opening the app.

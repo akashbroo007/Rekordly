@@ -23,6 +23,8 @@ import {
   Pause,
   PictureInPicture2,
   Play,
+  Plus,
+  Radio,
   Repeat,
   RotateCcw,
   RotateCw,
@@ -35,6 +37,7 @@ import {
   X,
 } from 'lucide-react';
 import { formatDuration } from '@rekordly/shared/format';
+import Hls from 'hls.js';
 import type { EditorTimelineDto, RecordingDto } from '@rekordly/shared/contracts';
 import { EditorPanel } from './editor/editor-panel';
 import { useToastStore } from '../stores/toast-store';
@@ -42,6 +45,21 @@ import { useToastStore } from '../stores/toast-store';
 /** Convert an absolute local file path into a sf-media:// URL. */
 export function toMediaUrl(filePath: string): string {
   return `sf-media:///${filePath.replace(/\\/g, '/').replace(/^\/+/, '')}`;
+}
+
+const REMOTE_PREFIX = '/remote/';
+
+/**
+ * Renderer twin of the main-process relay encoder (media-protocol.ts):
+ * wraps a remote http(s) URL into an sf-media relay URL so CSP/CORS-safe
+ * network playback (HLS playlists + segments, direct files) works.
+ */
+export function toRelayUrl(url: string): string {
+  const bytes = new TextEncoder().encode(url);
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  const b64 = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `sf-media://${REMOTE_PREFIX}${b64}`;
 }
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -444,6 +462,12 @@ export function VideoPlayerDialog({
   recordingId,
   fps,
   streamType,
+  /** ponytail: VLC-style network stream — play a remote URL instead of filePath. */
+  streamUrl,
+  /** Probe result: 'hls' needs hls.js (MSE); 'direct' uses the plain element. */
+  streamEngine,
+  /** True when the probe classified the playlist as live (EVENT, no ENDLIST). */
+  streamLive,
   initialEditing,
   previousRecording,
   nextRecording,
@@ -466,6 +490,12 @@ export function VideoPlayerDialog({
    * it off/on with the glasses button or the W key regardless.
    */
   streamType?: string | null;
+  /** Remote http(s) URL to play (VLC-style network stream). Empty = local file. */
+  streamUrl?: string | null;
+  /** Which playback engine the network stream needs (from the probe). */
+  streamEngine?: 'hls' | 'direct';
+  /** Whether the network stream is live (hides the duration, shows a LIVE badge). */
+  streamLive?: boolean;
   /** Open directly in edit mode (e.g. from Library → Trim/Edit). */
   initialEditing?: boolean;
   /** #10 playlist: neighbours in the current library view. */
@@ -494,8 +524,13 @@ export function VideoPlayerDialog({
   const [maximized, setMaximized] = useState(false);
   const [editing, setEditing] = useState(initialEditing ?? false);
   const canEdit = recordingId !== undefined && recordingId !== null;
+  // --- Network stream playback (VLC-style) ----------------------------------
+  const isNetwork = streamUrl !== undefined && streamUrl !== null && streamUrl !== '';
+  const relayUrl = isNetwork ? toRelayUrl(streamUrl) : '';
+  const liveStream = isNetwork && streamLive === true;
   const pushToast = useToastStore((state) => state.push);
   const [grabbingFrame, setGrabbingFrame] = useState(false);
+
   // #4 loop: R cycles whole-video loop; [ ] mark A/B points (both set = active).
   const [loopAll, setLoopAll] = useState(false);
   const [loopA, setLoopA] = useState<number | null>(null);
@@ -575,7 +610,7 @@ export function VideoPlayerDialog({
   const [mediaInfo, setMediaInfo] = useState<{ resolution: string; videoCodec: string; audioCodec: string; bitrate: number; fps: number } | null>(null);
 
   useEffect(() => {
-    if (!open || filePath === '') return;
+    if (!open || filePath === '' || isNetwork) return;
     let alive = true;
     setMediaInfo(null);
     window.desktop.app
@@ -592,18 +627,25 @@ export function VideoPlayerDialog({
   }, [open, filePath]);
 
   // #11 subtitles — auto-load a sidecar .srt/.vtt when present, CC on by default.
+  // Network streams have no sidecar; subtitles come from the upload picker.
   const trackRef = useRef<HTMLTrackElement>(null);
   const [subtitleUrl, setSubtitleUrl] = useState<string | null>(null);
+  const [subtitleLabel, setSubtitleLabel] = useState<string | null>(null);
   const [captionsOn, setCaptionsOn] = useState(true);
+  const [pickingSubtitle, setPickingSubtitle] = useState(false);
   useEffect(() => {
-    if (!open || filePath === '') return;
+    if (!open || isNetwork) return;
     let alive = true;
     setSubtitleUrl(null);
+    setSubtitleLabel(null);
     setCaptionsOn(true);
     window.desktop.app
       .findSubtitle({ filePath })
       .then((result) => {
-        if (alive) setSubtitleUrl(result?.dataUrl ?? null);
+        if (alive) {
+          setSubtitleUrl(result?.dataUrl ?? null);
+          setSubtitleLabel(result !== null ? 'Sidecar' : null);
+        }
       })
       .catch(() => {
         if (alive) setSubtitleUrl(null);
@@ -611,11 +653,32 @@ export function VideoPlayerDialog({
     return () => {
       alive = false;
     };
-  }, [open, filePath]);
+  }, [open, filePath, isNetwork]);
   useEffect(() => {
     const trackElement = trackRef.current;
     if (trackElement !== null) trackElement.track.mode = captionsOn ? 'showing' : 'hidden';
   }, [captionsOn, subtitleUrl]);
+  /** Opens the native picker, converts to VTT in the main process, attaches as the active track. */
+  const pickSubtitle = useCallback(async (): Promise<void> => {
+    try {
+      setPickingSubtitle(true);
+      const result = await window.desktop.app.pickSubtitle();
+      if (result.canceled || result.dataUrl === undefined) return;
+      setSubtitleUrl(result.dataUrl);
+      setSubtitleLabel(result.fileName ?? 'Uploaded subtitles');
+      setCaptionsOn(true);
+      pushToast({
+        level: 'info',
+        title: 'Subtitles loaded',
+        message: `${result.fileName ?? 'track'}${result.converted ? ' (converted to WebVTT)' : ''}`,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      pushToast({ level: 'error', title: 'Subtitle failed', message: msg.slice(0, 200) });
+    } finally {
+      setPickingSubtitle(false);
+    }
+  }, [pushToast]);
   const [editorWidth, setEditorWidth] = useState<number>(loadEditorWidth);
   const [resizing, setResizing] = useState(false);
   const resizingRef = useRef(false);
@@ -721,6 +784,70 @@ export function VideoPlayerDialog({
   useEffect(() => () => {
     if (osdTimer.current !== null) clearTimeout(osdTimer.current);
   }, []);
+
+  // --- hls.js attachment -----------------------------------------------------
+  // ponytail: hls.js feeds MSE buffers; the <video src> stays empty and the
+  // instance is destroyed on close/source swap. Native HLS (Safari) falls
+  // back to a plain relayed src.
+  const hlsRef = useRef<Hls | null>(null);
+  const [hlsEngine, setHlsEngine] = useState(false);
+  useEffect(() => {
+    if (!open || !isNetwork || streamEngine !== 'hls') {
+      setHlsEngine(false);
+      return;
+    }
+    let disposed = false;
+    let instance: Hls | null = null;
+    const attach = async (): Promise<void> => {
+      const video = videoRef.current;
+      if (video === null) return;
+      if (Hls.isSupported()) {
+        instance = new Hls({ enableWorker: true, lowLatencyMode: liveStream, backBufferLength: liveStream ? 30 : 90 });
+        instance.loadSource(relayUrl);
+        instance.attachMedia(video);
+        instance.on(Hls.Events.ERROR, (_event, data) => {
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                showOsd('Network error — retrying…');
+                instance?.startLoad();
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                showOsd('Media error — recovering…');
+                instance?.recoverMediaError();
+                break;
+              default:
+                setError(true);
+                instance?.destroy();
+            }
+          }
+        });
+        if (!disposed) {
+          hlsRef.current = instance;
+          setHlsEngine(true);
+        } else {
+          instance.destroy();
+        }
+      } else if (video.canPlayType('application/vnd.apple.mpegurl') !== '') {
+        // Safari-style native HLS: point src at the relayed playlist directly.
+        video.src = relayUrl;
+        setHlsEngine(false);
+      } else {
+        setError(true);
+      }
+    };
+    void attach();
+    return () => {
+      disposed = true;
+      if (hlsRef.current !== null) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+      instance?.destroy();
+      setHlsEngine(false);
+    };
+    // ponytail: (re)attach when the player opens or the stream changes.
+  }, [open, isNetwork, streamEngine, relayUrl, liveStream, showOsd]);
 
   // --- Dreamcam-style VR interaction ---------------------------------------
   // Drag = grab the scene and pull it (drag right → look left, like the
@@ -852,7 +979,7 @@ export function VideoPlayerDialog({
   const skipSpansRef = useRef<Array<{ start: number; end: number }> | null>(null);
   skipSpansRef.current = skipQuiet ? quietSpans : null;
   useEffect(() => {
-    if (!open || !skipQuiet || quietSpans !== null || quietLoading) return;
+    if (!open || isNetwork || !skipQuiet || quietSpans !== null || quietLoading) return;
     setQuietLoading(true);
     showOsd('Analyzing audio…');
     window.desktop.editor
@@ -870,11 +997,11 @@ export function VideoPlayerDialog({
         showOsd('Silence detection failed');
       })
       .finally(() => setQuietLoading(false));
-  }, [open, skipQuiet, quietSpans, quietLoading, recordingId, filePath, showOsd]);
+  }, [open, isNetwork, skipQuiet, quietSpans, quietLoading, recordingId, filePath, showOsd]);
 
   // #13 markers — M drops a bookmark at the playhead, Shift+M removes the
   // nearest one; ticks render on the seek bar and jump on click.
-  const markerKey = markersKey(recordingId, filePath);
+  const markerKey = isNetwork ? `net:${streamUrl}` : markersKey(recordingId, filePath);
   const [markers, setMarkers] = useState<number[]>([]);
   useEffect(() => {
     if (!open) return;
@@ -950,7 +1077,8 @@ export function VideoPlayerDialog({
   const grabFrame = useCallback(
     async (copy: boolean) => {
       const v = videoRef.current;
-      if (v === null || filePath === '' || grabbingFrame) return;
+      // Network streams can't be ffmpeg-probed locally — screenshots disabled.
+      if (v === null || filePath === '' || isNetwork || grabbingFrame) return;
       setGrabbingFrame(true);
       try {
         const { dataUrl } = await window.desktop.app.extractFrame({ filePath, seconds: v.currentTime });
@@ -1107,13 +1235,13 @@ export function VideoPlayerDialog({
           else if (quietSpans !== null) showOsd(`${quietSpans.length} quiet spans skipped`);
           break;
         }
-        // #11 captions toggle — always responds, even without a sidecar.
+        // #11 captions toggle — opens the upload picker when no track exists.
         case 'c': {
           if (subtitleUrl !== null) {
             setCaptionsOn((v) => !v);
             showOsd(captionsOn ? 'Subtitles off' : 'Subtitles on');
           } else {
-            showOsd('No subtitles found next to this video');
+            void pickSubtitle();
           }
           break;
         }
@@ -1134,7 +1262,7 @@ export function VideoPlayerDialog({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, editing, loopAll, loopA, loopB, fitMode, rotation, subtitleUrl, captionsOn, skipQuiet, quietSpans, markers, showRemaining, vrActive, setVrModePersisted, togglePlay, seekWithRipple, togglePiP, grabFrame, startHoldBoost, addMarker, removeNearestMarker, showOsd, onOpenChange, toggleWindowMaximize, vrPan]);
+  }, [open, editing, loopAll, loopA, loopB, fitMode, rotation, subtitleUrl, captionsOn, skipQuiet, quietSpans, markers, showRemaining, vrActive, setVrModePersisted, togglePlay, seekWithRipple, togglePiP, grabFrame, startHoldBoost, addMarker, removeNearestMarker, showOsd, onOpenChange, toggleWindowMaximize, vrPan, pickSubtitle]);
 
   // #3 keyup decides tap (±5s seek) vs hold (restore 2× boost).
   useEffect(() => {
@@ -1199,8 +1327,12 @@ export function VideoPlayerDialog({
       setUpNext(null);
       setSkipQuiet(false);
       setQuietSpans(null);
+      // Network stream: drop any previous subtitle track + reset state.
+      setSubtitleUrl(null);
+      setSubtitleLabel(null);
+      setHlsEngine(false);
     }
-  }, [open, filePath, initialEditing]);
+  }, [open, filePath, initialEditing, isNetwork]);
 
   // #10 auto-advance: when the video ends and a next recording exists, show
   // an "Up next" card with a 5s countdown (cancelable).
@@ -1228,7 +1360,7 @@ export function VideoPlayerDialog({
   const [filmstrip, setFilmstrip] = useState<EditorTimelineDto | null>(null);
   const [seekHover, setSeekHover] = useState<{ pct: number; time: number } | null>(null);
   useEffect(() => {
-    if (!open || filePath === '') return;
+    if (!open || filePath === '' || isNetwork) return;
     let alive = true;
     setFilmstrip(null);
     window.desktop.editor
@@ -1253,7 +1385,8 @@ export function VideoPlayerDialog({
   }, []);
 
   // #9 resume: save the position every ~5s + on close; restore on metadata.
-  const watchKey = watchPositionKey(recordingId, filePath);
+  // ponytail: keyed by URL for network streams so resume works there too.
+  const watchKey = isNetwork ? `rekordly:watch:net:${streamUrl}` : watchPositionKey(recordingId, filePath);
   useEffect(() => {
     if (!open) return;
     const save = (): void => {
@@ -1309,8 +1442,9 @@ export function VideoPlayerDialog({
 
   if (!open) return null;
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-  const bufferedPercent = duration > 0 ? (buffered / duration) * 100 : 0;
+  const progress = duration > 0 && Number.isFinite(duration) ? (currentTime / duration) * 100 : 0;
+  const bufferedPercent = duration > 0 && Number.isFinite(duration) ? (buffered / duration) * 100 : 0;
+  const seekableDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col bg-black" style={NO_DRAG_REGION}>
@@ -1349,10 +1483,12 @@ export function VideoPlayerDialog({
         onPointerUp={onVrPointerUp}
         onPointerCancel={onVrPointerUp}
       >
-        {filePath ? (
+        {filePath || isNetwork ? (
           <video
             ref={videoRef}
-            src={toMediaUrl(filePath)}
+            // ponytail: hls.js drives the element for HLS streams (src stays
+            // empty); direct network files stream through the sf-media relay.
+            src={isNetwork ? (streamEngine === 'hls' ? undefined : relayUrl) : toMediaUrl(filePath)}
             poster={posterPath ? toMediaUrl(posterPath) : undefined}
             className={`h-full w-full ${fitClass}`}
             style={rotation !== 0 ? { transform: `rotate(${rotation}deg) scale(${rotateScale})` } : undefined}
@@ -1387,8 +1523,10 @@ export function VideoPlayerDialog({
             }}
             onLoadedMetadata={(e) => {
               const v = e.currentTarget;
-              setDuration(v.duration || 0);
-              // #9 resume — only for genuinely long partial watches.
+              // Live HLS reports Infinity — keep the seek bar time-driven.
+              setDuration(Number.isFinite(v.duration) ? v.duration || 0 : 0);
+              // #9 resume — only for genuinely long partial watches (network
+              // VOD included; live streams report no finite duration).
               const saved = loadWatchPosition(watchKey);
               if (
                 saved !== null &&
@@ -1412,10 +1550,24 @@ export function VideoPlayerDialog({
             onError={() => setError(true)}
           >
             {subtitleUrl !== null && (
-              <track ref={trackRef} kind="subtitles" srcLang="en" src={subtitleUrl} default />
+              <track key={subtitleUrl.slice(-32)} ref={trackRef} kind="subtitles" srcLang="en" label={subtitleLabel ?? 'Subtitles'} src={subtitleUrl} default />
             )}
           </video>
         ) : null}
+
+        {/* Network stream: LIVE badge + engine readout (like VLC's status) */}
+        {isNetwork && (
+          <div className="pointer-events-none absolute left-3 top-3 z-10 flex items-center gap-2">
+            {liveStream && (
+              <span className="flex items-center gap-1.5 rounded-sm bg-red-600/90 px-2 py-1 text-[11px] font-semibold text-white">
+                <Radio size={11} /> LIVE
+              </span>
+            )}
+            <span className="rounded-sm bg-black/70 px-2 py-1 text-[11px] text-white/80">
+              {hlsEngine ? 'HLS' : streamEngine === 'direct' ? 'Direct stream' : 'Network'}
+            </span>
+          </div>
+        )}
 
         {/* ponytail: VR view — WebGL canvas sampling the <video> every frame.
             The video element stays the decoder (seek/volume/speed unchanged);
@@ -1622,7 +1774,13 @@ export function VideoPlayerDialog({
             const rect = e.currentTarget.getBoundingClientRect();
             const ratio = (e.clientX - rect.left) / rect.width;
             const v = videoRef.current;
-            if (v !== null && duration > 0) v.currentTime = ratio * duration;
+            // ponytail: finite duration → absolute seek; live streams (no
+            // finite duration) → seek within what's buffered so far.
+            if (v !== null && seekableDuration > 0) {
+              v.currentTime = ratio * seekableDuration;
+            } else if (v !== null && v.buffered.length > 0) {
+              v.currentTime = ratio * v.buffered.end(v.buffered.length - 1);
+            }
           }}
           onMouseEnter={updateSeekHover}
           onMouseMove={updateSeekHover}
@@ -1948,22 +2106,37 @@ export function VideoPlayerDialog({
           >
             <FastForward size={17} />
           </button>
-          {/* #11 captions — always visible; dimmed when no sidecar exists */}
+          {/* #11 captions — toggles the active track; long-press/alt opens the picker */}
           <button
             type="button"
             onClick={() => {
               if (subtitleUrl === null) {
-                showOsd('No subtitles found next to this video');
+                void pickSubtitle();
                 return;
               }
               setCaptionsOn((v) => !v);
               showOsd(captionsOn ? 'Subtitles off' : 'Subtitles on');
             }}
-            className={`p-1 hover:text-primary ${subtitleUrl === null ? 'text-white/30' : captionsOn ? 'text-primary' : 'text-white/50'}`}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              void pickSubtitle();
+            }}
+            className={`p-1 hover:text-primary ${subtitleUrl === null ? 'text-white/30' : captionsOn ? 'text-primary' : 'text-white/50'} ${pickingSubtitle ? 'animate-pulse' : ''}`}
             aria-label="Subtitles"
-            title={subtitleUrl !== null ? 'Subtitles (C)' : 'No subtitles file next to this video'}
+            title={subtitleUrl !== null ? `Subtitles (C) — right-click to change file (${subtitleLabel ?? ''})` : 'Load a subtitle file (.srt/.vtt/.ass)'}
           >
             <Captions size={17} />
+          </button>
+          {/* Subtitle upload — pick an .srt/.vtt/.ass file and overlay it */}
+          <button
+            type="button"
+            onClick={() => void pickSubtitle()}
+            disabled={pickingSubtitle}
+            className="p-1 hover:text-primary disabled:opacity-40"
+            aria-label="Upload subtitles"
+            title="Upload subtitles from a file (.srt, .vtt, .ass, .ssa)"
+          >
+            <Plus size={17} />
           </button>
           <button
             type="button"

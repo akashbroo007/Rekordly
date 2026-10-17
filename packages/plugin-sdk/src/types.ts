@@ -43,6 +43,17 @@ export interface LiveStatus {
    * Omit for definitive answers (state data, playlist 404).
    */
   unknown?: boolean;
+  /**
+   * ponytail: present on degraded (unknown) checks — the plugin's best-effort
+   * belief about whether the creator was live when the transport died
+   * (e.g. from a cheap directory/search flag that answered before the
+   * stream endpoint failed). Lets the host re-run the auto-record pipeline
+   * for a creator that IS live even though the definitive check failed —
+   * previously a live creator whose check kept erroring (ECONNRESET etc.)
+   * NEVER triggered auto-record until one clean check happened to land.
+   * Omit when the plugin cannot tell.
+   */
+  lastKnownLive?: boolean;
 }
 
 export interface CreatorMetadata {

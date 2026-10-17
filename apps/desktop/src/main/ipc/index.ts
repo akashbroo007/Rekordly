@@ -3,7 +3,6 @@ import { registerNotificationsIpc } from './notifications';
 import { registerPluginsIpc } from './plugins';
 import { registerProxyIpc } from './proxy';
 import { registerSettingsIpc } from './settings';
-import { registerLicenseIpc } from './license';
 import { registerCreatorsIpc } from './creators';
 import { registerRecordingsIpc } from './recordings';
 import { registerMonitoringIpc } from './monitoring';
@@ -21,7 +20,6 @@ import type { IpcContext } from './context';
 export function registerIpcHandlers(context: IpcContext): void {
   registerAppIpc(context);
   registerSettingsIpc(context);
-  registerLicenseIpc(context);
   registerPluginsIpc(context);
   registerProxyIpc(context);
   registerNotificationsIpc(context);
