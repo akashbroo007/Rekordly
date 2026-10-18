@@ -1335,12 +1335,23 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
           // Probing the capture turns that junk into the same bounded
           // transient-retry path any other blip takes: the partial is
           // preserved as a part below and a fresh capture restarts.
+          // ponytail: a clean exit with NOTHING written at all is the same
+          // junk outcome (previously it skipped the retry loop and failed the
+          // whole recording with RECORDING_NO_DATA — e.g. a dead edge window
+          // that answered EOF exactly once). Same bounded transient-retry.
           if (downloadResult.stopped === false && this.minCaptureSeconds > 0) {
             const capturedSeconds = await this.capturedDurationSeconds(outputPath);
             if (capturedSeconds > 0 && capturedSeconds < this.minCaptureSeconds) {
               throw new AppError({
                 code: 'CAPTURE_INSTANT_END',
                 message: `Capture stopped after only ${capturedSeconds.toFixed(1)}s — network blip, retrying`,
+                recoverable: true,
+              });
+            }
+            if (capturedSeconds === 0) {
+              throw new AppError({
+                code: 'CAPTURE_INSTANT_END',
+                message: 'Capture wrote no media — stream edge did not serve the playlist, retrying',
                 recoverable: true,
               });
             }

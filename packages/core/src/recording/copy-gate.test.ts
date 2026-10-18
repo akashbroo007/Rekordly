@@ -35,6 +35,22 @@ describe('copy-only gate (plan §7)', () => {
     }
   });
 
+  it('drops -reconnect_streamed for Kick/IVS LL-HLS edges (vendored ffmpeg master zero-byte captures)', () => {
+    // Every Kick playback URL is an Amazon IVS host (playlist/playback.
+    // live-video.net); the vendored ffmpeg master build (libavformat 63.x)
+    // spin-connections those under -reconnect_streamed ("Will reconnect …
+    // error=End of file" × ∞) → 0 bytes recorded → RECORDING_NO_DATA. Plain
+    // -reconnect/-reconnect_delay_max records fine on the same endpoint.
+    for (const url of [
+      'https://fa723fc1b171.aps32.playlist.live-video.net/v1/playlist/Cp8GjV.some.token.m3u8',
+      'https://fa723fc1b171.us-west-2.playback.live-video.net/api/video/v1/us-west-2.196233775518.channel.CGcY5kz4XZoH.m3u8?token=x',
+    ]) {
+      const args = buildDirectFfmpegArgs(url, '/tmp/out.mp4', {});
+      expect(args).toEqual(expect.arrayContaining(['-reconnect', '1', '-reconnect_delay_max', '5']));
+      expect(args.join(' ')).not.toContain('-reconnect_streamed');
+    }
+  });
+
   it('forwards headers/cookies/user-agent without altering the copy codec path', () => {
     const args = buildDirectFfmpegArgs('https://example.com/live.m3u8', '/tmp/out.mp4', {
       headers: { 'User-Agent': 'UA', Referer: 'https://example.com/' },

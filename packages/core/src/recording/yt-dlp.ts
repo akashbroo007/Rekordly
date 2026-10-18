@@ -283,6 +283,26 @@ export function buildFormatSelector(quality?: string): string {
  */
 const DEFAULT_LIVE_STALL_TIMEOUT_MS = 90_000;
 
+/**
+ * ponytail: URLs whose HLS edge deadlocks the ffmpeg master build under
+ * `-reconnect_streamed` — the streamed reconnect re-issues the playlist GET
+ * through an already-closed pipeline and the edge answers instant EOF, so the
+ * input-open retry loop spins forever writing zero bytes. Two spot classes
+ * proven in the field:
+ * - plugin-local loopback proxies (Stripchat MouflonProxy / Dreamcam VR bridge).
+ * - Kick's Amazon IVS LL-HLS endpoints (every kick stream lives on a
+ *   `*.playlist.live-video.net` / `*.playback.live-video.net` host).
+ */
+export function dropsReconnectStreamed(streamUrl: string): boolean {
+  if (isLoopbackStreamUrl(streamUrl)) return true;
+  try {
+    const host = new URL(streamUrl).hostname;
+    return host === 'live-video.net' || host.endsWith('.live-video.net');
+  } catch {
+    return false;
+  }
+}
+
 function unitToBytes(unit: string): number {
   switch (unit) {
     case 'GiB':
@@ -350,7 +370,15 @@ export function buildDirectFfmpegArgs(
   // this only failed in installed builds). Loopback proxies are single-consumer
   // local servers with nothing to re-connect to, so dropping the flag there is
   // safe — the stall watchdog + service retry loop still cover real drops.
-  if (isLoopbackStreamUrl(streamUrl)) {
+  // ponytail: the SAME spin-loop kills Kick (Amazon IVS LL-HLS) against the
+  // vendored ffmpeg master build (libavformat 63.11): the `/v1/playlist/…m3u8`
+  // edge answers each streamed reconnect with an instant EOF, so the input-open
+  // retry loop never reaches the read loop — zero bytes recorded, "q" never
+  // processed (verified 2026-10-18/19: every Kick capture stuck at 0.0 B →
+  // stall watchdog → retries → RECORDING_NO_DATA, v0.1.2 AND v0.1.3). Plain
+  // `-reconnect 1 -reconnect_delay_max 5` records fine on the same endpoint
+  // (24 MB in 20 s, A/B verified with the same vendored binary).
+  if (dropsReconnectStreamed(streamUrl)) {
     args.push('-reconnect', '1', '-reconnect_delay_max', '5');
   } else {
     args.push('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5');
