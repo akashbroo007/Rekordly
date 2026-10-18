@@ -20,4 +20,7 @@ const FEATURE_SLUGS = {
 /** Absolute URLs for the in-app feature links. */
 export const FEATURE_URLS = {
   automation: `${SITE_BASE_URL}${FEATURE_SLUGS.automation}`,
+  // ponytail: not a site page — the updater pulls from GitHub Releases, so
+  // the manual-download fallback goes straight to the releases list.
+  releases: 'https://github.com/akashbroo007/Rekordly/releases',
 } as const;

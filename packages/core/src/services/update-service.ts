@@ -24,11 +24,11 @@ export interface UpdateServiceOptions {
 /**
  * Auto-update service abstraction.
  *
- * Architecture supports GitHub Releases in the future.
- * Currently operates in passive mode — checks for updates
- * but does not require a release server.
- *
- * ponytail: minimal stub, real electron-updater integration when first release ships.
+ * ponytail: the real in-app updater lives in the desktop app
+ * (apps/desktop/src/main/updater.ts — electron-updater against GitHub
+ * Releases). This core abstraction is unused scaffolding, kept because
+ * it is exported from the SDK surface; do not build new update logic
+ * here.
  */
 export class UpdateService extends EventEmitter {
   private readonly logger: Logger;

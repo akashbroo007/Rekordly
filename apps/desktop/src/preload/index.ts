@@ -10,6 +10,7 @@ import type {
   EditorExportProgressDto,
   ProxyStatusDto,
   UploadEventDto,
+  UpdateStatusDto,
 } from '@rekordly/shared/contracts';
 
 const desktopApi: DesktopApi = {
@@ -320,6 +321,21 @@ const desktopApi: DesktopApi = {
       ipcRenderer.on(IPC_CHANNELS.editorExportProgress, listener);
       return () => {
         ipcRenderer.removeListener(IPC_CHANNELS.editorExportProgress, listener);
+      };
+    },
+  },
+  updates: {
+    getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.updatesGetStatus),
+    check: () => ipcRenderer.invoke(IPC_CHANNELS.updatesCheck),
+    download: () => ipcRenderer.invoke(IPC_CHANNELS.updatesDownload),
+    install: () => ipcRenderer.invoke(IPC_CHANNELS.updatesInstall),
+    onEvent: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: UpdateStatusDto): void => {
+        callback(status);
+      };
+      ipcRenderer.on(IPC_CHANNELS.updatesEvent, listener);
+      return () => {
+        ipcRenderer.removeListener(IPC_CHANNELS.updatesEvent, listener);
       };
     },
   },

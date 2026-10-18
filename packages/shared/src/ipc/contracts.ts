@@ -210,6 +210,13 @@ export const IPC_CHANNELS = {
 
   automationRunForRecording: 'automation:run-for-recording',
 
+  // --- In-app updates (electron-updater via GitHub Releases) ---
+  updatesGetStatus: 'updates:get-status',
+  updatesCheck: 'updates:check',
+  updatesDownload: 'updates:download',
+  updatesInstall: 'updates:install',
+  updatesEvent: 'updates:event',
+
   // --- Storage (Phase 9) ---
   storageGetStats: 'storage:get-stats',
   storageScan: 'storage:scan',
@@ -1197,6 +1204,31 @@ export interface FileVerificationResultDto {
   verifiedAt: string;
 }
 
+// --- In-app updates (electron-updater) ---------------------------------------
+
+export interface UpdateStatusDto {
+  state:
+    | 'idle'
+    | 'checking'
+    | 'available'
+    | 'not-available'
+    | 'downloading'
+    | 'downloaded'
+    | 'error';
+  /** Newest release version when state is 'available'/'downloading'/'downloaded'. */
+  version?: string;
+  /** 0–100 download progress (state 'downloading'). */
+  downloadPercent?: number;
+  error?: string;
+  /**
+   * ponytail: electron-updater can only self-update the packaged NSIS
+   * build — dev runs and the portable exe cannot (portable has no install
+   * location to patch). False there, so the UI never asks the user to
+   * "update" something that cannot.
+   */
+  supported: boolean;
+}
+
 /** The surface exposed to the renderer through the preload bridge. */
 export interface DesktopApi {
   app: {
@@ -1490,5 +1522,16 @@ export interface DesktopApi {
   automation: {
     /** Manually runs the automation pipeline for one recording. */
     runForRecording(recordingId: string): Promise<{ ran: string[]; errors: string[] }>;
+  };
+  updates: {
+    /** Last known update state (also pushed via onEvent). */
+    getStatus(): Promise<UpdateStatusDto>;
+    /** Runs a fresh GitHub-Releases check. Nothing downloads automatically. */
+    check(): Promise<UpdateStatusDto>;
+    /** Downloads the pending update (state must be 'available'). */
+    download(): Promise<void>;
+    /** Restarts the app and applies a downloaded update. */
+    install(): Promise<void>;
+    onEvent(callback: (status: UpdateStatusDto) => void): () => void;
   };
 }

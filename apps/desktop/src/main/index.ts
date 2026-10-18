@@ -53,6 +53,7 @@ import {
 } from '@rekordly/core';
 import { registerIpcHandlers } from './ipc';
 import { refreshCreatorAvatar } from './creator-avatars';
+import { initAppUpdater } from './updater';
 import { registerMediaScheme, registerMediaProtocolHandler } from './media-protocol';
 
 // ponytail: privileged schemes must be registered before app ready.
@@ -1521,6 +1522,15 @@ async function bootstrap(): Promise<void> {
     jobRepo,
   });
 
+  // ponytail: starts the in-app update checker (GitHub Releases). Only the
+  // packaged NSIS build self-updates; dev/portable stay idle (banner hides).
+  let appUpdater: ReturnType<typeof initAppUpdater> | null = null;
+  try {
+    appUpdater = initAppUpdater({ logger, getWindow: () => mainWindow });
+  } catch (err) {
+    logger.warn({ err }, 'app updater failed to start — updates stay manual');
+  }
+
   app.on('web-contents-created', (_event, contents) => {
     contents.setWindowOpenHandler(() => ({ action: 'deny' }));
     contents.on('will-navigate', (event, url) => {
@@ -1586,6 +1596,11 @@ async function bootstrap(): Promise<void> {
         trayController?.destroy();
       } catch {
         /* tray may already be gone */
+      }
+      try {
+        appUpdater?.dispose();
+      } catch {
+        /* updater may never have started */
       }
       // ponytail: stop schedulers synchronously so child transfers are
       // signalled before the DB handle closes; the async monitoring stop is

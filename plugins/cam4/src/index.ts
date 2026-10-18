@@ -697,12 +697,20 @@ const plugin: Plugin = {
         const username = identifier.replace(/^cam4:/, '');
         if (!username) return null;
         try {
+          // ponytail: the room-page og:image fallback is kicked OFF in
+          // parallel with the search call — running it sequentially after a
+          // missing picture doubled the lookup latency (two smart-route
+          // attempts in a row, direct-8s-fail → proxy boot) and blew past
+          // the host's 12s lookup ceiling, which read as "No profile found"
+          // in the Add Creator dialog. This result is ignored when the
+          // search payload already carries the picture.
+          const scrapePromise = scrapeAvatarFromRoomPage(identifier, username).catch(() => null);
           const { info, unavailable } = await fetchPerformerSmart(identifier, username);
           if (info !== null) {
             // ponytail: search payloads often omit the profile picture —
             // fall back to the room page's og:image before giving up.
             if ((info.profileImageUrl ?? '') === '') {
-              info.profileImageUrl = (await scrapeAvatarFromRoomPage(identifier, username)) ?? undefined;
+              info.profileImageUrl = (await scrapePromise) ?? undefined;
             }
             return creatorFromPerformer(info);
           }

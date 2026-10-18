@@ -1,5 +1,6 @@
-import { Copy, Minus, RadioTower, Square, X } from 'lucide-react';
+import { Copy, Minus, Square, X } from 'lucide-react';
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { TitleBarBrand } from './title-bar-brand';
 
 const DRAG_REGION = { WebkitAppRegion: 'drag' } as CSSProperties;
 const NO_DRAG_REGION = { WebkitAppRegion: 'no-drag' } as CSSProperties;
@@ -27,9 +28,11 @@ export function TitleBar() {
       style={DRAG_REGION}
       onDoubleClick={toggleMaximize}
     >
-      <div className="flex items-center gap-2 pl-3 pr-1">
-        <RadioTower size={16} className="shrink-0 text-primary" />
-        <span className="text-sm font-bold tracking-tight text-foreground">Rekordly</span>
+      {/* ponytail: wordmark only (mark re-addable via TitleBarBrand showMark).
+          Left padding 20px == the sidebar item column: nav p-2 (8px) +
+          NavLink px-3 (12px) — so the title bar and sidebar line up. */}
+      <div className="flex items-center pl-5 pr-1">
+        <TitleBarBrand />
       </div>
 
       <div className="ml-auto flex items-stretch gap-0 pr-0" style={NO_DRAG_REGION}>

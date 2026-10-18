@@ -39,6 +39,7 @@ import { TermsOfServiceContent } from '../components/settings/terms-of-service';
 import { SupportedSitesContent } from '../components/settings/supported-sites';
 import { CloudStorageSettings } from '../components/settings/cloud-storage-settings';
 import { BugReportSettings } from '../components/settings/bug-report';
+import { AppUpdatesCard } from '../components/settings/app-updates-card';
 
 
 const LOG_LEVELS: readonly LogLevel[] = ['debug', 'info', 'warn', 'error', 'fatal'];
@@ -386,6 +387,8 @@ function SettingsForm({
               Replay Welcome Tour
             </Button>
           </div>
+
+          <AppUpdatesCard />
         </div>
       )}
 

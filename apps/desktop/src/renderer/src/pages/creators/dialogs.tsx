@@ -142,29 +142,52 @@ export function AddCreatorDialog({ open, onOpenChange }: { open: boolean; onOpen
       return;
     }
     let cancelled = false;
-    const timer = window.setTimeout(() => {
+    // ponytail: one bounded retry when the lookup comes up empty. The plugin
+    // runs the same smart route the monitor uses — the first attempt often
+    // lands while the network route/secure proxy is still booting, and a
+    // null conflates a transport failure with "model does not exist". The
+    // live path already re-asks on every monitoring check (which is why the
+    // avatar reliably shows up there), so give the Add dialog one second
+    // attempt before reporting "No profile found".
+    let attempts = 0;
+    let retryTimer: number | undefined;
+    const run = () => {
+      if (cancelled) return;
+      attempts += 1;
       setLookupState('searching');
       window.desktop.creators
         .lookup(pluginId, normalizeExternalId(pluginId, externalId))
         .then((info) => {
           if (cancelled) return;
-          setProfileLookup(info);
-          setLookupState(info === null ? 'not-found' : 'found');
           if (info !== null) {
+            setProfileLookup(info);
+            setLookupState('found');
             setUsername((prev) => (prev.trim() === '' ? info.username.toLowerCase() : prev));
             setDisplayName((prev) => (prev.trim() === '' ? info.displayName : prev));
+            return;
           }
+          if (attempts < 2) {
+            retryTimer = window.setTimeout(run, 1500);
+            return;
+          }
+          setProfileLookup(null);
+          setLookupState('not-found');
         })
         .catch(() => {
-          if (!cancelled) {
-            setProfileLookup(null);
-            setLookupState('not-found');
+          if (cancelled) return;
+          if (attempts < 2) {
+            retryTimer = window.setTimeout(run, 1500);
+            return;
           }
+          setProfileLookup(null);
+          setLookupState('not-found');
         });
-    }, 700);
+    };
+    const timer = window.setTimeout(run, 700);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
     };
   }, [pluginId, externalId]);
 
