@@ -244,17 +244,41 @@ try {
       `Desktop SITE_BASE_URL (${SITE_BASE_URL}) differs from the website origin (${siteUrl})`,
     );
   }
+
+  // ponytail: a few desktop app links are deliberately EXTERNAL — they
+  // cannot be rekordly.in routes by design. Each must be listed here with
+  // its reason; the exact URL is pinned, so silently repointing one (to a
+  // stale/moved location) still fails the build like any other broken link.
+  const DESKTOP_EXTERNAL_URLS = new Map([
+    [
+      "releases",
+      "https://github.com/akashbroo007/Rekordly/releases", // installers/portable/latest.yml live on GitHub Releases, not on the site
+    ],
+  ]);
+
   for (const [key, url] of Object.entries(FEATURE_URLS ?? {})) {
+    const expectedExternal = DESKTOP_EXTERNAL_URLS.get(key);
     if (typeof url !== "string" || !url.startsWith(`${SITE_BASE_URL}/`)) {
-      fail(
-        `Desktop FEATURE_URLS.${key} is not a ${SITE_BASE_URL} URL: ${String(url)}`,
-      );
+      if (expectedExternal === undefined || url !== expectedExternal) {
+        fail(
+          `Desktop FEATURE_URLS.${key} is not a ${SITE_BASE_URL} URL (or a pinlisted external one): ${String(url)}`,
+        );
+        continue;
+      }
       continue;
     }
     validateFeatureHref(
       url.slice(SITE_BASE_URL.length),
       `Desktop FEATURE_URLS.${key}`,
     );
+  }
+
+  // Stale allowlist entries hide drift — flag anything whitelisted that the
+  // desktop app no longer exports.
+  for (const key of DESKTOP_EXTERNAL_URLS.keys()) {
+    if (!(key in (FEATURE_URLS ?? {}))) {
+      fail(`Desktop FEATURE_URLS no longer exports "${key}" — remove it from the external allowlist in checkFeatureLinks.mjs`);
+    }
   }
 } catch (error) {
   fail(
