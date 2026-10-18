@@ -189,13 +189,16 @@ export default function DownloadPage() {
         <div className="mt-10 text-center">
           <ShimmerLinkButton
             size="lg"
-            href={site.releasesUrl}
+            href={site.installerDownloadUrl}
             external
             className="font-semibold shadow-lg shadow-white/10"
           >
             <Download className="mr-2 h-4 w-4" />
-            Go to GitHub Releases
+            Download for Windows
           </ShimmerLinkButton>
+          <p className="mt-3 text-xs text-white/40">
+            Installer .exe · Windows 10+ (64-bit) · free, no account
+          </p>
           <div className="mt-4">
             <Link
               to="/features"

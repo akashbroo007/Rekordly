@@ -30,6 +30,12 @@ async function loadTsModule(filePath) {
       platform: "node",
       outfile: outFile,
       logLevel: "silent",
+      // ponytail: site.ts references the __APP_VERSION__ define that Vite
+      // injects during the real build — stub it here with the same fallback
+      // the vite config uses so this check matches local builds.
+      define: {
+        __APP_VERSION__: JSON.stringify(process.env.REKORDLY_VERSION ?? "0.1.0"),
+      },
     });
     return await import(pathToFileURL(outFile).href);
   } finally {

@@ -53,6 +53,57 @@ jobs:
       - name: Build packages + desktop app
         run: pnpm build
 
+      # ponytail: electron-builder expects apps/desktop/package.json version
+      # to match the pushed v-tag (it bakes it into the .exe name and the
+      # GitHub Release title). Workspace packages are synced so pnpm cannot
+      # choke on a workspace:* mismatch. Guards against tagging the repo at
+      # a stale version after a forgot-to-bump mistake.
+      - name: Sync package versions with pushed tag
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "Tag version: $TAG"
+          for pkg in apps/desktop/package.json packages/*/package.json; do
+            node -e "
+              const fs = require('fs');
+              const p = '$pkg';
+              const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+              if (j.version !== '$TAG') {
+                if (!/^(0|1)\\.x$/.test('$TAG')) {
+                  console.error('$pkg version ' + j.version + ' does not match tag v$TAG — bump the package versions before tagging.');
+                  process.exit(1);
+                }
+                j.version = '$TAG';
+                fs.writeFileSync(p, JSON.stringify(j, null, 2) + '\\n');
+                console.log('$pkg -> ' + j.version);
+              }
+            "
+          done
+
+      # ponytail: electron-builder creates (or reuses) the GitHub Release and
+      # uploads newest-first (latest.yml -> installer -> portable). If ANOTHER
+      # process published a release for the same tag earlier — e.g. a crashed
+      # prior run — two concurrent uploads race and GitHub ends up with TWO
+      # separate published releases for one tag, splitting the assets across
+      # both (seen live: installer/portable in one, a stray .blockmap in a
+      # duplicate). latest/download/... then 404s and the site's direct
+      # download button breaks. Deleting any pre-existing release for the tag
+      # here guarantees electron-builder is the sole publisher and the assets
+      # all land in ONE clean release.
+      - name: Delete pre-existing release for this tag (publish race guard)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          EXISTING=$(gh api "repos/akashbroo007/Rekordly/releases/tags/$TAG" --jq '.id // empty')
+          if [ -n "$EXISTING" ]; then
+            echo "Deleting stale release $EXISTING for tag $TAG"
+            gh api -X DELETE "repos/akashbroo007/Rekordly/releases/$EXISTING"
+          else
+            echo "No existing release for $TAG — clean publish"
+          fi
+
       - name: Package & publish to GitHub Releases
         working-directory: apps/desktop
         run: pnpm exec electron-builder --win --publish always

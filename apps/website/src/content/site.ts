@@ -1,6 +1,13 @@
 /** Absolute origin used for canonical URLs, OG tags, and the sitemap. */
 export const siteUrl = "https://rekordly.in";
 
+/**
+ * Desktop app version this site build links against — injected by Vite from
+ * REKORDLY_VERSION (set by the deploy pipeline from the latest git tag),
+ * falling back to 0.1.0 for local builds.
+ */
+declare const __APP_VERSION__: string;
+
 export const site = {
   name: "Rekordly",
   tagline: "Monitor, record, and download live streams — automatically.",
@@ -8,6 +15,19 @@ export const site = {
     "A free, source-available Windows desktop app for monitoring creators, automatically recording live streams, downloading videos and VODs, and organizing your recordings.",
   repoUrl: "https://github.com/akashbroo007/Rekordly",
   releasesUrl: "https://github.com/akashbroo007/Rekordly/releases",
+  latestReleaseUrl: "https://github.com/akashbroo007/Rekordly/releases/latest",
+  /**
+   * Direct installer download — hits the installer asset on the exact
+   * release this build references (REKORDLY_VERSION from the deploy env, so
+   * it matches the tag the site shipped with). Not latest/download: that
+   * path only redirects when the newest release's assets are fully
+   * propagated, and version-pinning keeps the link valid during a release
+   * window when assets are still uploading.
+   *
+   * NOTE: bump the desktop app version (apps/desktop/package.json) whenever
+   * releasing a new one — the deploy env sets REKORDLY_VERSION to match.
+   */
+  installerDownloadUrl: `https://github.com/akashbroo007/Rekordly/releases/download/v${__APP_VERSION__}/Rekordly-Setup-${__APP_VERSION__}.exe`,
   issuesUrl: "https://github.com/akashbroo007/Rekordly/issues",
   discussionsUrl: "https://github.com/akashbroo007/Rekordly/discussions",
   pluginGuideUrl:
@@ -47,8 +67,7 @@ export const hero = {
   primaryCta: {
     label: "Download for Windows",
     href: "https://rekordly.in/download",
-  },
-  secondaryCta: { label: "View on GitHub", href: site.repoUrl },
+  },  secondaryCta: { label: "View on GitHub", href: site.repoUrl },
   stats: [
     { value: "12", label: "Sites supported" },
     { value: "0", label: "Setup — yt-dlp & ffmpeg bundled" },
