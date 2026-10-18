@@ -3,6 +3,7 @@ import { execFile, execFileSync, spawn, type ChildProcessWithoutNullStreams } fr
 import { promisify } from 'node:util';
 import { AppError } from '@rekordly/shared';
 import { ExternalBinary, resolveExecutable } from '@rekordly/recorder';import { attemptDnsFix, extractUnresolvedHost, isDnsFailure } from './dns-fix';
+import { isLoopbackStreamUrl } from './failures';
 
 const execFileAsync = promisify(execFile);
 
@@ -336,8 +337,24 @@ export function buildDirectFfmpegArgs(
     args.push('-headers', headerLines.join('\r\n'));
   }
 
-  // ponytail: live HLS connections drop occasionally — reconnect instead of failing
-  args.push('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5');
+  // ponytail: live HLS connections drop occasionally — reconnect instead of failing.
+  // -reconnect_streamed lets ffmpeg re-open the CURRENT (already-open) stream on a
+  // mid-transfer drop. That is correct for remote CDNs, but against a PLUGIN-LOCAL
+  // PROXY (Stripchat's MouflonProxy / Dreamcam's VR bridge on 127.0.0.1) it is
+  // fatal on current ffmpeg master builds: each reconnect re-issues GET /index.m3u8,
+  // the proxy (stateless playlist server) answers immediately with EOF on the
+  // re-opened demuxer read, and ffmpeg spin-loops "Will reconnect at 211 in 0
+  // second(s), error=End of file" until the stall watchdog kills a capture that
+  // wrote ZERO bytes (verified A/B: removing the flag records fine with the same
+  // binary; dev machines with older gyan.dev builds never hit it — which is why
+  // this only failed in installed builds). Loopback proxies are single-consumer
+  // local servers with nothing to re-connect to, so dropping the flag there is
+  // safe — the stall watchdog + service retry loop still cover real drops.
+  if (isLoopbackStreamUrl(streamUrl)) {
+    args.push('-reconnect', '1', '-reconnect_delay_max', '5');
+  } else {
+    args.push('-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5');
+  }
 
   // ponytail: accept fragmented-MP4 HLS regardless of segment file names.
   // Many platforms serve Apple-standard fMP4 HLS whose segments end in

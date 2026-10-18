@@ -22,7 +22,7 @@ const status: PluginStatus = { state: 'installed' };
 
 let ctx: PluginContext | null = null;
 
-const DEFAULT_BASE = 'https://www.bongacams.com';
+const DEFAULT_BASE = 'https://en.bongacams.mobi';
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
@@ -263,6 +263,37 @@ function readPerformerData(room: Record<string, unknown>): Record<string, unknow
     : undefined;
 }
 
+/**
+ * ponytail: the AMF payload hands back the avatar as a SITE-RELATIVE path
+ * ("/0f3/0fd/297/…_avatar120x120.jpg"). Passing it through raw made the
+ * host's sanitizeAvatarUrl() reject it (it only accepts http(s) URLs), so
+ * every BongaCams creator silently lost their profile picture and the UI
+ * fell back to initials. The image lives on the very origin the browser
+ * loads it from, so qualify the path against the configured base URL
+ * (mirror-aware, exactly like profileUrl below). Absolute URLs pass
+ * through unchanged; protocol-relative origins (the site's other CDN
+ * style) are forced onto https. The 120×120 variant is preferred for the
+ * small round UI avatar with graceful fallbacks for models that only
+ * populate some of the keys.
+ */
+function avatarUrlFromRoom(room: Record<string, unknown>): string | undefined {
+  const performer = readPerformerData(room);
+  const candidates = [
+    performer?.['avatarUrl120'],
+    performer?.['avatarUrlMedium'],
+    performer?.['avatarUrl90'],
+    performer?.['avatarUrl'],
+  ];
+  for (const raw of candidates) {
+    if (typeof raw !== 'string' || raw.length === 0) continue;
+    if (raw.startsWith('//')) return `https:${raw}`;
+    if (/^https?:\/\//i.test(raw)) return raw;
+    const base = getBaseUrl();
+    return raw.startsWith('/') ? `${base}${raw}` : `${base}/${raw}`;
+  }
+  return undefined;
+}
+
 /** The site's own username for stream_ URLs (case matters). */
 function readStreamName(room: Record<string, unknown>): string | undefined {
   const performer = readPerformerData(room);
@@ -371,13 +402,12 @@ async function resolveBestVariantUrl(
 function htmlToCreatorInfo(username: string, room: Record<string, unknown> | null, live: boolean): CreatorInfo {
   const performer = room !== null ? readPerformerData(room) : undefined;
   const displayName = performer?.['displayName'];
-  const avatar = performer?.['avatarUrl'];
   const bio = performer?.['description'] ?? performer?.['aboutMe'];
   return {
     id: `bongacams:${username}`,
     username,
     displayName: typeof displayName === 'string' && displayName.length > 0 ? displayName : username,
-    avatarUrl: typeof avatar === 'string' ? avatar : undefined,
+    avatarUrl: room !== null ? avatarUrlFromRoom(room) : undefined,
     profileUrl: `${getBaseUrl()}/${username}/`,
     bio: typeof bio === 'string' ? bio : undefined,
     isLive: live,
@@ -612,14 +642,34 @@ const plugin: Plugin = {
       async check(): Promise<HealthStatus> {
         const start = Date.now();
         try {
-          const res = await request(`${getBaseUrl()}/`);
+          // ponytail: probe the AMF API, not the homepage. The .mobi mirrors
+          // are behind a Cloudflare JS challenge that answers 403 ("Just a
+          // moment…") to every plain GET of `/`, while /tools/amf.php — the
+          // very endpoint live detection uses — answers 200 in ~400ms. A 200
+          // here means the site is talking; the probe username is fake so
+          // `{"status":"error"}` in the body is the expected answer and is
+          // NOT an error for health purposes. The timeout must also stay
+          // under the host's 10s health-check cap (LIFECYCLE_TIMEOUT_MS) so
+          // a hanging connect surfaces as this plugin's own message instead
+          // of a generic "health … timed out".
+          const res = await request(`${getBaseUrl()}/tools/amf.php`, {
+            method: 'POST',
+            body: 'method=getRoomData&args[]=healthcheck&args[]=false',
+            timeout: DIRECT_TIMEOUT_MS,
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'X-Requested-With': 'XMLHttpRequest',
+              Referer: `${getBaseUrl()}/healthcheck/`,
+              Origin: getBaseUrl(),
+            },
+          });
           return {
             healthy: res.status === 200,
             message: res.status === 200 ? 'BongaCams reachable' : `HTTP ${res.status}`,
             latencyMs: Date.now() - start,
           };
         } catch (e) {
-          return { healthy: false, message: String(e) };
+          return { healthy: false, message: e instanceof Error ? e.message : String(e) };
         }
       },
     },
@@ -631,12 +681,11 @@ const plugin: Plugin = {
           const { room } = await fetchRoomDataSmart(identifier);
           const performer = readPerformerData(room);
           const displayName = performer?.['displayName'];
-          const avatar = performer?.['avatarUrl'];
           const lovers = performer?.['loversCount'];
           return {
             displayName:
               typeof displayName === 'string' && displayName.length > 0 ? displayName : username,
-            avatarUrl: typeof avatar === 'string' ? avatar : undefined,
+            avatarUrl: avatarUrlFromRoom(room),
             followerCount: typeof lovers === 'number' ? lovers : undefined,
             website: `${getBaseUrl()}/${username}/`,
           };

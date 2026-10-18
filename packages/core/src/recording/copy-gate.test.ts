@@ -24,6 +24,17 @@ describe('copy-only gate (plan §7)', () => {
     expect(args).toEqual(expect.arrayContaining(['-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5']));
   });
 
+  it('drops -reconnect_streamed for plugin-local loopback proxy URLs (vendored ffmpeg master EOF spin-loop)', () => {
+    // Stripchat MouflonProxy / Dreamcam VR bridge: ffmpeg master re-issues the
+    // playlist GET on every streamed reconnect and the stateless local server
+    // answers EOF, spinning the capture to zero bytes (v0.1.1 blank recordings).
+    for (const url of ['http://127.0.0.1:7734/index.m3u8', 'http://localhost:4411/index.m3u8']) {
+      const args = buildDirectFfmpegArgs(url, '/tmp/out.mp4', {});
+      expect(args).toEqual(expect.arrayContaining(['-reconnect', '1', '-reconnect_delay_max', '5']));
+      expect(args.join(' ')).not.toContain('-reconnect_streamed');
+    }
+  });
+
   it('forwards headers/cookies/user-agent without altering the copy codec path', () => {
     const args = buildDirectFfmpegArgs('https://example.com/live.m3u8', '/tmp/out.mp4', {
       headers: { 'User-Agent': 'UA', Referer: 'https://example.com/' },

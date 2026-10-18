@@ -118,6 +118,41 @@ jobs:
           # to create the release for the pushed tag and upload artifacts.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # ponytail: the website's "Download for Windows" buttons point DIRECTLY
+      # at the installer asset of a pinned version
+      # (releases/download/v<version>/Rekordly-Setup-<version>.exe) — the
+      # version lives in apps/website/public/app-version.json. After the
+      # release publishes successfully, rewrite that file to this tag's
+      # version and push it to main: the push triggers the Cloudflare Pages
+      # deploy, so the site's download links follow every release
+      # automatically. Done LAST (after publish) so a failed build never
+      # re-points the site at an installer that does not exist.
+      - name: Update website download-version pin and push to main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          # Discard the tree's build-time edits (synced package versions,
+          # fetched binaries) so we can safely move onto origin/main.
+          git reset --hard HEAD
+          git fetch origin main
+          git checkout -B website-version-pin origin/main
+          printf '{\n  "version": "%s"\n}\n' "$VER" > apps/website/public/app-version.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/website/public/app-version.json
+          if git diff --cached --quiet; then
+            echo "app-version.json already pins $VER — nothing to push"
+          else
+            git commit -m "chore: pin website download links to v$VER"
+            if git push origin HEAD:main; then
+              echo "pushed version pin v$VER to main — Pages deploy will pick it up"
+            else
+              echo "::warning::Could not push app-version.json to main (non-fast-forward or refused) — update the pin manually."
+            fi
+          fi
+
       # ponytail: best-effort copies of the installers for troubleshooting —
       # the real distribution channel is the GitHub Release itself.
       - name: Upload build artifacts
