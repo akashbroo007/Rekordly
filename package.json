@@ -7,6 +7,7 @@
     "dev": "pnpm --filter @rekordly/desktop dev",
     "build": "pnpm -r build && pnpm --filter @rekordly/desktop build",
     "typecheck": "pnpm -r typecheck",
+    "check:migrations": "node scripts/check-migrations.cjs",
     "package": "pnpm --filter @rekordly/desktop package",
     "site:dev": "pnpm --filter @rekordly/website dev",
     "site:build": "pnpm --filter @rekordly/website build"

@@ -47,6 +47,16 @@ jobs:
         shell: pwsh
         run: ./scripts/fetch-binaries.ps1
 
+      # ponytail: migration integrity gate — MUST run before packaging. A
+      # migration file with two statements but no statement-breakpoint marker
+      # makes drizzle hand both to better-sqlite3 as one statement; the whole
+      # chain rolls back and a brand-new profile cannot start the app at all
+      # (that is exactly how v0.1.0 shipped: every fresh install died on
+      # "Rekordly failed to start" before a single log line was written).
+      # Pure Node — no native module, so no Electron rebuild needed.
+      - name: Check migrations
+        run: node scripts/check-migrations.cjs
+
       # ponytail: builds every workspace package in dependency order,
       # including the bundled plugins' dist/ outputs that electron-builder's
       # extraResources copies into the installer.
