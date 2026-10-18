@@ -6,18 +6,42 @@
  * sitemap entry, or a missing route/render. Exit code 0 = all good.
  *
  * Run directly: node scripts/checkFeatureLinks.mjs
- * (imports the app's features config via Node's native TS type-stripping)
+ * (imports the app's features config, bundled by esbuild)
  */
 import { readFileSync, readdirSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { build } from "esbuild";
+
+// Node can only `import()` a .ts file natively from v22.18+ (type-stripping);
+// deploy environments (e.g. Cloudflare Pages) still run older LTS versions.
+// Bundle each TS module to a throwaway ESM file and import that instead.
+async function loadTsModule(filePath) {
+  const outDir = await mkdtemp(join(tmpdir(), "rekordly-link-check-"));
+  const outFile = join(outDir, "module.mjs");
+  try {
+    await build({
+      entryPoints: [filePath],
+      bundle: true,
+      format: "esm",
+      platform: "node",
+      outfile: outFile,
+      logLevel: "silent",
+    });
+    return await import(pathToFileURL(outFile).href);
+  } finally {
+    await rm(outDir, { recursive: true, force: true });
+  }
+}
 
 const here = dirname(fileURLToPath(import.meta.url));
 const src = join(here, "..", "src");
 
 const { FEATURES_HUB_PATH, featureBoxes, featurePages: pages } =
-  await import(pathToFileURL(join(src, "content", "featuresConfig.ts")).href);
+  await loadTsModule(join(src, "content", "featuresConfig.ts"));
 
 const problems = [];
 
@@ -189,7 +213,7 @@ for (const match of blogSource.matchAll(/\]\((\/[^)\s]+)\)/g) ?? []) {
 // same way the config is imported and validate every URL against the routes
 // registered above — so a slug that points at a missing page fails THIS
 // build, on both the website and the desktop.
-const { siteUrl } = await import(pathToFileURL(join(src, "content", "site.ts")).href);
+const { siteUrl } = await loadTsModule(join(src, "content", "site.ts"));
 
 const desktopLinksPath = join(
   here,
@@ -203,9 +227,7 @@ const desktopLinksPath = join(
   "site-links.ts",
 );
 try {
-  const { SITE_BASE_URL, FEATURE_URLS } = await import(
-    pathToFileURL(desktopLinksPath).href
-  );
+  const { SITE_BASE_URL, FEATURE_URLS } = await loadTsModule(desktopLinksPath);
   if (SITE_BASE_URL !== siteUrl) {
     fail(
       `Desktop SITE_BASE_URL (${SITE_BASE_URL}) differs from the website origin (${siteUrl})`,
