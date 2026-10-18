@@ -37,7 +37,18 @@ function cspPlugin(): Plugin {
         // recordings/thumbnails into the renderer (see media-protocol.ts) —
         // without it the packaged app blocks every library thumbnail and
         // video (dev has no CSP, which is why this only broke in builds).
-        "img-src 'self' data: blob: sf-media:; font-src 'self' data:; " +
+        // ponytail: every remote image in this app is USER-SUPPLIED data from
+        // a platform CDN, so 'self' can never enumerate it: creator avatars
+        // and live thumbnails come back from each plugin's own CDN (verified
+        // in a real profile: static-proxy.strpst.com, imagetransform.icfcdn.com,
+        // yt3.googleusercontent.com, static.cam4.com, bss-cdn.dreamcam.com,
+        // files.kick.com, hugh.cdn.rumble.cloud — a new plugin adds more), and
+        // plugin tiles fetch favicons from public icon services. Blocking them
+        // made every avatar, tile and thumbnail blank ONLY in packaged builds,
+        // because dev has no CSP at all. Images cannot execute script, so
+        // https: is the narrowest source that covers all of them.
+        "img-src 'self' data: blob: sf-media: https:; " +
+        "font-src 'self' data:; " +
         // ponytail: hls.js fetches playlists/segments over the sf-media relay
         // (XHR/fetch → connect-src) and feeds MSE buffers (media-src); its
         // transmuxer runs in a web worker (worker-src blob:).

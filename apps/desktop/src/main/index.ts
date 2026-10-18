@@ -220,6 +220,18 @@ const extractionSlots = new Semaphore(2);
 // set before requestSingleInstanceLock(), which resolves the userData path.
 app.setName('Rekordly');
 
+// ponytail: a dev run MUST NOT share userData with the installed app. Both
+// used %APPDATA%\Rekordly, so running `pnpm dev` on the same machine wrote
+// test creators, recordings, logs and settings into the exact database the
+// packaged build opens — a freshly installed copy then booted looking like
+// the developer's workspace ("the installed app opens with my dev data").
+// Development gets its own folder; installed builds keep the real one, and
+// neither can ever contaminate the other. Resolved before the single-instance
+// lock so the lock itself is per-profile.
+if (!app.isPackaged) {
+  app.setPath('userData', join(app.getPath('appData'), 'Rekordly (dev)'));
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
