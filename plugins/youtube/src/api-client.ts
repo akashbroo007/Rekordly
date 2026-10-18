@@ -215,3 +215,51 @@ export async function probeLivePage(
     viewers: isLive ? extractViewerCount(html) : undefined,
   };
 }
+
+export interface ChannelProfileProbe {
+  displayName?: string;
+  avatarUrl?: string;
+}
+
+/**
+ * ponytail: free channel-profile probe (no Data API quota). The channel page
+ * is server-rendered and its og: meta tags carry the channel's real display
+ * name + avatar (yt3.* CDN), so creators added WITHOUT an API key still get
+ * their actual profile picture. All failures resolve to {} — callers treat
+ * the probe as best-effort.
+ */
+export async function probeChannelProfile(idOrHandle: string): Promise<ChannelProfileProbe> {
+  const path = /^UC[\w-]{22}$/.test(idOrHandle)
+    ? `channel/${idOrHandle}`
+    : `@${idOrHandle.replace(/^@/, '')}`;
+  try {
+    const res = await fetch(`https://www.youtube.com/${path}?hl=en`, {
+      redirect: 'follow',
+      headers: BROWSER_HEADERS,
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) return {};
+    const html = await res.text();
+    const unescapeMeta = (s: string): string =>
+      s.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+    const contentMatch = (tag: 'og:image' | 'og:title'): string | undefined => {
+      const direct = html.match(
+        new RegExp(`<meta[^>]+property=["']${tag}["'][^>]+content=["']([^"']+)["']`),
+      )?.[1];
+      const flipped = html.match(
+        new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']${tag}["']`),
+      )?.[1];
+      const raw = direct ?? flipped;
+      return raw !== undefined ? unescapeMeta(raw) : undefined;
+    };
+    const title = contentMatch('og:title');
+    const image = contentMatch('og:image');
+    // The channel avatar is served by the yt3.* CDNs; any other og:image
+    // (banners, video stills) is not the profile picture.
+    const avatarUrl =
+      image !== undefined && /^https:\/\/yt3\.|^\/\/yt3\./i.test(image) ? image : undefined;
+    return { displayName: title, avatarUrl };
+  } catch {
+    return {};
+  }
+}

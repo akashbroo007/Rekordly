@@ -207,7 +207,14 @@ export function registerAppIpc({
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
       throw new Error('Only http/https URLs can be opened');
     }
-    void shell.openExternal(parsed.toString());
+    // Offline / no handler cases must fail silently — never surface an error
+    // dialog to the user; the browser itself will show its own DNS error page.
+    void shell.openExternal(parsed.toString()).catch((error: unknown) => {
+      logger.debug(
+        { url: parsed.toString(), error: error instanceof Error ? error.message : String(error) },
+        'openExternal failed (likely offline) — ignored',
+      );
+    });
   });
 
   // --- Player screenshots ----------------------------------------------------

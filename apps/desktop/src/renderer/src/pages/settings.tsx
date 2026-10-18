@@ -24,13 +24,16 @@ import {
   Bug,
   Send,
   Workflow,
+  ExternalLink,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Button, Dialog, DialogContent, EmptyState, Input, PageContainer, SectionHeader, Select, Skeleton, Switch } from '@rekordly/ui';
 import { formatBytes } from '@rekordly/shared/format';
 import type { AppSettings, LogLevel, RecordingSettingsDto } from '@rekordly/shared/contracts';
 import { useToastStore } from '../stores/toast-store';
 import { useThemeStore } from '../stores/theme-store';
+import { FEATURE_URLS } from '../lib/site-links';
 import { PrivacyPolicyContent } from '../components/settings/privacy-policy';
 import { TermsOfServiceContent } from '../components/settings/terms-of-service';
 import { SupportedSitesContent } from '../components/settings/supported-sites';
@@ -106,6 +109,15 @@ export function SettingsPage() {
   const [draft, setDraft] = useState<AppSettings | null>(null);
   const [recDraft, setRecDraft] = useState<RecordingSettingsDto | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+
+  // ponytail: pages can deep-link straight into a section — the Uploads page's
+  // "Set up" provider buttons land on /settings?tab=cloud-storage. Read-once
+  // on mount/parm change; normal in-page tab clicks keep working after that.
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab !== null && SETTINGS_TABS.some((t) => t.id === tab)) setActiveTab(tab as SettingsTab);
+  }, [searchParams]);
 
   useEffect(() => {
     if (current !== undefined) {
@@ -1246,7 +1258,18 @@ function AutomationSettings({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4 rounded-sm border border-border bg-surface px-3 py-2.5">
         <div>
-          <p className="text-sm font-medium text-foreground">Enable post-recording automation</p>
+          <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+            Enable post-recording automation
+            {/* Opens in the system's default browser — fails silently when offline. */}
+            <button
+              type="button"
+              onClick={() => void window.desktop.app.openUrl(FEATURE_URLS.automation)}
+              className="inline-flex w-fit items-center gap-1 text-xs font-normal text-foreground-muted transition-colors hover:text-foreground-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+            >
+              Learn how it works
+              <ExternalLink size={12} aria-hidden="true" />
+            </button>
+          </p>
           <p className="text-xs text-foreground-muted">
             Runs on every finished recording, in order: tag → compress → move → upload → delete after upload.
           </p>

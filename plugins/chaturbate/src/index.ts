@@ -289,6 +289,27 @@ function htmlToCreatorInfo(username: string, roomData: RoomData | null, html: st
   };
 }
 
+// ponytail: many room pages don't carry "profile_image_url" (the photo
+// renders separately for a lot of broadcasters) — probe CB's static avatar
+// CDN as a fallback. A wrong guess never matters: misses are ignored and the
+// UI's avatar component falls back to initials when nothing resolves.
+async function probeAvatarUrl(username: string): Promise<string | undefined> {
+  const cdn = 'https://img.stream.highwebmedia.com/avatars';
+  for (const ext of ['jpg', 'png']) {
+    const url = `${cdn}/${encodeURIComponent(username)}.${ext}`;
+    try {
+      const res = await httpGet(url);
+      const contentType = String(res.headers['content-type'] ?? '');
+      if (res.status === 200 && contentType.startsWith('image/')) {
+        return url;
+      }
+    } catch {
+      /* probe failures stay quiet */
+    }
+  }
+  return undefined;
+}
+
 const ROUTE_PATHS = new Set([
   'api', 'auth', 'terms', 'privacy', 'tags', 'discover', 'following',
   'accounts', 'security', 'billingsupport', 'law_enforcement', 'jobs',
@@ -429,7 +450,10 @@ const plugin: Plugin = {
           const res = await httpGet(`${BASE}/${username}/`);
           if (res.status === 404) return null;
           const roomData = extractRoomData(res.body);
-          return htmlToCreatorInfo(username, roomData, res.body);
+          const creator = htmlToCreatorInfo(username, roomData, res.body);
+          return creator.avatarUrl !== undefined
+            ? creator
+            : { ...creator, avatarUrl: await probeAvatarUrl(username) };
         } catch {
           return null;
         }

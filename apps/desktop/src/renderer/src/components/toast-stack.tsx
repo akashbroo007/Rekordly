@@ -59,6 +59,11 @@ function ToastItem({ id, ttlMs, onRemove }: { id: number; ttlMs: number; onRemov
   }
   const Icon = ICONS[toast.level];
 
+  const runAction = (): void => {
+    toast.action?.onAction();
+    dismiss();
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, x: 24 }}
@@ -72,6 +77,15 @@ function ToastItem({ id, ttlMs, onRemove }: { id: number; ttlMs: number; onRemov
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-foreground">{toast.title}</p>
         <p className="mt-0.5 text-xs text-foreground-muted">{toast.message}</p>
+        {toast.action && (
+          <button
+            type="button"
+            onClick={runAction}
+            className="mt-1.5 inline-flex cursor-pointer items-center gap-1 rounded-sm px-1.5 py-1 text-xs font-semibold leading-none text-primary transition-colors hover:bg-primary/10"
+          >
+            {toast.action.label}
+          </button>
+        )}
       </div>
       <button
         type="button"

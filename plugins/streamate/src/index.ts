@@ -503,12 +503,22 @@ async function resolveStreamSmart(
 
 // ---- creator helpers -------------------------------------------------------
 
+// ponytail: ICF/Naiad's shared avatar CDN keys profile pictures by nickname
+// (`imagetransform.icfcdn.com/s/avatar/<nick>.webp` — verified against the
+// server-rendered og:image on streamate.com/cam/<name> pages). Works for the
+// whole white-label family (jerkmate included), so no extra page fetch is
+// needed for the photo. Broken/unknown pics simply fall back to initials in
+// the UI's avatar component.
+const icfAvatarUrl = (username: string): string =>
+  `https://imagetransform.icfcdn.com/s/avatar/${encodeURIComponent(username)}.webp`;
+
 function creatorFromUsername(username: string, live: boolean): CreatorInfo {
   const base = getBase();
   return {
     id: `streamate:${username}`,
     username,
     displayName: username,
+    avatarUrl: icfAvatarUrl(username),
     profileUrl: `${base}/cam/${username}/`,
     isLive: live,
     liveUrl: live ? `${base}/cam/${username}/` : undefined,

@@ -8,10 +8,11 @@
 # Dependencies
 node_modules/
 
-# Uploads and recordings
-uploads/
-recordings/
-downloads/
+# Uploads and recordings (anchored to the repo root so source folders like
+# apps/desktop/src/renderer/src/pages/recordings/ stay tracked in git)
+/uploads/
+/recordings/
+/downloads/
 *.mp4
 *.webm
 *.mov

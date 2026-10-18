@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { stat } from 'node:fs/promises';
-import { basename } from 'node:path';
+import { readdir, stat } from 'node:fs/promises';
+import { basename, dirname, extname, join } from 'node:path';
 import type { Logger } from '@rekordly/shared';
 import type { UploadQueueRepo, UploadQueueRecord } from '@rekordly/database';
 import type { NotificationService } from './notification-service';
+
+/** Uploadable video containers (mirrors the library IPC media-sync set). */
+const MEDIA_EXTENSIONS = new Set(['.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv', '.wmv', '.m4v', '.ts', '.mpg', '.mpeg']);
 
 export interface UploadServiceOptions {
   repo: UploadQueueRepo;
@@ -315,12 +318,19 @@ export class UploadService extends EventEmitter<UploadServiceEvents> {
     this.active.set(item.id, controller);
 
     try {
-      const totalBytes = (await stat(item.sourcePath)).size;
+      // ponytail: a derivative transcode can delete its source file after
+      // the item was queued — resolve to the surviving file first or the
+      // transfer fails with ENOENT on every retry.
+      const sourcePath = await this.resolveSourcePath(item.sourcePath);
+      if (sourcePath !== item.sourcePath) {
+        this.repo.update(item.id, { sourcePath });
+      }
+      const totalBytes = (await stat(sourcePath)).size;
       this.repo.update(item.id, { totalBytes });
-      const fileName = item.destinationPath ?? basename(item.sourcePath);
+      const fileName = item.destinationPath ?? basename(sourcePath);
 
       let lastWrite = 0;
-      const result = await provider.upload(item.sourcePath, fileName, (percent, speed) => {
+      const result = await provider.upload(sourcePath, fileName, (percent, speed) => {
         const bytesUploaded = Math.round((percent / 100) * totalBytes);
         const eta = speed > 0 && percent < 100 ? (totalBytes - bytesUploaded) / speed : 0;
         const ts = new Date().toISOString();
@@ -365,6 +375,56 @@ export class UploadService extends EventEmitter<UploadServiceEvents> {
     } finally {
       this.active.delete(item.id);
     }
+  }
+
+  /**
+   * ponytail: quality-derivative transcodes delete their source file after
+   * the job completed (the selected quality REPLACES the capture), so queue
+   * rows recorded before the job-path fix can point at a file that no longer
+   * exists. Fall back to the largest same-stem sibling video (derivative
+   * names append AFTER the extension-less stem: 'X.mp4' → 'X_480p.mp4', so
+   * matching must use the stem, not the full old name) while skipping
+   * .thumb.jpg previews and temp files; when nothing matches, the final
+   * stat rethrows the original ENOENT.
+   */
+  private async resolveSourcePath(sourcePath: string): Promise<string> {
+    try {
+      await stat(sourcePath);
+      return sourcePath;
+    } catch {
+      /* fall through to sibling resolution */
+    }
+    const dir = dirname(sourcePath);
+    const stem = basename(sourcePath).replace(
+      /\.(mp4|mkv|webm|avi|mov|flv|wmv|m4v|ts|mpg|mpeg)$/i,
+      '',
+    );
+    try {
+      const candidates: Array<{ path: string; size: number }> = [];
+      for (const name of await readdir(dir)) {
+        if (name === stem || !name.startsWith(stem)) continue;
+        if (name.endsWith('.thumb.jpg') || name.endsWith('.part')) continue;
+        if (!MEDIA_EXTENSIONS.has(extname(name).toLowerCase())) continue;
+        const full = join(dir, name);
+        try {
+          candidates.push({ path: full, size: (await stat(full)).size });
+        } catch {
+          /* file vanished between listing and stat */
+        }
+      }
+      const best = candidates.sort((a, b) => b.size - a.size)[0];
+      if (best !== undefined) {
+        this.logger.warn(
+          { sourcePath, resolved: best.path, sizeBytes: best.size },
+          'queued source file missing — uploading its surviving sibling instead',
+        );
+        return best.path;
+      }
+    } catch {
+      /* directory gone — rethrow the original ENOENT below */
+    }
+    await stat(sourcePath);
+    return sourcePath;
   }
 
   private handleRunError(item: UploadQueueRecord, error: unknown): void {

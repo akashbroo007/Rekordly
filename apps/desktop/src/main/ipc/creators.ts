@@ -1,6 +1,7 @@
 import { ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { IPC_CHANNELS } from '@rekordly/shared';
 import type { IpcContext } from './context';
+import { lookupCreatorInfo, sanitizeAvatarUrl } from '../creator-avatars';
 
 function trusted(event: IpcMainInvokeEvent, getWindow: IpcContext['getWindow']): void {
   const win = getWindow();
@@ -105,6 +106,25 @@ export function registerCreatorsIpc(context: IpcContext): void {
     trusted(event, getWindow);
     if (!isString(query)) throw new Error('Invalid search query');
     return creatorRepo.search(query);
+  });
+
+  // ponytail: profile lookup for the Add Creator form — resolves the real
+  // displayName/avatar through the plugin so creators are added with their
+  // actual photo instead of a placeholder. Best-effort: null when the plugin
+  // cannot answer (offline, unknown profile, no creatorSearch capability).
+  ipcMain.handle(IPC_CHANNELS.creatorsLookup, async (event, pluginId: unknown, externalId: unknown) => {
+    trusted(event, getWindow);
+    if (!isString(pluginId) || !isString(externalId)) throw new Error('Invalid lookup input');
+    const info = await lookupCreatorInfo(context.plugins, pluginId, `${pluginId}:${externalId}`);
+    if (info === null) return null;
+    return {
+      displayName: info.displayName,
+      username: info.username,
+      avatarUrl: sanitizeAvatarUrl(info.avatarUrl),
+      profileUrl: info.profileUrl ?? null,
+      bio: info.bio ?? null,
+      followerCount: info.followerCount ?? null,
+    };
   });
 
   ipcMain.handle(IPC_CHANNELS.creatorsSetFavorite, (event, id: unknown, favorite: unknown) => {

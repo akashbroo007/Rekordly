@@ -1,7 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ChevronLeft,
-  ChevronRight,
   Copy,
   Download,
   Eye,
@@ -58,6 +56,7 @@ import { formatBytes, formatDuration } from '@rekordly/shared/format';
 import { toMediaUrl, VideoPlayerDialog, watchProgressFor } from '../components/video-player-dialog';
 import { NetworkStreamDialog } from '../components/network-stream-dialog';
 import { ConcatDialog } from '../components/editor/concat-dialog';
+import { Pagination, usePaged } from '../components/pagination';
 
 type ViewMode = 'grid' | 'list' | 'compact' | 'details';
 type SortField = 'title' | 'createdAt' | 'startedAt' | 'durationSeconds' | 'sizeBytes' | 'platformId';
@@ -92,7 +91,11 @@ export function LibraryPage() {
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     try { return (localStorage.getItem(STORAGE_KEY) as ViewMode) || 'grid'; } catch { return 'grid'; }
   });
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState<string>(
+    // ponytail: one-shot push from Recordings "Open in library" — pre-fill
+    // the search box so the landing view is already filtered to that row.
+    () => useDrilldownStore.getState().librarySearch ?? '',
+  );
   const [sortField, setSortField] = useState<SortField>('createdAt');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [filterFavorites, setFilterFavorites] = useState(false);
@@ -177,6 +180,14 @@ export function LibraryPage() {
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / pageSize);
 
+  // ponytail: reset to page 0 whenever the query shape changes — otherwise a
+  // filter, sort or tab switch can strand the view on an empty high page.
+  const pageResetKey = JSON.stringify({ filters, sort, tab });
+  useEffect(() => {
+    setPage(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageResetKey]);
+
   // #10 playlist — the player navigates within the current filtered page.
   const playerIndex = playerRecording !== null ? recordings.findIndex((r) => r.id === playerRecording.id) : -1;
   const previousRecording = playerIndex > 0 ? recordings[playerIndex - 1] ?? null : null;
@@ -201,6 +212,13 @@ export function LibraryPage() {
   useEffect(() => {
     if (filterDateFrom) useDrilldownStore.getState().clear();
   }, [filterDateFrom]);
+
+  // ponytail: same for the Recordings "Open in library" search push — it was
+  // consumed into state on mount, drop the store copy so the next visit
+  // doesn't inherit an old filter.
+  useEffect(() => {
+    if (searchQuery !== '') useDrilldownStore.getState().setLibrarySearch(undefined);
+  }, [searchQuery]);
 
   // ponytail: tabs share paging/selection state — reset both on switch so the
   // Edited tab never opens on page 3 of Recordings or with stale checkboxes.
@@ -628,20 +646,8 @@ export function LibraryPage() {
             </div>
           )}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2">
-              <Button variant="ghost" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
-                <ChevronLeft size={14} /> Previous
-              </Button>
-              <span className="text-xs tabular-nums text-foreground-muted">
-                Page {page + 1} of {totalPages} ({total} recordings)
-              </span>
-              <Button variant="ghost" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
-                Next <ChevronRight size={14} />
-              </Button>
-            </div>
-          )}
+          {/* Pagination — shared Previous / Page x of y / Next bar */}
+          <Pagination page={page} pageCount={totalPages} onPageChange={setPage} total={total} noun="recordings" />
         </>
       )}
       </>)}
@@ -748,6 +754,10 @@ function DownloadsLibrary({ onPlay }: { onPlay: (item: DownloadQueueItemDto) => 
   const queryClient = useQueryClient();
   const pushToast = useToastStore((state) => state.push);
 
+  /** ponytail: thumb-card grid, 4 columns — 24 per page = exactly 6 rows.
+   * Long generic-download histories stay browsable without scrolling forever. */
+  const LIBRARY_DOWNLOAD_PAGE_SIZE = 24;
+
   const { data: items, isLoading, isError } = useQuery({
     queryKey: ['downloads', 'library'],
     queryFn: async () => {
@@ -756,6 +766,9 @@ function DownloadsLibrary({ onPlay }: { onPlay: (item: DownloadQueueItemDto) => 
       return [...completed, ...failed];
     },
   });
+
+  const list = items ?? [];
+  const { page, setPage, pageCount, paged: visibleDownloads, total } = usePaged(list, LIBRARY_DOWNLOAD_PAGE_SIZE);
 
   const remove = useMutation({
     mutationFn: (id: string) => window.desktop.downloads.remove(id),
@@ -777,7 +790,6 @@ function DownloadsLibrary({ onPlay }: { onPlay: (item: DownloadQueueItemDto) => 
 
   if (isError) return <p className="text-sm text-error">Failed to load downloads.</p>;
 
-  const list = items ?? [];
   if (list.length === 0) {
     return (
       <EmptyState
@@ -789,8 +801,9 @@ function DownloadsLibrary({ onPlay }: { onPlay: (item: DownloadQueueItemDto) => 
   }
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {list.map((item) => (
+    <>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {visibleDownloads.map((item) => (
         <ContextMenu key={item.id}>
           <ContextMenuTrigger asChild>
             <Card
@@ -858,9 +871,13 @@ function DownloadsLibrary({ onPlay }: { onPlay: (item: DownloadQueueItemDto) => 
               <Trash2 size={14} /> Remove from Library
             </ContextMenuItem>
           </ContextMenuContent>
-        </ContextMenu>
-      ))}
-    </div>
+          </ContextMenu>
+        ))}
+      </div>
+
+      {/* Pagination — shared Previous / Page x of y / Next bar */}
+      <Pagination page={page} pageCount={pageCount} onPageChange={setPage} total={total} noun="downloads" />
+    </>
   );
 }
 

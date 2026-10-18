@@ -4,7 +4,7 @@
 /* Tailwind must scan the ui package source for its utility classes. */
 @source '../../../../../packages/ui/src/**/*.{ts,tsx}';
 
-/* Low-Resource Mode: strip animations/transitions to save CPU/GPU. */
+/* Low-Resource-Mode: strip animations/transitions to save CPU/GPU. */
 html[data-lowres='true'] *,
 html[data-lowres='true'] *::before,
 html[data-lowres='true'] *::after {
@@ -12,3 +12,8 @@ html[data-lowres='true'] *::after {
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
 }
+
+/* ponytail: status-card glows (live/recording) were removed per user
+ * preference — the 2px colored borders alone carry the state. No box-shadow
+ * animations on the creator grid. */
+

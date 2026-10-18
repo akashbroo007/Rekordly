@@ -6,6 +6,8 @@ export interface Toast {
   level: NotificationDto['level'];
   title: string;
   message: string;
+  /** Optional single inline action (e.g. "Undo" on a destructive toast). */
+  action?: { label: string; onAction: () => void };
 }
 
 interface ToastState {

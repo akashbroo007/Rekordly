@@ -16,17 +16,22 @@ export const site = {
   email: "hello@rekordly.in",
 } as const;
 
-/** Primary links shown in the navbar pill. */
+/**
+ * Primary links shown in the navbar pill, after the Features dropdown.
+ * "Features" itself is NOT here — the navbar renders the FeaturesDropdown
+ * (with all 7 feature pages) before these; adding it here would duplicate it
+ * (see Navbar). Ordered by value: learn (Docs, Blog), extend (Marketplace),
+ * then act (Download — also echoed by the pill's "Get Started" CTA).
+ */
 export const navLinks = [
-  { label: "Features", href: "/features" },
   { label: "Docs", href: "/docs" },
+  { label: "Blog", href: "/blog" },
   { label: "Marketplace", href: "/marketplace" },
   { label: "Download", href: "/download" },
 ] as const;
 
 /** Secondary links live in the footer (and the mobile menu), not the navbar. */
 export const secondaryNavLinks = [
-  { label: "Blog", href: "/blog" },
   { label: "Plugins", href: "/plugins" },
   { label: "Roadmap", href: "/roadmap" },
   { label: "Contact", href: "/contact" },

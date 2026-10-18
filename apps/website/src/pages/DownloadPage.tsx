@@ -1,4 +1,5 @@
 import { ArrowRight, Cpu, Download, FolderDown, RefreshCw, ShieldCheck } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Section, SectionHeading } from "../components/layout/Section";
 import { ShimmerLinkButton } from "../components/hero/ShimmerButton";
 import { Reveal } from "../components/shared/Reveal";
@@ -195,6 +196,18 @@ export default function DownloadPage() {
             <Download className="mr-2 h-4 w-4" />
             Go to GitHub Releases
           </ShimmerLinkButton>
+          <div className="mt-4">
+            <Link
+              to="/features"
+              className="group inline-flex items-center gap-1.5 text-sm font-medium text-white/60 transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+            >
+              See everything you get
+              <ArrowRight
+                className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </Link>
+          </div>
         </div>
       </Section>
 

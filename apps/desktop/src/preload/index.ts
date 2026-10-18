@@ -101,6 +101,7 @@ const desktopApi: DesktopApi = {
     update: (id, patch) => ipcRenderer.invoke(IPC_CHANNELS.creatorsUpdate, id, patch),
     remove: (id) => ipcRenderer.invoke(IPC_CHANNELS.creatorsRemove, id),
     search: (query) => ipcRenderer.invoke(IPC_CHANNELS.creatorsSearch, query),
+    lookup: (pluginId, externalId) => ipcRenderer.invoke(IPC_CHANNELS.creatorsLookup, pluginId, externalId),
     setFavorite: (id, favorite) => ipcRenderer.invoke(IPC_CHANNELS.creatorsSetFavorite, id, favorite),
     setAutoRecord: (id, enabled) => ipcRenderer.invoke(IPC_CHANNELS.creatorsSetAutoRecord, id, enabled),
     setUseProxy: (id, enabled) => ipcRenderer.invoke(IPC_CHANNELS.creatorsSetUseProxy, id, enabled),

@@ -17,6 +17,7 @@ import {
   getPlaylistItems,
   getVideos,
   pickThumb,
+  probeChannelProfile,
   probeLivePage,
   searchChannels,
   searchLiveVideos,
@@ -218,19 +219,36 @@ const plugin: Plugin = {
         const raw = stripPrefix(identifier).trim();
         if (!raw) return null;
         const apiKey = getApiKey();
-        if (!apiKey) return null;
-        try {
-          if (/^UC[\w-]{22}$/.test(raw)) {
-            const channels = await getChannels(apiKey, { ids: [raw] });
+        if (apiKey) {
+          try {
+            if (/^UC[\w-]{22}$/.test(raw)) {
+              const channels = await getChannels(apiKey, { ids: [raw] });
+              return channels[0] ? channelToCreatorInfo(channels[0]) : null;
+            }
+            const handle = raw.startsWith('@') ? raw : `@${raw}`;
+            const channels = await getChannels(apiKey, { handles: [handle] });
             return channels[0] ? channelToCreatorInfo(channels[0]) : null;
+          } catch (e) {
+            ctx?.logger.warn(`youtube: getCreator failed for ${raw}: ${e}`);
           }
-          const handle = raw.startsWith('@') ? raw : `@${raw}`;
-          const channels = await getChannels(apiKey, { handles: [handle] });
-          return channels[0] ? channelToCreatorInfo(channels[0]) : null;
-        } catch (e) {
-          ctx?.logger.warn(`youtube: getCreator failed for ${raw}: ${e}`);
+        }
+        // ponytail: quota-free fallback — the channel page's og: meta tags
+        // carry the real display name + avatar, so creators added WITHOUT
+        // an API key still get their actual profile picture.
+        const probe = await probeChannelProfile(raw);
+        if (probe.displayName === undefined && probe.avatarUrl === undefined) {
           return null;
         }
+        const handle = raw.replace(/^@/, '');
+        return {
+          id: `youtube:${raw}`,
+          username: handle,
+          displayName: probe.displayName ?? handle,
+          avatarUrl: probe.avatarUrl,
+          profileUrl: /^UC[\w-]{22}$/.test(raw)
+            ? `https://www.youtube.com/channel/${raw}`
+            : `https://www.youtube.com/@${handle}`,
+        };
       },
     },
 

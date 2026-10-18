@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Info, Radio, Shield, Zap } from 'lucide-react';
-import { useState } from 'react';
-import type { CreatorDto } from '@rekordly/shared';
+import { Check, Info, Loader2, Radio, Shield, Zap } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import type { CreatorDto, CreatorLookupDto } from '@rekordly/shared';
 import { Button, Dialog, DialogContent, Input, Select, Switch, Textarea } from '@rekordly/ui';
 import { useToastStore } from '../../stores/toast-store';
 import { friendlyErrorMessage } from '../../lib/errors';
@@ -116,6 +116,11 @@ export function AddCreatorDialog({ open, onOpenChange }: { open: boolean; onOpen
   // unreachable from this network (ISP blocks). Default OFF: direct access.
   const [useProxy, setUseProxy] = useState(false);
 
+  // ponytail: profile auto-lookup — the plugin resolves the real profile so
+  // creators are added with their actual avatar photo (not initials).
+  const [profileLookup, setProfileLookup] = useState<CreatorLookupDto | null>(null);
+  const [lookupState, setLookupState] = useState<'idle' | 'searching' | 'found' | 'not-found'>('idle');
+
   // ponytail: segment length comes from the global setting — shown so the
   // user knows how files will be split before committing.
   const { data: appSettingsForAdd } = useQuery({
@@ -127,6 +132,42 @@ export function AddCreatorDialog({ open, onOpenChange }: { open: boolean; onOpen
 
   const hints = PLUGIN_CREATOR_HINTS[pluginId] ?? GENERIC_CREATOR_HINTS;
 
+  // ponytail: debounced profile lookup. Once a plugin + id are available,
+  // ask the plugin for the upstream profile (real displayName/username +
+  // avatar). Only empties are autofilled — the user's own inputs win.
+  useEffect(() => {
+    if (pluginId === '' || externalId.trim() === '') {
+      setProfileLookup(null);
+      setLookupState('idle');
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setLookupState('searching');
+      window.desktop.creators
+        .lookup(pluginId, normalizeExternalId(pluginId, externalId))
+        .then((info) => {
+          if (cancelled) return;
+          setProfileLookup(info);
+          setLookupState(info === null ? 'not-found' : 'found');
+          if (info !== null) {
+            setUsername((prev) => (prev.trim() === '' ? info.username.toLowerCase() : prev));
+            setDisplayName((prev) => (prev.trim() === '' ? info.displayName : prev));
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setProfileLookup(null);
+            setLookupState('not-found');
+          }
+        });
+    }, 700);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [pluginId, externalId]);
+
   const create = useMutation({
     mutationFn: (values: { externalId: string; username: string }) =>
       window.desktop.creators.create({
@@ -134,6 +175,10 @@ export function AddCreatorDialog({ open, onOpenChange }: { open: boolean; onOpen
         externalId: values.externalId,
         username: values.username,
         displayName,
+        // ponytail: real profile photo + url from the plugin lookup (null
+        // when the plugin couldn't resolve a profile).
+        avatarUrl: profileLookup?.avatarUrl ?? null,
+        profileUrl: profileLookup?.profileUrl ?? null,
         autoRecord,
         autoRecordQuality,
         useProxy,
@@ -154,6 +199,7 @@ export function AddCreatorDialog({ open, onOpenChange }: { open: boolean; onOpen
       if (useProxy) void queryClient.invalidateQueries({ queryKey: ['settings'] });
       onOpenChange(false);
       setPluginId(''); setExternalId(''); setUsername(''); setDisplayName(''); setNotes(''); setAutoRecord(false); setAutoRecordQuality('best'); setUseProxy(false);
+      setProfileLookup(null); setLookupState('idle');
     },
     onError: (err: unknown) => {
       pushToast({ level: 'error', title: 'Failed to add creator', message: err instanceof Error ? err.message : 'Unknown error' });
@@ -203,6 +249,37 @@ export function AddCreatorDialog({ open, onOpenChange }: { open: boolean; onOpen
             onChange={(e) => setExternalId(e.target.value)}
             placeholder={hints.idPlaceholder}
           />
+          {/* ponytail: live profile-lookup feedback — shows the resolved
+              avatar so the user can confirm the right creator is matched. */}
+          {pluginId !== '' && externalId.trim() !== '' && (
+            <div aria-live="polite" className="flex items-center gap-2 text-xs text-foreground-muted">
+              {lookupState === 'searching' ? (
+                <>
+                  <Loader2 size={12} className="animate-spin text-info" aria-hidden="true" />
+                  Looking up profile from {enabledPlugins.find((p) => p.id === pluginId)?.name ?? pluginId}…
+                </>
+              ) : lookupState === 'found' && profileLookup !== null ? (
+                <>
+                  {profileLookup.avatarUrl ? (
+                    <img
+                      src={profileLookup.avatarUrl}
+                      alt="Creator avatar preview"
+                      className="h-5 w-5 shrink-0 rounded-full border border-border object-cover"
+                    />
+                  ) : (
+                    <Check size={12} className="shrink-0 text-success" aria-hidden="true" />
+                  )}
+                  <span className="text-success">Profile matched</span>
+                  <span>{profileLookup.avatarUrl ? '— avatar will be saved' : '— details autofilled'}</span>
+                </>
+              ) : lookupState === 'not-found' ? (
+                <>
+                  <Info size={12} className="shrink-0 text-foreground-disabled" aria-hidden="true" />
+                  No profile found — details are saved as entered. The avatar is fetched on the next live check.
+                </>
+              ) : null}
+            </div>
+          )}
           <Input
             label={`${hints.usernameLabel} (optional - auto-filled if empty)`}
             value={username}
@@ -517,9 +594,12 @@ export function RecordDialog({
   const startRecording = useMutation({
     mutationFn: () =>
       window.desktop.recording.startForCreator(creator.id, {
-        // ponytail: the select values are already minutes — no conversion.
-        // Splitting and stop-after are mutually exclusive (split wins).
-        durationMinutes: segment !== '' ? undefined : duration === '' ? undefined : Number(duration),
+        // ponytail: Duration is the stop-after budget for the WHOLE recording,
+        // even with splitting on — 30-min recording split every 15 min =
+        // exactly 2 parts (the second is the last one). Split = each part's
+        // length. Passing both used to drop the duration entirely, so split
+        // chains ran until the stream ended.
+        durationMinutes: duration === '' ? undefined : Number(duration),
         quality,
         segmentMinutes: segment === '' ? undefined : Number(segment),
         streamType: streamType === 'auto' ? undefined : streamType,
@@ -565,6 +645,7 @@ export function RecordDialog({
           />
           <Select
             label="Duration"
+            hint="Total length of the recording. With a split selected, this covers all parts together."
             value={duration}
             onChange={(e) => setDuration(e.target.value)}
             options={[
@@ -585,6 +666,7 @@ export function RecordDialog({
             onChange={(e) => setSegment(e.target.value)}
             options={[
               { value: '', label: 'No split (single file)' },
+              { value: '5', label: 'Every 5 minutes' },
               { value: '15', label: 'Every 15 minutes' },
               { value: '30', label: 'Every 30 minutes' },
               { value: '60', label: 'Every hour' },

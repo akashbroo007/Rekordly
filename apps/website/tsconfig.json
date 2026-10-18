@@ -4,6 +4,7 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
     "types": ["vite/client"],
+    "allowImportingTsExtensions": true,
     "useDefineForClassFields": true
   },
   "include": ["src/**/*", "vite.config.ts"]

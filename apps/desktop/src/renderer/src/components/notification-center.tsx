@@ -48,10 +48,20 @@ export function NotificationCenter() {
       <DialogTrigger asChild>
         <Button variant="ghost" size="icon" aria-label="Notifications" className="relative">
           <Bell size={16} />
+          {/* ponytail: a loud red count digit competed with the toolbar's
+              active-recording pill — an unread state now reads as one tiny
+              soft dot, with the exact count kept for screen readers. */}
           {(unread ?? 0) > 0 && (
-            <span className="absolute right-1 top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-error px-1 text-[9px] font-semibold text-white">
-              {unread}
-            </span>
+            <>
+              <span
+                title={`${unread} unread notification${unread === 1 ? '' : 's'}`}
+                aria-hidden="true"
+                className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-error/80 shadow-[0_0_0_2px_var(--color-panel)]"
+              />
+              <span className="sr-only">
+                {typeof unread === 'number' ? unread : ''} unread notification{unread === 1 ? '' : 's'}
+              </span>
+            </>
           )}
         </Button>
       </DialogTrigger>
@@ -114,7 +124,11 @@ function NotificationItem({ notification }: { notification: NotificationDto }) {
       <div className="min-w-0 flex-1">
         <p className="flex items-baseline justify-between gap-2">
           <span className="truncate text-sm font-medium text-foreground">{notification.title}</span>
-          <time className="shrink-0 text-[10px] text-foreground-muted" title={new Date(notification.time).toLocaleString()}>
+          <time
+            dateTime={new Date(notification.time).toISOString()}
+            className="shrink-0 text-xs text-foreground-muted"
+            title={formatFullStamp(notification.time)}
+          >
             {formatRelativeTime(notification.time)}
           </time>
         </p>
@@ -124,6 +138,11 @@ function NotificationItem({ notification }: { notification: NotificationDto }) {
       </div>
     </li>
   );
+}
+
+/** Locale-aware full stamp for tooltips. */
+function formatFullStamp(time: number): string {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' }).format(time);
 }
 
 function formatRelativeTime(time: number): string {

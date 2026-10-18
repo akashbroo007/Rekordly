@@ -6,6 +6,7 @@ import rehypeHighlight from "rehype-highlight";
 import { Check, Copy, Link as LinkIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { slugifyHeading } from "../../lib/docs";
+import { linkifyFeatureMentions } from "../../content/featuresConfig";
 
 function extractText(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") {
@@ -75,6 +76,7 @@ export function MarkdownRenderer({ source }: { source: string }) {
 
   return (
     <div className="markdown">
+      {/* First mention of each feature name links to its feature page. */}
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeHighlight]}
@@ -139,7 +141,7 @@ export function MarkdownRenderer({ source }: { source: string }) {
           },
         }}
       >
-        {source}
+        {linkifyFeatureMentions(source)}
       </ReactMarkdown>
     </div>
   );

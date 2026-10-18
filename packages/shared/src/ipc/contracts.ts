@@ -62,6 +62,8 @@ export const IPC_CHANNELS = {
   creatorsUpdate: 'creators:update',
   creatorsRemove: 'creators:remove',
   creatorsSearch: 'creators:search',
+  /** ponytail: upstream profile lookup (displayName/avatar) via the plugin. */
+  creatorsLookup: 'creators:lookup',
   creatorsSetFavorite: 'creators:set-favorite',
   creatorsSetAutoRecord: 'creators:set-auto-record',
   creatorsSetUseProxy: 'creators:set-use-proxy',
@@ -638,6 +640,17 @@ export interface CreatorTagDto {
   name: string;
   color?: string | null;
   createdAt: string;
+}
+
+/** ponytail: plugin-provided profile snapshot for the Add Creator form —
+ * autofills displayName/username and carries the real avatar/profile url. */
+export interface CreatorLookupDto {
+  displayName: string;
+  username: string;
+  avatarUrl?: string | null;
+  profileUrl?: string | null;
+  bio?: string | null;
+  followerCount?: number | null;
 }
 
 /** ponytail: per-creator library aggregates for the details dialog. */
@@ -1274,6 +1287,11 @@ export interface DesktopApi {
     update(id: string, patch: Partial<CreatorDto>): Promise<void>;
     remove(id: string): Promise<void>;
     search(query: string): Promise<CreatorDto[]>;
+    /**
+     * ponytail: resolve a creator's upstream profile (real display name +
+     * avatar) via the platform plugin; null when the plugin cannot answer.
+     */
+    lookup(pluginId: string, externalId: string): Promise<CreatorLookupDto | null>;
     setFavorite(id: string, favorite: boolean): Promise<void>;
     setAutoRecord(id: string, enabled: boolean): Promise<void>;
     setUseProxy(id: string, enabled: boolean): Promise<void>;

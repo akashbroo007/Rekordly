@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { ArrowRight, Github, Menu, X } from "lucide-react";
+import { navLinks, secondaryNavLinks, site } from "../../content/site";
 import {
-  navLinks,
-  secondaryNavLinks,
-  site,
-} from "../../content/site";
+  FeaturesAccordion,
+  FeaturesDropdown,
+} from "../features/FeaturesDropdown";
 
 export function Navbar() {
   const [open, setOpen] = useState(false);
@@ -39,6 +39,7 @@ export function Navbar() {
 
           {/* Glassmorphic Navigation Pills (center) */}
           <div className="hidden md:flex items-center space-x-1 rounded-full bg-white/5 backdrop-blur-xl border border-white/10 p-1">
+            <FeaturesDropdown />
             {navLinks.map((link) => (
               <NavLink
                 key={link.href}
@@ -92,11 +93,26 @@ export function Navbar() {
         </div>
       </div>
 
-      {/* Mobile menu — every page, flat list */}
+      {/* Mobile menu — every page, flat list; Features expands as an accordion */}
       {open && (
         <div className="border-b border-white/10 bg-black/90 backdrop-blur-xl md:hidden">
           <div className="mx-auto max-w-7xl space-y-1 px-6 py-4 lg:px-8">
-            {[...navLinks, ...secondaryNavLinks].map((link) => (
+            {/* Features first, as an accordion (mirrors the desktop dropdown). */}
+            <FeaturesAccordion />
+            {navLinks.map((link) => (
+              <NavLink
+                key={link.href}
+                to={link.href}
+                className={({ isActive }) =>
+                  `block rounded-full px-4 py-2 text-sm font-medium transition-all hover:bg-white/10 hover:text-white ${
+                    isActive ? "bg-white/10 text-white" : "text-white/90"
+                  }`
+                }
+              >
+                {link.label}
+              </NavLink>
+            ))}
+            {[...secondaryNavLinks].map((link) => (
               <NavLink
                 key={link.href}
                 to={link.href}

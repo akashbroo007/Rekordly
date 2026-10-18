@@ -171,6 +171,26 @@ export interface StartRecordingOptions {
    * on the job row so the host's resolveStream can honor it.
    */
   streamType?: string;
+  /**
+   * ponytail: internal — epoch ms anchor of the whole segmented session. Set
+   * on the FIRST part only (undefined → the service anchors it at that part's
+   * pipeline start) and round-tripped through the `recording-segment-finished`
+   * event so every chained part clamps its cap to the ORIGINAL stop-after
+   * budget: `durationMinutes` is the TOTAL session length, not a per-part
+   * limit (30-min recording split every 15 min = exactly 2 parts).
+   */
+  sessionStartedAt?: number;
+  /**
+   * ponytail: internal — set when the START came from the host's auto-record
+   * entry (manual Record-dialog / Telegram starts leave it unset). It is
+   * round-tripped through the `recording-segment-finished` event so the host
+   * can apply the auto-record guardrails (master pause, per-creator opt-in)
+   * ONLY to chains that came from auto-record. Manual segmented recordings
+   * keep chaining independently of auto-record — they used to stop silently
+   * after the first split (this flag's absence was misread as "auto-record
+   * revoked").
+   */
+  autoRecord?: boolean;
 }
 
 /**
@@ -1204,29 +1224,49 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
         timestamp: new Date().toISOString(),
       });
 
-      // ponytail: service-level duration watchdog — guarantees a time-limited
+      // ponytail: session budget — `durationMinutes` is the TOTAL stop-after
+      // across a segmented session (a 30-min recording split every 15 min is
+      // exactly 2 parts), anchored at the first part's pipeline start. Each
+      // part caps at the smaller of its segment length and the remaining
+      // budget, so the last part is the short remainder and the chain stops
+      // there. Chained parts receive the SAME anchor back through the chain
+      // event (sessionStartedAt).
+      const sessionStartedAtMs = options.sessionStartedAt ?? Date.now();
+      const sessionBudgetSeconds =
+        options.durationMinutes !== undefined && options.durationMinutes > 0
+          ? options.durationMinutes * 60
+          : undefined;
+      const remainingSessionSeconds =
+        sessionBudgetSeconds !== undefined
+          ? sessionBudgetSeconds - (Date.now() - sessionStartedAtMs) / 1000
+          : undefined;
+      const segmentCapSeconds =
+        options.segmentMinutes !== undefined && options.segmentMinutes > 0
+          ? options.segmentMinutes * 60
+          : undefined;
+      // Effective per-part cap: segment length clamped by the remaining
+      // session budget; duration-only sessions keep the plain stop-after cap.
+      const partCapSeconds =
+        segmentCapSeconds !== undefined
+          ? remainingSessionSeconds !== undefined
+            ? Math.min(segmentCapSeconds, Math.max(remainingSessionSeconds, 1))
+            : segmentCapSeconds
+          : remainingSessionSeconds;
+
+      // ponytail: service-level cap watchdog — guarantees a time-capped
       // recording stops even if the downloader-level timer was never armed
-      // (e.g. no parseable progress lines). finalizeRecording is idempotent,
-      // and a no-op once the job left the 'recording' state.
-      if (options.durationMinutes !== undefined && options.durationMinutes > 0) {
+      // (e.g. no parseable progress lines, or an ffmpeg that ignores 'q').
+      // finalizeRecording is idempotent, and a no-op once the job left the
+      // 'recording' state. The old duration/segment watchdogs were armed from
+      // the RAW options, which would restart the FULL 15- or 30-minute timers
+      // on every chained part — bounding each part correctly requires the
+      // merged part cap computed above.
+      if (partCapSeconds !== undefined) {
         const watchdog = setTimeout(
           () => void this.finalizeRecording(jobId, 'duration-limit-reached'),
-          options.durationMinutes * 60 * 1000 + 15_000,
+          partCapSeconds * 1000 + 15_000,
         );
         watchdog.unref?.();
-      }
-
-      // ponytail: segment-splitting watchdog — mirrors the duration watchdog
-      // above but for segmentMinutes-based recordings. If the downloader-level
-      // timer fails (ffmpeg ignores 'q', timer doesn't fire), this guarantees
-      // the segment still gets finalized. finalizeRecording is idempotent, so
-      // when the downloader timer fires normally this is a harmless no-op.
-      if (options.segmentMinutes !== undefined && options.segmentMinutes > 0) {
-        const segmentWatchdog = setTimeout(
-          () => void this.finalizeRecording(jobId, 'segment-split-watchdog'),
-          options.segmentMinutes * 60 * 1000 + 15_000,
-        );
-        segmentWatchdog.unref?.();
       }
 
       // ponytail: the stream may have ended while we were preparing — skip the download
@@ -1258,14 +1298,10 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
         // plugin flagged the stream (creators.useProxy).
         proxyUrl: stream.proxyUrl,
         resume: true,
-        // ponytail: segmentMinutes (splitting) takes precedence over the
-        // stop-after cap — the UI treats them as mutually exclusive.
-        durationSeconds:
-          options.segmentMinutes !== undefined && options.segmentMinutes > 0
-            ? options.segmentMinutes * 60
-            : options.durationMinutes !== undefined && options.durationMinutes > 0
-              ? options.durationMinutes * 60
-              : undefined,
+        // ponytail: the effective per-part cap computed above — the segment
+        // length clamped to the remaining stop-after budget. `durationMinutes`
+        // is the TOTAL for a segmented session (60s sliver guards the clamp).
+        durationSeconds: partCapSeconds,
       };
       for (let reResolveCount = 0; ; reResolveCount++) {
         // ponytail: pause landed between generations — never spawn another
@@ -1590,11 +1626,22 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
       // split (not a user stop-after or stream end), tell the host so it can
       // re-run its guardrails and start the next segment. The event carries
       // the original StreamObject + options for the continuation.
+      // ponytail: the stop-after budget applies to the WHOLE chain — when
+      // durationMinutes is set, only chain while a meaningful chunk of it
+      // remains (30-min recording split every 15 min = exactly 2 parts). The
+      // 30s floor keeps a near-exhausted budget from spawning a junk sliver
+      // part; the previously-reported "keeps queuing another part forever"
+      // was this chain ignoring the stop-after cap.
+      const sessionRemainingAfterPart =
+        sessionBudgetSeconds !== undefined
+          ? sessionBudgetSeconds - (Date.now() - sessionStartedAtMs) / 1000
+          : undefined;
       const chainable =
         options.segmentMinutes !== undefined &&
         options.segmentMinutes > 0 &&
         downloadResult.durationCapReached &&
-        options.resumeFrom === undefined;
+        options.resumeFrom === undefined &&
+        (sessionRemainingAfterPart === undefined || sessionRemainingAfterPart > 30);
       if (chainable) {
         this.emitEvent({
           type: 'recording-segment-finished',
@@ -1604,7 +1651,17 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
             stream: stream as unknown as Record<string, unknown>,
             options: {
               quality: options.quality,
+              durationMinutes: options.durationMinutes,
               segmentMinutes: options.segmentMinutes,
+              // ponytail: keep the session anchor — chained parts clamp every
+              // cap to the SAME total stop-after budget.
+              sessionStartedAt: sessionStartedAtMs,
+              // ponytail: round-trip the stream variant and chain origin —
+              // a VR pick must not degrade to the plugin default on part 2+,
+              // and the host needs to know which guardrails apply (auto-record
+              // ones only for chains that started via auto-record).
+              streamType: options.streamType,
+              autoRecord: options.autoRecord,
             } as unknown as Record<string, unknown>,
           },
           timestamp: new Date().toISOString(),
@@ -2070,6 +2127,7 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
       const now = new Date().toISOString();
       const job = this.repo.getJob(input.jobId);
       const derivativeId = randomUUID();
+      const outSize = (await stat(outPath)).size;
       this.repo.createRecording({
         id: derivativeId,
         // ponytail: inherit the job's creatorId so per-creator stats keep
@@ -2084,7 +2142,7 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
         status: 'completed',
         quality: input.quality,
         resolution: undefined,
-        sizeBytes: (await stat(outPath)).size,
+        sizeBytes: outSize,
         durationSeconds: undefined,
         videoCodec: undefined,
         audioCodec: undefined,
@@ -2097,6 +2155,10 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
         updatedAt: now,
       });
       const { thumbnailPath } = await this.enrichLibraryEntry(input.jobId, derivativeId, outPath);
+      // ponytail: whoever ends up owning the on-disk thumbnail (the
+      // derivative's own, or the renamed source one below) is also what the
+      // job row should point at.
+      let survivingThumb: string | undefined = thumbnailPath;
 
       // ponytail: the selected quality REPLACES the source capture. Only the
       // source row produced by THIS job's capture (matched by file path) is
@@ -2119,6 +2181,7 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
           try {
             await rename(sourceEntry.thumbnailPath, reused);
             this.repo.updateRecording(derivativeId, { thumbnailPath: reused });
+            survivingThumb = reused;
           } catch {
             /* best-effort thumbnail reuse */
           }
@@ -2126,6 +2189,14 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
         this.repo.removeRecording(sourceEntry.id);
         await rm(input.filePath, { force: true });
         await rm(`${input.filePath}.thumb.jpg`, { force: true });
+        // ponytail: the source file is gone — the job row MUST follow the
+        // surviving derivative, or every Recordings-page action that stats
+        // job.filePath (Upload from the row, partial playback, retry
+        // guards) fails with ENOENT forever after.
+        this.repo.updateJob(input.jobId, { filePath: outPath, bytesDownloaded: outSize });
+        if (survivingThumb !== undefined) {
+          this.repo.updateJob(input.jobId, { thumbnailPath: survivingThumb });
+        }
       }
     } catch (error) {
       this.logger.warn(

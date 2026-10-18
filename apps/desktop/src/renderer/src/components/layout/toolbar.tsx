@@ -2,6 +2,7 @@ import { Moon, Plus, Puzzle, Settings, Sun } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@rekordly/ui';
+import { RECORDING_ROW_ACTIVE_STATUSES } from '../../pages/recordings/recording-row';
 import { useThemeStore } from '../../stores/theme-store';
 import { NotificationCenter } from '../notification-center';
 
@@ -34,30 +35,41 @@ export function Toolbar() {
     refetchInterval: 3000,
   });
 
-  const activeCount = (jobs ?? []).filter((j) =>
-    ['recording', 'queued', 'preparing'].includes(j.status),
-  ).length;
+  // ponytail: the top bar count must agree with the Recordings page — share
+  // its active-status set instead of a hand-rolled subset.
+  const activeCount = (jobs ?? []).filter((j) => RECORDING_ROW_ACTIVE_STATUSES.includes(j.status)).length;
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-panel px-4">
       <div className="ml-auto flex items-center gap-2">
-        <span className="hidden items-center gap-1.5 text-xs text-foreground-muted lg:flex">
+        <span className="hidden items-center gap-2 lg:flex">
           {activeCount > 0 ? (
-            <>
-              <span
-                className="h-1.5 w-1.5 rounded-full bg-error animate-pulse"
-                aria-hidden="true"
-              />
-              {activeCount} active recording{activeCount > 1 ? 's' : ''}
-            </>
+            // ponytail: the pill is the chrome's live heartbeat — prominent
+            // border, pulsing dot, and a click lands on the live list. No
+            // glow animation: the user explicitly removed those (see
+            // index.css) — the 2px border + dot carry the state.
+            <button
+              type="button"
+              onClick={() => navigate('/recordings?filter=active')}
+              title={`${activeCount} active recording${activeCount > 1 ? 's' : ''} — watch them live`}
+              aria-label={`${activeCount} active recording${activeCount > 1 ? 's' : ''} — open recordings`}
+              className="flex transform-gpu cursor-pointer items-center gap-1.5 rounded-md border-2 border-error/60 bg-error/15 px-2.5 py-1 text-xs font-semibold text-error transition-colors duration-150 hover:-translate-y-px hover:bg-error/25"
+            >
+              <span className="relative flex h-2 w-2" aria-hidden="true">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-error opacity-70" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-error" />
+              </span>
+              <span className="tabular-nums">{activeCount}</span>
+              active recording{activeCount > 1 ? 's' : ''}
+            </button>
           ) : (
-            <>
-              <span
-                className="h-1.5 w-1.5 rounded-full bg-foreground-disabled"
-                aria-hidden="true"
-              />
-              No active recording
-            </>
+            <span
+              className="hidden items-center gap-1.5 px-1.5 text-xs text-foreground-disabled"
+              title="Nothing is recording right now"
+            >
+              <span className="h-1.5 w-1.5 rounded-full border border-border bg-transparent" aria-hidden="true" />
+              Idle — no active recording
+            </span>
           )}
         </span>
 

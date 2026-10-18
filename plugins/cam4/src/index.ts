@@ -598,13 +598,49 @@ function roomUrl(username: string): string {
   return `${DEFAULT_BASE}/${encodeURIComponent(username)}`;
 }
 
+// ponytail: some cam4 CDNs answer protocol-relative URLs ("//img.cam4…/x"),
+// which break <img> in the renderer (no scheme) — force https.
+function httpsImageUrl(raw: string | undefined): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const url = raw.trim();
+  if (url === '') return undefined;
+  const absolute = url.startsWith('//') ? `https:${url}` : url;
+  return /^https?:\/\//i.test(absolute) ? absolute : undefined;
+}
+
+/**
+ * ponytail: the search/performer payload does not always carry an avatar —
+ * but cam4 room pages are server-rendered with an og:image that IS the
+ * performer's picture. Best-effort scrape fallback (never fatal; the UI
+ * falls back to initials when this comes up empty).
+ */
+async function scrapeAvatarFromRoomPage(identifier: string, username: string): Promise<string | null> {
+  try {
+    const { value } = await withSmartRoute(identifier, async (agent) =>
+      request(roomUrl(username), {
+        agent,
+        timeout: agent !== null ? PROXY_TIMEOUT_MS : DIRECT_TIMEOUT_MS,
+        headers: siteHeaders({ Accept: 'text/html' }),
+      }),
+    );
+    const match =
+      value.body.match(/<meta[^>]+(?:property|name)=["']og:image["'][^>]+content=["']([^"']+)["']/) ??
+      value.body.match(/<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']og:image["']/);
+    if (match === null) return null;
+    return httpsImageUrl(match[1]?.replace(/&amp;/g, '&')) ?? null;
+  } catch (err) {
+    ctx?.logger.debug(`cam4: avatar scrape failed for ${username}: ${err}`);
+    return null;
+  }
+}
+
 function creatorFromPerformer(info: PerformerInfo): CreatorInfo {
   const live = info.online;
   return {
     id: `cam4:${info.username}`,
     username: info.username,
     displayName: info.username,
-    avatarUrl: info.profileImageUrl,
+    avatarUrl: httpsImageUrl(info.profileImageUrl),
     profileUrl: roomUrl(info.username),
     bio: info.country !== undefined ? `Country: ${info.country}` : undefined,
     isLive: live,
@@ -662,7 +698,14 @@ const plugin: Plugin = {
         if (!username) return null;
         try {
           const { info, unavailable } = await fetchPerformerSmart(identifier, username);
-          if (info !== null) return creatorFromPerformer(info);
+          if (info !== null) {
+            // ponytail: search payloads often omit the profile picture —
+            // fall back to the room page's og:image before giving up.
+            if ((info.profileImageUrl ?? '') === '') {
+              info.profileImageUrl = (await scrapeAvatarFromRoomPage(identifier, username)) ?? undefined;
+            }
+            return creatorFromPerformer(info);
+          }
           if (unavailable) {
             ctx?.logger.debug(`cam4: ${username} lookup degraded (site unreachable)`);
           }

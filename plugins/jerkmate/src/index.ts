@@ -515,15 +515,24 @@ async function resolveStreamSmart(
 // ponytail: the room page path is /camgirl/<name>/ on the white-label
 // storefront. Only the storefront URL pattern differs from streamate.com's
 // /cam/<name>/ — stream state always comes from the shared manifest edge.
+
 function roomUrl(username: string): string {
   return `${getBase()}/camgirl/${encodeURIComponent(username)}/`;
 }
+
+// ponytail: ICF's shared avatar CDN keys profile pictures by nickname
+// (verified: imagetransform.icfcdn.com serves webp avatars for jerkmate
+// nicknames too — jerkmate is a streamate-family white-label). The profile
+// picture now rides along with the username resolution.
+const icfAvatarUrl = (username: string): string =>
+  `https://imagetransform.icfcdn.com/s/avatar/${encodeURIComponent(username)}.webp`;
 
 function creatorFromUsername(username: string, live: boolean): CreatorInfo {
   return {
     id: `jerkmate:${username}`,
     username,
     displayName: username,
+    avatarUrl: icfAvatarUrl(username),
     profileUrl: roomUrl(username),
     isLive: live,
     liveUrl: live ? roomUrl(username) : undefined,

@@ -1,6 +1,7 @@
 import { LayoutGrid, List, Search, SlidersHorizontal, X } from 'lucide-react';
 import type { CreatorTagDto } from '@rekordly/shared';
 import { Button, Input, MultiSelect, type MultiSelectOption } from '@rekordly/ui';
+import { platformColor } from '../../components/platform-config';
 import type {
   CreatorsFilterState,
   CreatorSortDir,
@@ -56,6 +57,8 @@ export function FilterBar({
     label: p.name,
     count: p.count,
     live: p.liveCount > 0,
+    // ponytail: brand-tinted dot — same single color map as the cards use.
+    dot: platformColor(p.pluginId),
   }));
 
   const tagOptions: MultiSelectOption[] = tags.map((t) => ({
@@ -83,11 +86,11 @@ export function FilterBar({
           />
         </div>
 
-        {/* Site / platform dynamic filter */}
+        {/* Platform dynamic filter */}
         <MultiSelect
           className="w-40"
           icon={<SlidersHorizontal size={13} className="text-foreground-muted" />}
-          placeholder="All sites"
+          placeholder="All platforms"
           options={platformOptions}
           value={filters.platforms}
           onChange={(platforms) => onChange({ platforms })}
@@ -131,19 +134,20 @@ export function FilterBar({
             aria-label="Sort creators by"
             className="h-9 rounded-sm border border-border bg-elevated px-2.5 text-sm text-foreground transition-colors duration-150 focus:border-primary focus:outline-none"
           >
+            <option value="liveFirst">Live first</option>
             <option value="displayName">Name</option>
-            <option value="username">Username</option>
-            <option value="createdAt">Date Added</option>
-            <option value="updatedAt">Last Updated</option>
+            <option value="lastLive">Last live</option>
           </select>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onChange({ sortDir: (filters.sortDir === 'asc' ? 'desc' : 'asc') as CreatorSortDir })}
-            title="Toggle sort direction"
-          >
-            {filters.sortDir === 'asc' ? 'A-Z' : 'Z-A'}
-          </Button>
+          {filters.sortField === 'displayName' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onChange({ sortDir: (filters.sortDir === 'asc' ? 'desc' : 'asc') as CreatorSortDir })}
+              title="Toggle sort direction"
+            >
+              {filters.sortDir === 'asc' ? 'A-Z' : 'Z-A'}
+            </Button>
+          )}
 
           {/* Grid/list view toggle */}
           <div className="flex items-center overflow-hidden rounded-sm border border-border">
@@ -186,7 +190,7 @@ export function FilterBar({
                 <FilterChip
                   key={pluginId}
                   label={platform?.name ?? pluginId}
-                  dot="bg-info"
+                  dotColor={platformColor(pluginId)}
                   onRemove={() =>
                     onChange({ platforms: filters.platforms.filter((p) => p !== pluginId) })
                   }
@@ -200,7 +204,7 @@ export function FilterBar({
                 <FilterChip
                   key={tagId}
                   label={tag?.name ?? 'Tag'}
-                  dot="bg-primary"
+                  dotColor={tag?.color ?? undefined}
                   onRemove={() => onChange({ tagIds: filters.tagIds.filter((t) => t !== tagId) })}
                 />
               );
@@ -208,9 +212,9 @@ export function FilterBar({
           <button
             type="button"
             onClick={onReset}
-            className="flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 text-[11px] text-foreground-muted transition-colors hover:bg-hover hover:text-error"
+            className="flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 text-xs text-foreground-muted transition-colors hover:bg-hover hover:text-error"
           >
-            <X size={10} /> Clear all
+            <X size={11} /> Clear all
           </button>
           <span className="ml-1 text-xs text-foreground-muted">
             <span className="font-semibold tabular-nums text-foreground">{resultCount}</span>
@@ -225,15 +229,20 @@ export function FilterBar({
 function FilterChip({
   label,
   onRemove,
-  dot,
+  dotColor,
 }: {
   label: string;
   onRemove: () => void;
-  dot?: string;
+  dotColor?: string;
 }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-sm border border-primary/30 bg-primary/10 py-0.5 pl-1.5 pr-1 text-[11px] font-medium text-primary">
-      {dot && <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />}
+    <span className="inline-flex items-center gap-1 rounded-sm border border-primary/30 bg-primary/10 py-0.5 pl-1.5 pr-1 text-xs font-medium text-primary">
+      {dotColor && (
+        <span
+          className="h-1.5 w-1.5 rounded-full"
+          style={{ backgroundColor: dotColor }}
+        />
+      )}
       {label}
       <button
         type="button"
@@ -241,7 +250,7 @@ function FilterChip({
         aria-label={`Remove filter ${label}`}
         className="rounded-sm p-0.5 transition-colors hover:bg-primary/20"
       >
-        <X size={9} />
+        <X size={10} />
       </button>
     </span>
   );

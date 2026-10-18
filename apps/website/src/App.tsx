@@ -8,6 +8,9 @@ import { CurrencyProvider } from "./lib/CurrencyContext";
 import { HomePage } from "./pages/HomePage";
 
 const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
+const FeatureDetailPage = lazy(
+  () => import("./pages/features/FeatureDetailPage"),
+);
 const BlogIndexPage = lazy(() => import("./pages/BlogIndexPage"));
 const BlogPostPage = lazy(() => import("./pages/BlogPostPage"));
 const PluginsPage = lazy(() => import("./pages/PluginsPage"));
@@ -55,6 +58,25 @@ export default function App() {
               </Lazy>
             }
           />
+          {[
+            "/features/automation",
+            "/features/monitoring-auto-record",
+            "/features/recording",
+            "/features/blocked-networks",
+            "/features/library-editor",
+            "/features/desktop",
+            "/features/notifications-remote",
+          ].map((path) => (
+            <Route
+              key={path}
+              path={path}
+              element={
+                <Lazy>
+                  <FeatureDetailPage pagePath={path} />
+                </Lazy>
+              }
+            />
+          ))}
           <Route
             path="/blog"
             element={

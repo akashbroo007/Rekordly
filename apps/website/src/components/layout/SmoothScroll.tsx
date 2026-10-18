@@ -22,7 +22,10 @@ export function SmoothScroll({ children }: { children: React.ReactNode }) {
       options={{
         lerp: 0.1,
         autoRaf: true,
-        anchors: true,
+        // Same-page anchor clicks (TOC links, in-page chips) are scrolled by
+        // Lenis; the -96px offset matches the scroll-margin-top used on
+        // section anchors so headings stay clear of the header.
+        anchors: { offset: -96 },
       }}
     >
       {children}

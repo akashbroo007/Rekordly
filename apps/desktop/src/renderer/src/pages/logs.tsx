@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { ScrollText, Search, Filter, Copy, Download, Trash2, AlertTriangle, Info, Bug, AlertCircle } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, EmptyState, Input, PageContainer, SectionHeader, Skeleton } from '@rekordly/ui';
 import type { LogEntry, LogLevel } from '@rekordly/shared/contracts';
+import { Pagination, usePaged } from '../components/pagination';
 
 const LEVELS: readonly LogLevel[] = ['debug', 'info', 'warn', 'error', 'fatal'];
 
@@ -23,6 +24,9 @@ const LEVEL_COLORS: Record<LogLevel, string> = {
 };
 
 const MAX_LOGS = 500;
+/** ponytail: dense one-line rows — 100 per page keeps scanning comfortable
+ * without burying the newest entries behind endless clicks. */
+const LOG_PAGE_SIZE = 100;
 
 export function LogsPage() {
   const [search, setSearch] = useState('');
@@ -65,6 +69,17 @@ export function LogsPage() {
   }, []);
 
   const hasFilters = search || levelFilter.size > 0 || scopeFilter;
+
+  // Pagination — reset to page 0 whenever any filter changes.
+  const resetKey = `${search}|${[...levelFilter].sort().join(',')}|${scopeFilter}`;
+  const { page, setPage, pageCount, paged: visibleLogs, total } = usePaged(filtered, LOG_PAGE_SIZE, resetKey);
+
+  // A row expanded on one page should not leak onto the next — collapse when
+  // the page (or the filter set behind it) changes.
+  useEffect(() => {
+    setExpandedId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   return (
     <PageContainer>
@@ -163,15 +178,20 @@ export function LogsPage() {
 
       {!isLoading && filtered.length > 0 && (
         <div className="min-h-0 flex-1 divide-y divide-border/60 overflow-y-auto rounded-sm border border-border bg-surface">
-          {filtered.map((entry, index) => (
+          {visibleLogs.map((entry, index) => (
             <LogRow
-              key={`${entry.time}-${index}`}
+              key={`${entry.time}-${page}-${index}`}
               entry={entry}
               expanded={expandedId === index}
               onToggle={() => setExpandedId(expandedId === index ? null : index)}
             />
           ))}
         </div>
+      )}
+
+      {/* Pagination — shared Previous / Page x of y / Next bar */}
+      {!isLoading && filtered.length > 0 && (
+        <Pagination page={page} pageCount={pageCount} onPageChange={setPage} total={total} noun="entries" />
       )}
     </PageContainer>
   );

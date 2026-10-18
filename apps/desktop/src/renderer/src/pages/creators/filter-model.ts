@@ -1,4 +1,4 @@
-export type CreatorSortField = 'displayName' | 'username' | 'createdAt' | 'updatedAt';
+export type CreatorSortField = 'liveFirst' | 'displayName' | 'lastLive';
 export type CreatorSortDir = 'asc' | 'desc';
 
 /** ponytail: status chips — 'issues' covers failed/paused/retrying monitoring. */
@@ -6,6 +6,7 @@ export type CreatorStatusFilter =
   | 'all'
   | 'live'
   | 'offline'
+  | 'recording'
   | 'autoRecord'
   | 'favorites'
   | 'issues';
@@ -14,7 +15,7 @@ export type CreatorView = 'grid' | 'list';
 
 export interface CreatorsFilterState {
   search: string;
-  /** pluginIds to include (empty = all sites). */
+  /** pluginIds to include (empty = all platforms). */
   platforms: string[];
   status: CreatorStatusFilter;
   /** tag ids to include (empty = all). */
@@ -29,12 +30,26 @@ export const DEFAULT_FILTERS: CreatorsFilterState = {
   platforms: [],
   status: 'all',
   tagIds: [],
-  sortField: 'displayName',
+  sortField: 'liveFirst',
   sortDir: 'asc',
   view: 'grid',
 };
 
 const STORAGE_KEY = 'rekordly.creators.filters.v1';
+
+/** ponytail: persisted pre-redesign sort fields map onto the new options. */
+const LEGACY_SORT_FIELDS: Record<string, CreatorSortField> = {
+  username: 'displayName',
+  createdAt: 'displayName',
+  updatedAt: 'lastLive',
+};
+
+function normalizeSortField(raw: unknown): CreatorSortField {
+  const legacy = LEGACY_SORT_FIELDS[raw as string];
+  if (legacy) return legacy;
+  if (raw === 'displayName' || raw === 'lastLive' || raw === 'liveFirst') return raw;
+  return DEFAULT_FILTERS.sortField;
+}
 
 export function loadFilters(): CreatorsFilterState {
   try {
@@ -46,6 +61,7 @@ export function loadFilters(): CreatorsFilterState {
       ...parsed,
       platforms: Array.isArray(parsed.platforms) ? parsed.platforms : [],
       tagIds: Array.isArray(parsed.tagIds) ? parsed.tagIds : [],
+      sortField: normalizeSortField(parsed.sortField),
     };
   } catch {
     return DEFAULT_FILTERS;

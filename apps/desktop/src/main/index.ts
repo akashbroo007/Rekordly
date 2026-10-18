@@ -17,6 +17,12 @@ import {
 } from '@rekordly/database';
 import { IPC_CHANNELS, createLogger, type StreamObject } from '@rekordly/shared';
 import {
+  clearChainIntent,
+  persistChainIntent,
+  readChainIntents,
+  type ChainIntentOptions,
+} from './segment-chain-store';
+import {
   ConfigManager,
   EventBus,
   NotificationService,
@@ -46,6 +52,7 @@ import {
   type CoreEvents,
 } from '@rekordly/core';
 import { registerIpcHandlers } from './ipc';
+import { refreshCreatorAvatar } from './creator-avatars';
 import { registerMediaScheme, registerMediaProtocolHandler } from './media-protocol';
 
 // ponytail: privileged schemes must be registered before app ready.
@@ -1068,6 +1075,10 @@ async function bootstrap(): Promise<void> {
         // and resumes re-request the same one.
         streamType: stream.metadata?.streamType,
         segmentMinutes: settingsNow.autoRecordSegmentMinutes > 0 ? settingsNow.autoRecordSegmentMinutes : undefined,
+        // ponytail: mark the chain origin — `recording-segment-finished`
+        // round-trips this so the chain handler knows which guardrails
+        // apply. Manual/Telegram starts leave it unset (ungated chaining).
+        autoRecord: true,
       });
       notifications.send({
         level: 'info',
@@ -1110,76 +1121,282 @@ async function bootstrap(): Promise<void> {
     });
   });
 
-  // ponytail: segment chaining — a duration-capped auto-record segment just
-  // finished cleanly (split setting). Re-run every guardrail (master pause,
-  // disk, still-live) and start the next part with a fresh timestamped file.
-  // Always re-extract a fresh stream (new proxy + fresh signed playlist URL)
-  // before starting the next segment — the old proxy URL is stale by the time
-  // the next segment starts (proxy idle timeout or signed URL expiration).
+  // ponytail: PROFILE PHOTOS — the Add form may have added a creator with no
+  // avatar (manual entry). On every successful check AND whenever a creator
+  // goes live (a moment we know the platform answers), ask the plugin for the
+  // upstream profile and backfill missing/stale photos into the DB. Rate-
+  // limited inside refreshCreatorAvatar (≈2 min retry / 7d refresh), so this
+  // cheap listener can fire on each event.
+  monitoring.on('event', (event) => {
+    if (event.creatorId === undefined) return;
+    if (event.type !== 'creator-checked' && event.type !== 'creator-live') return;
+    const [pluginId, externalId] = (event.creatorId ?? '').split(':');
+    const tracked =
+      pluginId !== undefined && externalId !== undefined
+        ? creatorRepo.getByExternal(pluginId, externalId)
+        : undefined;
+    if (tracked === undefined) return;
+    void refreshCreatorAvatar({ plugins: pluginManager, creatorRepo, logger }, tracked).catch((err) => {
+      logger.warn({ creatorId: tracked.id, error: err }, 'creator avatar refresh crashed');
+    });
+  });
+
+  // ponytail: segment chaining — a duration-capped segment just finished
+  // cleanly (split setting, manual OR auto-record). Re-run the guardrails and
+  // start the next part with a fresh timestamped file. Always re-extract a
+  // fresh stream (new proxy + fresh signed playlist URL) before starting the
+  // next segment — the old proxy URL is stale by the time the next segment
+  // starts (proxy idle timeout or signed URL expiration).
+  //
+  // ponytail: MANUAL segments chain too. The old handler required
+  // `tracked.autoRecord` and returned SILENTLY otherwise — a recording
+  // started from the Record dialog (or Telegram) with the split option saved
+  // its first part and then just stopped, with no error anywhere (the exact
+  // "splitting silently stops" report). Chains now remember their origin
+  // (options.autoRecord, round-tripped by the recording service): auto-record
+  // chains keep every guardrail (master pause, opt-in), manual chains only
+  // require the creator to still be tracked.
+  //
+  // ponytail: the hand-off is PERSISTED (segment-chain-store) — the live
+  // check + plugin re-extraction can take a minute or longer, and a quit,
+  // crash, update or dev-mode rebuild during that window used to silently
+  // kill the chain (the plumhaze 15-min/5-part report: one part, then
+  // "stopped" with zero errors — the app closed before the stripchat
+  // re-extraction ever landed). The intent is on disk before any network
+  // work, and boot recovery picks it back up.
   recording.on('event', (event) => {
     if (event.type !== 'recording-segment-finished') return;
     const stream = event.data?.['stream'] as StreamObject | undefined;
-    const opts = event.data?.['options'] as
-      | { quality?: string; segmentMinutes?: number; streamType?: string }
-      | undefined;
+    const opts = event.data?.['options'] as ChainIntentOptions | undefined;
     if (stream === undefined || opts === undefined) return;
-    if (settings.getAll().autoRecordPaused) return;
-
     void (async () => {
       const tracked = stream.creatorId !== '' ? creatorRepo.get(stream.creatorId) : undefined;
-      if (tracked === undefined || !tracked.autoRecord) return;
-
-      // disk guardrail (same as the auto-record entry path)
-      const minFreeGb = settings.getAll().autoRecordMinFreeDiskGb;
-      if (minFreeGb > 0) {
-        const stats = await statfs(dirs.recordingsDir);
-        const freeBytes = stats.bavail * stats.bsize;
-        if (freeBytes < minFreeGb * 1024 ** 3) {
-          notifications.send({
-            level: 'warn',
-            title: 'Auto-record paused — low disk space',
-            message: `Segment chain for ${tracked.displayName} stopped: free space is below the ${minFreeGb} GB limit.`,
-            data: { creatorId: tracked.id, freeBytes },
-          });
-          return;
-        }
-      }
-
-      // still live? if the stream ended, the chain stops cleanly here.
-      const monitorId = `${tracked.pluginId}:${tracked.externalId}`;
-      const managed = pluginManager.get(tracked.pluginId);
-      const detection = managed?.instance?.capabilities.liveDetection;
-      if (detection === undefined) return;
-      const live = await detection.getLiveStatus(monitorId).catch(() => ({ isLive: false }));
-      if (!live.isLive) {
-        logger.info({ creatorId: monitorId }, 'segment chain stopped — stream ended');
+      if (tracked === undefined) {
+        logger.info({ creatorId: stream.creatorId }, 'segment chain stopped — creator no longer tracked');
         return;
       }
+      // Auto-record chains stop cleanly when the opt-in was revoked
+      // mid-stream; manual chains have no auto-record dependency.
+      const isAutoChain = opts.autoRecord === true;
+      if (isAutoChain && !tracked.autoRecord) return;
 
-      // duplicate-session guard (a manual recording may be running instead)
-      const ACTIVE_JOB_STATUSES = ['queued', 'preparing', 'recording', 'paused', 'stopping'];
-      if (recording.getJobs().some((j) => ACTIVE_JOB_STATUSES.includes(j.status) && j.creatorId === tracked.id)) {
-        return;
-      }
-
-      // ponytail: keep the stream variant across segment chains — a VR pick
-      // must not silently degrade to 2D on the next part.
-      const startOpts = { quality: opts.quality, segmentMinutes: opts.segmentMinutes, streamType: opts.streamType };
+      // ponytail: PERSIST BEFORE ANY NETWORK WORK — the exact moment a
+      // restart during the extraction window stops losing the chain.
+      persistChainIntent(dirs.userData, {
+        creatorId: tracked.id,
+        options: {
+          quality: opts.quality,
+          durationMinutes: opts.durationMinutes,
+          sessionStartedAt: typeof opts.sessionStartedAt === 'number' ? opts.sessionStartedAt : undefined,
+          segmentMinutes: opts.segmentMinutes,
+          streamType: opts.streamType,
+          autoRecord: isAutoChain || undefined,
+        },
+        startedAt: new Date().toISOString(),
+      });
       try {
-        await reExtractAndStart(tracked, monitorId, managed, startOpts);
-      } catch (err) {
-        logger.error({ creatorId: monitorId, error: err }, 'segment chain re-extract failed');
-        notifications.send({
-          level: 'error',
-          title: 'Auto-record stopped',
-          message: `${tracked.displayName}'s segmented recording could not continue: ${err instanceof Error ? err.message : 'unknown error'}`,
-          data: { creatorId: tracked.id },
-        });
+        await startNextChainPart(tracked, opts, isAutoChain);
+      } finally {
+        // The attempt RESOLVED (part started, or the chain stopped for a
+        // definitive reason) — drop the disk hint so a later crash recovery
+        // does not re-launch a finished chain. A crash mid-attempt leaves the
+        // pending entry for boot recovery, which re-validates everything.
+        clearChainIntent(dirs.userData, tracked.id);
       }
     })().catch((err) => {
       logger.error({ error: err }, 'segment chain failed');
     });
   });
+
+  // ponytail: BOOT RECOVERY — any chain that a restart or crash interrupted
+  // mid-hand-off resumes here instead of dying silently.
+  const recoverChainIntents = async (): Promise<void> => {
+    const pending = readChainIntents(dirs.userData);
+    if (pending.length === 0) return;
+    logger.info({ count: pending.length }, 'persisted segment chains found — recovering interrupted part hand-offs');
+    for (const intent of pending) {
+      try {
+        const tracked = creatorRepo.get(intent.creatorId);
+        if (tracked === undefined) {
+          clearChainIntent(dirs.userData, intent.creatorId);
+          continue;
+        }
+        // Give plugins/monitoring a beat to settle after boot before the
+        // live check + re-extraction (which may boot a site's browser).
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, 5000);
+          timer.unref?.();
+        });
+        await startNextChainPart(tracked, intent.options, intent.options.autoRecord === true);
+        clearChainIntent(dirs.userData, intent.creatorId);
+      } catch (err) {
+        logger.warn({ creatorId: intent.creatorId, error: err }, 'segment chain recovery failed');
+        clearChainIntent(dirs.userData, intent.creatorId);
+      }
+    }
+  };
+  void recoverChainIntents().catch((err) => {
+    logger.error({ error: err }, 'segment chain crash recovery crashed');
+  });
+
+  /** Re-run guardrails, live-check and extraction to start the next part. */
+  async function startNextChainPart(
+    tracked: {
+      id: string;
+      displayName: string;
+      pluginId: string;
+      externalId: string;
+      autoRecord: boolean;
+    },
+    opts: ChainIntentOptions,
+    isAutoChain: boolean,
+  ): Promise<void> {
+    // The master pause switch pauses AUTO-RECORD — a manually started
+    // segmented recording must keep recording through it.
+    if (isAutoChain && settings.getAll().autoRecordPaused) return;
+    // Auto-record chains stop cleanly when the opt-in was revoked
+    // mid-stream; manual chains have no auto-record dependency.
+    if (isAutoChain && !tracked.autoRecord) return;
+
+    // duplicate-session guard FIRST (no network work while a capture runs —
+    // a manual recording may have started in the meantime)
+    const ACTIVE_JOB_STATUSES = ['queued', 'preparing', 'recording', 'paused', 'stopping'];
+    if (recording.getJobs().some((j) => ACTIVE_JOB_STATUSES.includes(j.status) && j.creatorId === tracked.id)) {
+      return;
+    }
+
+    // disk guardrail (same as the auto-record entry path)
+    const minFreeGb = settings.getAll().autoRecordMinFreeDiskGb;
+    if (minFreeGb > 0) {
+      const stats = await statfs(dirs.recordingsDir);
+      const freeBytes = stats.bavail * stats.bsize;
+      if (freeBytes < minFreeGb * 1024 ** 3) {
+        notifications.send({
+          level: 'warn',
+          title: 'Recording split paused — low disk space',
+          message: `Segment chain for ${tracked.displayName} stopped: free space is below the ${minFreeGb} GB limit.`,
+          data: { creatorId: tracked.id, freeBytes },
+        });
+        return;
+      }
+    }
+
+    // still live? if the stream ended, the chain stops cleanly here.
+    // ponytail: the live check is RETRIED — a flaky site used to kill the
+    // whole chain silently right here: `.catch(() => ({ isLive: false }))`
+    // fed a degraded check into the "stream ended" branch even though the
+    // broadcast was fine (the monitor module hit and verified the same
+    // class of bug against BongaCams). A degraded/unknown answer is NEITHER
+    // live nor ended; only a DEFINITIVE offline answer ends the chain.
+    const monitorId = `${tracked.pluginId}:${tracked.externalId}`;
+    const managed = pluginManager.get(tracked.pluginId);
+
+    const detection = managed?.instance?.capabilities.liveDetection;
+    if (detection === undefined) {
+      logger.warn({ creatorId: monitorId }, 'segment chain stopped — plugin has no live detection');
+      return;
+    }
+    let liveStatus: { isLive: boolean } | null = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      if (attempt > 1) {
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, 3000);
+          timer.unref?.();
+        });
+      }
+      const status = await detection
+        .getLiveStatus(monitorId)
+        .catch((err: unknown) => {
+          logger.warn({ creatorId: monitorId, error: err, attempt }, 'segment chain live-check failed — retrying');
+          return undefined;
+        });
+      if (status === undefined) continue;
+      if (status.unknown === true) {
+        logger.info(
+          { creatorId: monitorId, attempt },
+          'segment chain live-check degraded (site unreachable) — retrying',
+        );
+        continue;
+      }
+      liveStatus = status;
+      break;
+    }
+    if (liveStatus === null) {
+      // ponytail: degraded through every attempt — that is NOT "stream
+      // ended". Treat the creator as live and restart capture: the
+      // re-extraction below decides whether the broadcast is actually
+      // reachable, and its failure surfaces visibly (notification) instead
+      // of this chain dying silently.
+      logger.warn(
+        { creatorId: monitorId },
+        'segment chain live-check stayed degraded — restarting capture anyway',
+      );
+    } else if (!liveStatus.isLive) {
+      logger.info({ creatorId: monitorId }, 'segment chain stopped — stream ended');
+      if (!isAutoChain) {
+        notifications.send({
+          level: 'info',
+          title: 'Recording split finished',
+          message: `${tracked.displayName}'s stream ended — the split recording chain stopped. All finished parts were saved to your Library.`,
+          data: { creatorId: tracked.id },
+        });
+      }
+      return;
+    }
+
+    // ponytail: VISIBLE HAND-OFF — the stripchat re-extraction boots a
+    // browser and can take a minute or longer; with no signal the user
+    // reads the app as "stopped after the split" and closes it (which then
+    // DOES kill the pending part). Announce the continuation before the
+    // first slow step, and log the carried options so a mis-carried quality
+    // / budget / variant is traceable from the log alone.
+    logger.info(
+      {
+        creatorId: monitorId,
+        quality: opts.quality,
+        durationMinutes: opts.durationMinutes,
+        sessionStartedAt: opts.sessionStartedAt,
+        segmentMinutes: opts.segmentMinutes,
+        streamType: opts.streamType,
+        autoRecord: isAutoChain,
+      },
+      'segment chain — starting next part with the same options (live check passed, re-extracting)',
+    );
+    notifications.send({
+      level: 'info',
+      title: 'Recording split continuing',
+      message: `${tracked.displayName}'s recording was split at ${opts.segmentMinutes} minutes — preparing the next part…`,
+      data: { creatorId: tracked.id },
+    });
+
+    // ponytail: keep the stream variant across segment chains — a VR pick
+    // must not silently degrade to 2D on the next part. The chain origin is
+    // carried too, so later parts keep the same guardrail policy. The
+    // stop-after budget rides along as well: durationMinutes is the TOTAL
+    // session length and sessionStartedAt is part 1's anchor, so every
+    // chained part clamps to the same budget (30-min recording split every
+    // 15 min = exactly 2 parts, not a forever chain).
+    const startOpts = {
+      quality: opts.quality,
+      durationMinutes: opts.durationMinutes,
+      segmentMinutes: opts.segmentMinutes,
+      sessionStartedAt:
+        typeof opts.sessionStartedAt === 'number' ? opts.sessionStartedAt : undefined,
+      streamType: opts.streamType,
+      autoRecord: isAutoChain,
+    };
+    try {
+      await reExtractAndStart(tracked, monitorId, managed, startOpts);
+    } catch (err) {
+      logger.error({ creatorId: monitorId, error: err }, 'segment chain re-extract failed');
+      notifications.send({
+        level: 'error',
+        title: isAutoChain ? 'Auto-record stopped' : 'Recording split stopped',
+        message: `${tracked.displayName}'s segmented recording could not continue: ${err instanceof Error ? err.message : 'unknown error'}`,
+        data: { creatorId: tracked.id },
+      });
+    }
+  }
 
   // Push notifications (Discord/Telegram) + post-recording automation
   // pipeline, driven off the recording event stream.
@@ -1232,7 +1449,14 @@ async function bootstrap(): Promise<void> {
     tracked: { id: string; displayName: string },
     monitorId: string,
     managed: ReturnType<typeof pluginManager.get>,
-    startOpts: { quality?: string; segmentMinutes?: number; streamType?: string },
+    startOpts: {
+      quality?: string;
+      durationMinutes?: number;
+      sessionStartedAt?: number;
+      segmentMinutes?: number;
+      streamType?: string;
+      autoRecord?: boolean;
+    },
   ): Promise<string> {
     const extract = managed?.instance?.capabilities.streamExtraction;
     if (extract === undefined) throw new Error('Plugin has no stream extraction');

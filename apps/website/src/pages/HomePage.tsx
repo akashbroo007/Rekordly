@@ -4,16 +4,12 @@ import { BeamsBackground } from "../components/hero/Beams";
 import { ShimmerLinkButton } from "../components/hero/ShimmerButton";
 import { Section, SectionHeading } from "../components/layout/Section";
 import { ScreenshotFrame } from "../components/showcase/ScreenshotFrame";
-import { FeatureCard } from "../components/shared/FeatureCard";
+import { FeatureCardLink } from "../components/features/FeatureCardLink";
+import { AutomationBanner } from "../components/features/AutomationBanner";
 import { PlatformMatrix } from "../components/shared/PlatformMatrix";
 import { FaqItem } from "../components/shared/FaqItem";
-import {
-  faqs,
-  features,
-  safetyRails,
-  site,
-  steps,
-} from "../content/site";
+import { faqs, safetyRails, site, steps } from "../content/site";
+import { featureBoxes } from "../content/featuresConfig";
 import { Reveal } from "../components/shared/Reveal";
 import { useSeo, faqSchema, softwareAppSchema } from "../lib/seo";
 
@@ -71,12 +67,9 @@ function FeatureGrid() {
         description="From watching a status dot to pushing finished files to the cloud — every step lives in a single, local-first desktop app."
       />
       <div className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {features.map((feature, index) => (
-          <Reveal key={feature.title} delay={(index % 3) * 0.08} className="h-full">
-            <FeatureCard
-              title={feature.title}
-              description={feature.description}
-            />
+        {featureBoxes.map((box, index) => (
+          <Reveal key={box.title} delay={(index % 3) * 0.08} className="h-full">
+            <FeatureCardLink box={box} featured={false} />
           </Reveal>
         ))}
       </div>
@@ -393,6 +386,7 @@ export function HomePage() {
       <Showcase />
       <HowItWorks />
       <FeatureGrid />
+      <AutomationBanner />
       <SafetyRails />
       <Platforms />
       <Community />

@@ -1,10 +1,12 @@
 import { Check, Download, ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Section, SectionHeading } from "../components/layout/Section";
 import { ScreenshotFrame } from "../components/showcase/ScreenshotFrame";
-import { FeatureCard } from "../components/shared/FeatureCard";
+import { FeatureCardLink } from "../components/features/FeatureCardLink";
 import { ShimmerLinkButton } from "../components/hero/ShimmerButton";
 import { Reveal } from "../components/shared/Reveal";
-import { features, safetyRails, site } from "../content/site";
+import { safetyRails, site } from "../content/site";
+import { featureBoxes } from "../content/featuresConfig";
 import { useSeo } from "../lib/seo";
 
 interface ComparisonRow {
@@ -234,15 +236,39 @@ export default function FeaturesPage() {
       </Section>
 
       <Section className="pt-0">
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {features.map((feature, index) => (
-          <Reveal key={feature.title} delay={(index % 3) * 0.08} className="h-full">
-            <FeatureCard
-              title={feature.title}
-              description={feature.description}
-            />
+        {/* [grid-auto-flow:dense] lets the trailing CTA card slot into the gap
+            the featured 2-col card leaves, so every row stays full. */}
+        <div className="grid grid-cols-1 gap-6 [grid-auto-flow:dense] sm:grid-cols-2 lg:grid-cols-3">
+          {featureBoxes.map((box, index) => (
+            <Reveal
+              key={box.title}
+              delay={(index % 3) * 0.08}
+              className={`h-full${box.featured ? " sm:col-span-2" : ""}`}
+            >
+              <FeatureCardLink box={box} />
+            </Reveal>
+          ))}
+          <Reveal delay={0.16} className="h-full">
+            <Link
+              to="/download"
+              className="group flex h-full flex-col justify-center rounded-xl border border-white/10 bg-white/[0.02] p-6 text-center transition-all duration-200 hover:-translate-y-1 hover:border-white/25 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+            >
+              <span className="text-lg font-semibold text-white">
+                All of it, free
+              </span>
+              <p className="mt-2 text-sm leading-6 text-white/70">
+                Every capability above ships in one download — no tiers, no
+                locked features.
+              </p>
+              <span className="mt-4 inline-flex items-center justify-center gap-1.5 text-sm font-medium text-white/80 transition-colors group-hover:text-white">
+                Download for Windows
+                <ArrowRight
+                  className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
+                  aria-hidden="true"
+                />
+              </span>
+            </Link>
           </Reveal>
-        ))}
         </div>
       </Section>
 

@@ -25,7 +25,9 @@
   --color-foreground: #ffffff;
   --color-foreground-secondary: #a1a1a1;
   --color-foreground-muted: #888888;
-  --color-foreground-disabled: #666666;
+  /* ponytail: bumped from #666666 — reads 4.7:1+ on surface/elevated so
+   * tertiary text meets WCAG AA on the dark theme. */
+  --color-foreground-disabled: #83838d;
 
   --radius-sm: 8px;
   --radius-md: 12px;

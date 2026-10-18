@@ -32,10 +32,15 @@ import {
   Switch,
 } from '@rekordly/ui';
 import type { DownloadProbeResultDto, DownloadQueueItemDto } from '@rekordly/shared/contracts';
+import { Pagination, usePaged } from '../components/pagination';
 import { useToastStore } from '../stores/toast-store';
 import { formatBytes, formatEta } from '@rekordly/shared/format';
 
 type FilterStatus = 'all' | 'queued' | 'downloading' | 'paused' | 'completed' | 'failed' | 'cancelled';
+
+/** ponytail: medium-height progress rows — 25 per page keeps long completed
+ * histories browsable without a wall of cards. */
+const DOWNLOAD_PAGE_SIZE = 25;
 
 export function DownloadsPage() {
   const queryClient = useQueryClient();
@@ -70,6 +75,9 @@ export function DownloadsPage() {
 
   const items = downloads ?? [];
   const counts = statusCounts ?? {};
+
+  // Pagination — reset to page 0 whenever the status tab changes.
+  const { page, setPage, pageCount, paged: visibleItems, total } = usePaged(items, DOWNLOAD_PAGE_SIZE, filterStatus);
 
   const pauseAll = useMutation({
     mutationFn: () => window.desktop.downloads.pauseAll(),
@@ -161,10 +169,15 @@ export function DownloadsPage() {
 
       {!isLoading && !isError && items.length > 0 && (
         <div className="space-y-2">
-          {items.map((item) => (
+          {visibleItems.map((item) => (
             <DownloadItem key={item.id} item={item} />
           ))}
         </div>
+      )}
+
+      {/* Pagination — shared Previous / Page x of y / Next bar */}
+      {!isLoading && !isError && items.length > 0 && (
+        <Pagination page={page} pageCount={pageCount} onPageChange={setPage} total={total} noun="downloads" />
       )}
 
       <AddDownloadDialog open={addOpen} onOpenChange={setAddOpen} />

@@ -1,14 +1,24 @@
 import { Link } from "react-router-dom";
-import { Globe, Github } from "lucide-react";
+import { Github, Globe } from "lucide-react";
 import { navLinks, site } from "../../content/site";
+import { navFeaturePages } from "../../content/featuresConfig";
 import { useCurrency } from "../../lib/CurrencyContext";
 import { CURRENCY_OPTIONS } from "../../lib/currency";
 
 const footerNav = [
   {
     heading: "Product",
-    // Blog/Roadmap live under Resources, Contact under Company.
-    links: [...navLinks],
+    // The Features hub leads the column; the rest is the navbar order
+    // (Blog/Roadmap live under Resources, Contact under Company).
+    links: [{ label: "Features", href: "/features" }, ...navLinks],
+  },
+  {
+    heading: "Features",
+    // All 7 feature pages, same order as the navbar dropdown (Automation first).
+    links: navFeaturePages.map((page) => ({
+      label: page.name,
+      href: page.path,
+    })),
   },
   {
     heading: "Resources",
@@ -36,8 +46,8 @@ export function Footer() {
   return (
     <footer className="border-t border-white/10 bg-black">
       <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
-        <div className="grid grid-cols-3 gap-6 md:grid-cols-[1.5fr_repeat(3,1fr)] md:gap-12">
-          <div className="col-span-3 md:col-span-1">
+        <div className="grid grid-cols-2 gap-6 md:grid-cols-[1.5fr_repeat(4,1fr)] md:gap-12">
+          <div className="col-span-2 md:col-span-1">
             <Link to="/" className="flex items-center gap-2.5">
               <img
                 src="./icon.png"

@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, Info, Plus, Star, Tags, Trash2, Upload, Users, X, Zap } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import type { CreatorDto, MonitoringJobDto } from '@rekordly/shared';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
+import type { CreatorDto, MonitoringJobDto, RecordingJobDto } from '@rekordly/shared';
 import {
   Button,
   Dialog,
@@ -12,15 +13,55 @@ import {
   Skeleton,
 } from '@rekordly/ui';
 import { useToastStore } from '../../stores/toast-store';
-import { CreatorCard } from './creator-card';
+import { CreatorCard, type CreatorCardStatus } from './creator-card';
 import { FilterBar, type PlatformFilterInfo, type StatusChipInfo, type TagFilterInfo } from './filter-bar';
 import { activeFilterCount, loadFilters, saveFilters, type CreatorsFilterState } from './filter-model';
 import { friendlyErrorMessage } from '../../lib/errors';
 import { AddCreatorDialog, DeleteCreatorDialog, EditCreatorDialog, ImportDialog, RecordDialog } from './dialogs';
 import { CreatorDetailsDialog } from './details-dialog';
+import { usePaged, Pagination } from '../../components/pagination';
 import { BulkTagDialog, CollectionsDialog, TagsDialog } from './tag-dialogs';
 
 const PAGE_SIZE = 20;
+
+/** ponytail: same "active" set the toolbar counts — recording, queued or
+ * preparing jobs all mean this creator is currently being recorded. */
+const ACTIVE_RECORDING_STATUSES = ['recording', 'queued', 'preparing'];
+
+/** Section header above the card grid ("Live now (N)" / "Offline / Monitored (N)"). */
+function CardSection({
+  title,
+  count,
+  tone,
+  children,
+}: {
+  title: string;
+  count: number;
+  tone: 'live' | 'muted';
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-2.5" aria-label={`${title} — ${count}`}>
+      <div className="flex items-center gap-2">
+        {tone === 'live' ? (
+          <span className="h-2 w-2 rounded-full bg-success" aria-hidden="true" />
+        ) : (
+          <span className="h-2 w-2 rounded-full bg-foreground-disabled" aria-hidden="true" />
+        )}
+        <h2 className="text-sm font-semibold tracking-tight text-foreground">{title}</h2>
+        <span
+          className={`rounded-sm px-1.5 py-0.5 text-xs font-semibold leading-none tabular-nums ${
+            tone === 'live' ? 'bg-success/15 text-success' : 'bg-elevated text-foreground-muted'
+          }`}
+        >
+          {count}
+        </span>
+        <span className="h-px flex-1 bg-border" aria-hidden="true" />
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export function CreatorsPage() {
   const pushToast = useToastStore((state) => state.push);
@@ -37,6 +78,14 @@ export function CreatorsPage() {
     refetchInterval: 30_000,
   });
 
+  // ponytail: recording jobs drive the REC badge + "Recording" filter chip;
+  // shares the toolbar's query key so the cache stays consistent.
+  const { data: recordingJobs } = useQuery({
+    queryKey: ['recording-jobs'],
+    queryFn: () => window.desktop.recording.getJobs(),
+    refetchInterval: 3000,
+  });
+
   // Refetch immediately on monitoring events (live/offline changes)
   useEffect(() => {
     return window.desktop.monitoring.onEvent((event) => {
@@ -45,6 +94,32 @@ export function CreatorsPage() {
       }
     });
   }, [refetchJobs]);
+
+  // ponytail: PROFILE PHOTOS — the main process backfills missing/stale
+  // avatars after checks and live transitions (`creator-checked` /
+  // `creator-live`). Refresh the list throttled (at most every 60s) so new
+  // profile photos appear without a manual refresh.
+  const lastAvatarRefreshAt = useRef(0);
+  useEffect(() => {
+    return window.desktop.monitoring.onEvent((event) => {
+      if (event.type !== 'creator-checked' && event.type !== 'creator-live') return;
+      const now = Date.now();
+      if (now - lastAvatarRefreshAt.current < 60_000) return;
+      lastAvatarRefreshAt.current = now;
+      void queryClient.invalidateQueries({ queryKey: ['creators'] });
+    });
+  }, [queryClient]);
+
+  // ponytail: a completed/finalized recording matures "Last live …" instantly
+  // and drops the card's REC badge state.
+  useEffect(() => {
+    return window.desktop.recording.onEvent((event) => {
+      if (event.type === 'recording-completed' || event.type === 'recording-finalized') {
+        void queryClient.invalidateQueries({ queryKey: ['creators-last-live'] });
+        void queryClient.invalidateQueries({ queryKey: ['recording-jobs'] });
+      }
+    });
+  }, [queryClient]);
 
   const { data: plugins } = useQuery({
     queryKey: ['plugins'],
@@ -100,13 +175,31 @@ export function CreatorsPage() {
     return monitoringJobs?.find((j) => j.creatorId === monitorId);
   };
 
+  // ponytail: recording_jobs.creator_id is the DB creator id (a uuid) on
+  // every start path — join by creator.id, exactly like the dashboard's
+  // active-recording lookup does.
+  const recordingJobFor = (creator: CreatorDto): RecordingJobDto | undefined => {
+    return recordingJobs?.find(
+      (j) => j.creatorId === creator.id && ACTIVE_RECORDING_STATUSES.includes(j.status),
+    );
+  };
+
+  /** Card state — recording outranks live; everything else is offline. */
+  const statusFor = (creator: CreatorDto): CreatorCardStatus => {
+    if (recordingJobFor(creator) !== undefined) return 'recording';
+    if (liveJobFor(creator)?.state === 'live') return 'live';
+    return 'offline';
+  };
+
   // --- Counts + filter option sources ---------------------------------------
   const counts = useMemo(() => {
     let live = 0;
+    let recording = 0;
     let issues = 0;
     let favorites = 0;
     let autoRecord = 0;
     for (const creator of creators ?? []) {
+      if (recordingJobFor(creator) !== undefined) recording++;
       const state = liveJobFor(creator)?.state;
       if (state === 'live') live++;
       if (state === 'failed' || state === 'paused' || state === 'retrying') issues++;
@@ -114,9 +207,9 @@ export function CreatorsPage() {
       if (creator.autoRecord) autoRecord++;
     }
     const total = creators?.length ?? 0;
-    return { live, issues, favorites, autoRecord, offline: total - live, total };
+    return { live, recording, issues, favorites, autoRecord, offline: total - live, total };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [creators, monitoringJobs]);
+  }, [creators, monitoringJobs, recordingJobs]);
 
   const platforms: PlatformFilterInfo[] = useMemo(() => {
     const names = new Map((plugins ?? []).map((p) => [p.id, p.name]));
@@ -144,10 +237,35 @@ export function CreatorsPage() {
   const statusChips: StatusChipInfo[] = [
     { key: 'all', label: 'All', count: counts.total },
     { key: 'live', label: 'Live', count: counts.live },
+    { key: 'offline', label: 'Offline', count: counts.offline },
+    { key: 'recording', label: 'Recording', count: counts.recording },
     { key: 'favorites', label: 'Favorites', count: counts.favorites },
-    { key: 'autoRecord', label: 'Auto-record', count: counts.autoRecord },
-    { key: 'issues', label: 'Issues', count: counts.issues },
   ];
+
+  // --- "Last live" timestamps ------------------------------------------------
+  // ponytail: no persisted last-live timestamp exists upstream, but recordings
+  // only ever start while a creator is live — so the library aggregate
+  // (stats.lastRecordedAt) is a faithful "last seen live" signal, fetched in
+  // one batch keyed to the creator list.
+  const { data: lastLiveById } = useQuery({
+    queryKey: ['creators-last-live'],
+    queryFn: async (): Promise<Record<string, number>> => {
+      const list = creators ?? [];
+      if (list.length === 0) return {};
+      const settled = await Promise.allSettled(list.map((c) => window.desktop.creators.stats(c.id)));
+      const map: Record<string, number> = {};
+      settled.forEach((result, index) => {
+        const creator = list[index];
+        if (result.status === 'fulfilled' && creator !== undefined && result.value.lastRecordedAt) {
+          map[creator.id] = new Date(result.value.lastRecordedAt).getTime();
+        }
+      });
+      return map;
+    },
+    enabled: creators !== undefined,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
 
   // --- Filtering + sorting ---------------------------------------------------
   const filtered = useMemo(() => {
@@ -174,6 +292,8 @@ export function CreatorsPage() {
       switch (filters.status) {
         case 'live':
           return state === 'live';
+        case 'recording':
+          return recordingJobFor(c) !== undefined;
         case 'issues':
           return state === 'failed' || state === 'paused' || state === 'retrying';
         case 'favorites':
@@ -189,24 +309,80 @@ export function CreatorsPage() {
     });
     result = [...result];
     result.sort((a, b) => {
-      const aVal = (a[filters.sortField] ?? '').toString();
-      const bVal = (b[filters.sortField] ?? '').toString();
-      const cmp = aVal.localeCompare(bVal);
-      return filters.sortDir === 'asc' ? cmp : -cmp;
+      switch (filters.sortField) {
+        case 'liveFirst': {
+          // Sections handle the live/offline split visually; inside a section
+          // (and for hidden "issues"/"recording" stragglers) sort by name.
+          const aTier = statusFor(a) === 'offline' ? 1 : 0;
+          const bTier = statusFor(b) === 'offline' ? 1 : 0;
+          if (aTier !== bTier) return aTier - bTier;
+          return a.displayName.localeCompare(b.displayName);
+        }
+        case 'lastLive': {
+          const aTime = lastLiveById?.[a.id] ?? Number.NEGATIVE_INFINITY;
+          const bTime = lastLiveById?.[b.id] ?? Number.NEGATIVE_INFINITY;
+          if (aTime !== bTime) return bTime - aTime; // most recent first
+          return a.displayName.localeCompare(b.displayName);
+        }
+        default: {
+          const cmp = a.displayName.localeCompare(b.displayName);
+          return filters.sortDir === 'asc' ? cmp : -cmp;
+        }
+      }
     });
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [creators, filters, tagAssignments, monitoringJobs]);
+  }, [creators, filters, tagAssignments, monitoringJobs, recordingJobs, lastLiveById]);
 
-  const [page, setPage] = useState(0);
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  // Shared pagination — resets to page 0 whenever the filter state changes.
   const filterKey = JSON.stringify({ ...filters });
-  useEffect(() => {
-    setPage(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterKey]);
+  const { page, setPage, pageCount: totalPages, paged } = usePaged(filtered, PAGE_SIZE, filterKey);
 
+  // ponytail: section split — live/recording cards always float to the top,
+  // everything else is grouped under "Offline / Monitored" below.
+  const liveNow: CreatorDto[] = [];
+  const offlineRows: CreatorDto[] = [];
+  for (const creator of paged) {
+    (statusFor(creator) === 'offline' ? offlineRows : liveNow).push(creator);
+  }
+
+  const renderCard = (creator: CreatorDto) => (
+    <CreatorCard
+      key={creator.id}
+      creator={creator}
+      status={statusFor(creator)}
+      platformId={creator.pluginId}
+      platformName={pluginNameFor(creator.pluginId)}
+      avatarUrl={creator.avatarUrl}
+      viewers={liveJobFor(creator)?.lastResult?.viewerCount}
+      lastLiveAt={lastLiveById?.[creator.id] ?? null}
+      isFavorite={creator.isFavorite}
+      recordingStartedAt={recordingJobFor(creator)?.startedAt ?? null}
+      job={liveJobFor(creator)}
+      tags={tagAssignments?.[creator.id] ?? []}
+      allTags={tags ?? []}
+      selected={selectedIds.has(creator.id)}
+      view={filters.view}
+      onToggleFavorite={setFavorite}
+      onToggleAutoRecord={requestAutoRecord}
+      onDetails={setDetailsCreator}
+      onRecord={setRecordCreator}
+      onEdit={setEditCreator}
+      onDelete={setDeleteCreator}
+      onPauseMonitoring={pauseMonitoring}
+      onFilterPlatform={(pluginId) => patchFilters({ platforms: [pluginId], status: 'all' })}
+      onAssignTag={assignTag}
+      onRemoveTag={removeTag}
+      onToggleSelect={toggleSelect}
+    />
+  );
+
+  const cardGridClass =
+    filters.view === 'grid'
+      ? // ponytail: auto-fill keeps cards whole at any window width — no
+        // squeezed or overflowing last column.
+        'grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]'
+      : 'flex flex-col gap-1.5';
   // --- Bulk selection --------------------------------------------------------
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const toggleSelect = (creatorId: string): void => {
@@ -227,6 +403,8 @@ export function CreatorsPage() {
   const invalidateCreators = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['creators'] });
     void queryClient.invalidateQueries({ queryKey: ['creator-tag-assignments'] });
+    // ponytail: a finished recording changes a creator's "last seen live".
+    void queryClient.invalidateQueries({ queryKey: ['creators-last-live'] });
   };
 
   const bulkFavorite = useMutation({
@@ -283,6 +461,33 @@ export function CreatorsPage() {
   const removeTag = (creator: CreatorDto, tagId: string): void => {
     void window.desktop.creators.removeTagFromCreator(creator.id, tagId);
     void queryClient.invalidateQueries({ queryKey: ['creator-tag-assignments'] });
+  };
+
+  // --- Pause / resume monitoring (… menu + context menu) -----------------------
+  const pauseMonitoring = (creator: CreatorDto): void => {
+    const monitorId = `${creator.pluginId}:${creator.externalId}`;
+    const isPaused = liveJobFor(creator)?.state === 'paused';
+    const action = isPaused
+      ? window.desktop.monitoring.resume(monitorId)
+      : window.desktop.monitoring.pause(monitorId);
+    void action
+      .then(() => {
+        pushToast({
+          level: 'info',
+          title: isPaused ? 'Monitoring resumed' : 'Monitoring paused',
+          message: isPaused
+            ? `${creator.displayName} is checked for live status again.`
+            : `${creator.displayName} will not be checked until you resume monitoring.`,
+        });
+      })
+      .catch((error: unknown) => {
+        pushToast({
+          level: 'warn',
+          title: 'Could not update monitoring',
+          message: friendlyErrorMessage(error, 'Something went wrong — please try again.'),
+        });
+      });
+    void queryClient.invalidateQueries({ queryKey: ['monitoring-jobs'] });
   };
 
   // --- Auto-record flow (one-time storage warning) ----------------------------
@@ -357,7 +562,11 @@ export function CreatorsPage() {
     platforms.find((p) => p.pluginId === pluginId)?.name ?? pluginId;
 
   return (
-    <PageContainer>
+    <PageContainer
+      // ponytail: keep room below the last card so the grid never looks cut
+      // off at the scroll edge (extra when the bulk toolbar overlays it).
+      className={selectedIds.size > 0 ? 'pb-28' : 'pb-12'}
+    >
       <SectionHeader
         title="Creators"
         description="Manage the creators you monitor."
@@ -399,9 +608,9 @@ export function CreatorsPage() {
       )}
 
       {isLoading && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={cardGridClass}>
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-28" />
+            <Skeleton key={i} className={i % 3 === 0 ? 'h-44' : 'h-36'} />
           ))}
         </div>
       )}
@@ -433,59 +642,19 @@ export function CreatorsPage() {
 
       {!isLoading && !isError && paged.length > 0 && (
         <>
-          <div
-            className={
-              filters.view === 'grid'
-                ? 'grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3'
-                : 'flex flex-col gap-1.5'
-            }
-          >
-            {paged.map((creator) => (
-              <CreatorCard
-                key={creator.id}
-                creator={creator}
-                job={liveJobFor(creator)}
-                tags={tagAssignments?.[creator.id] ?? []}
-                allTags={tags ?? []}
-                platformName={pluginNameFor(creator.pluginId)}
-                selected={selectedIds.has(creator.id)}
-                view={filters.view}
-                onToggleFavorite={setFavorite}
-                onToggleAutoRecord={requestAutoRecord}
-                onDetails={setDetailsCreator}
-                onRecord={setRecordCreator}
-                onEdit={setEditCreator}
-                onDelete={setDeleteCreator}
-                onFilterPlatform={(pluginId) => patchFilters({ platforms: [pluginId], status: 'all' })}
-                onAssignTag={assignTag}
-                onRemoveTag={removeTag}
-                onToggleSelect={toggleSelect}
-              />
-            ))}
+          <div className="space-y-6">
+            {liveNow.length > 0 && (
+              <CardSection title="Live now" count={liveNow.length} tone="live">
+                <div className={cardGridClass}>{liveNow.map((creator) => renderCard(creator))}</div>
+              </CardSection>
+            )}
+            {offlineRows.length > 0 && (
+              <CardSection title="Offline / Monitored" count={offlineRows.length} tone="muted">
+                <div className={cardGridClass}>{offlineRows.map((creator) => renderCard(creator))}</div>
+              </CardSection>
+            )}
           </div>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={page === 0}
-                onClick={() => setPage(page - 1)}
-              >
-                Previous
-              </Button>
-              <span className="text-xs tabular-nums text-foreground-muted">
-                Page {page + 1} of {totalPages}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={page >= totalPages - 1}
-                onClick={() => setPage(page + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          )}
+          <Pagination page={page} pageCount={totalPages} onPageChange={setPage} total={filtered.length} noun="creators" />
         </>
       )}
 
