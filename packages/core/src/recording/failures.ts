@@ -21,6 +21,14 @@ export type FailureClass = 'TRANSIENT' | 'URL_EXPIRED' | 'STREAM_ENDED' | 'FATAL
 export interface ClassifiableFailure {
   code?: string;
   message?: string;
+  /**
+   * The URL the failed capture was reading. Its HOST decides whether a
+   * same-URL retry can ever work: a loopback URL belongs to a plugin-local
+   * proxy that died with the extraction that minted it (Stripchat's
+   * MouflonProxy, Dreamcam's VR bridge), so the URL itself — not the error
+   * wording — is proof that a fresh extraction is required.
+   */
+  streamUrl?: string;
 }
 
 const URL_EXPIRED_PATTERNS = [
@@ -78,6 +86,22 @@ function isLoopbackProxyFailure(text: string): boolean {
   return LOOPBACK_HOST_PATTERN.test(text) && CONNECTION_FAILURE_PATTERN.test(text);
 }
 
+/**
+ * ponytail: is the capture URL itself a plugin-local proxy endpoint?
+ * The error TEXT is not a reliable signal — a dead MouflonProxy surfaces as
+ * "ffmpeg exited with code 1: ... -10053 occurred", "no media progress",
+ * "Got nothing", or a bare nonzero exit, none of which name the loopback
+ * host. Verified against a real blank Stripchat recording: the job's URL was
+ * http://127.0.0.1:6153/index.m3u8, the failure was classified TRANSIENT,
+ * the retry re-used that same dead port, and the job died with
+ * RECORDING_NO_DATA instead of re-extracting.
+ */
+const LOOPBACK_URL_PATTERN = /^https?:\/\/(127\.\d{1,3}\.\d{1,3}\.\d{1,3}|\[?::1\]?|localhost)(?::\d+)?(?:\/|$)/i;
+
+export function isLoopbackStreamUrl(url: string | undefined): boolean {
+  return typeof url === 'string' && LOOPBACK_URL_PATTERN.test(url.trim());
+}
+
 /** Local errors that retrying will never fix — fail fast instead of burning attempts. */
 const FATAL_CODES = new Set([
   'YTDLP_NOT_FOUND',
@@ -98,6 +122,11 @@ export function classifyCaptureFailure(error: ClassifiableFailure): FailureClass
   // retry would hammer a closed port until the bound burns out).
   if (isLoopbackProxyFailure(text)) return 'URL_EXPIRED';
   if (STREAM_ENDED_PATTERNS.some((re) => re.test(text))) return 'STREAM_ENDED';
+  // ponytail: a capture pointed at a loopback proxy can never be reconnected
+  // — only a fresh extraction mints a new proxy with a new port. Checked
+  // AFTER STREAM_ENDED so a genuine "stream ended" through the proxy still
+  // finalizes cleanly, and after FATAL so a missing binary is not masked.
+  if (isLoopbackStreamUrl(error.streamUrl)) return 'URL_EXPIRED';
   if (TRANSIENT_PATTERNS.some((re) => re.test(text))) return 'TRANSIENT';
   // plan §4A/§25: unexplained mid-capture death (crash, SIGKILL, edge drop
   // with no signature) retries bounded on the same URL — see docstring.

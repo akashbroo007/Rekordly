@@ -59,6 +59,41 @@ describe('classifyCaptureFailure', () => {
       'STREAM_ENDED',
     );
   });
+
+  it('routes a loopback capture URL to URL_EXPIRED even when the error text has no loopback signature', () => {
+    // Real blank Stripchat recording: the job read http://127.0.0.1:6153/index.m3u8,
+    // ffmpeg died with an unclassifiable transport error, the retry re-used the
+    // dead port and the job ended with RECORDING_NO_DATA.
+    expect(classifyCaptureFailure({
+      code: 'FFMPEG_HLS_DOWNLOAD_FAILED',
+      message: 'ffmpeg exited with code 1: Error number -10053 occurred',
+      streamUrl: 'http://127.0.0.1:6153/index.m3u8',
+    })).toBe('URL_EXPIRED');
+    expect(classifyCaptureFailure({
+      message: 'live capture stalled — no media progress for 90s',
+      streamUrl: 'http://localhost:4411/index.m3u8',
+    })).toBe('URL_EXPIRED');
+    expect(classifyCaptureFailure({ message: 'some unknown catastrophe', streamUrl: 'http://[::1]:9000/x.m3u8' })).toBe(
+      'URL_EXPIRED',
+    );
+    // A remote URL with the same wording still gets a bounded same-URL retry.
+    expect(
+      classifyCaptureFailure({ message: 'some unknown catastrophe', streamUrl: 'https://media-hls.doppiocdn.org/x.m3u8' }),
+    ).toBe('TRANSIENT');
+    // EXACTLY-MATCHING host form: a public host that merely CONTAINS 127.0.0.1 is remote.
+    expect(classifyCaptureFailure({ message: 'some unknown catastrophe', streamUrl: 'https://cdn.127.0.0.1.example.com/x.m3u8' })).toBe(
+      'TRANSIENT',
+    );
+  });
+
+  it('keeps genuine stream endings and local fatals ahead of the loopback-URL rule', () => {
+    expect(
+      classifyCaptureFailure({ message: 'broadcaster is offline', streamUrl: 'http://127.0.0.1:5000/index.m3u8' }),
+    ).toBe('STREAM_ENDED');
+    expect(
+      classifyCaptureFailure({ code: 'FFMPEG_NOT_FOUND', message: 'binary missing', streamUrl: 'http://127.0.0.1:5000/index.m3u8' }),
+    ).toBe('FATAL');
+  });
 });
 
 describe('computeBackoffMs', () => {

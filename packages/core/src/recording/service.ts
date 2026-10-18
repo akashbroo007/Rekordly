@@ -1351,6 +1351,12 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
           const failureClass = classifyCaptureFailure({
             code: error instanceof AppError ? error.code : undefined,
             message: error instanceof Error ? error.message : String(error),
+            // ponytail: the URL that just failed — a loopback proxy URL is
+            // dead for good, so this routes to re-resolution even when the
+            // error text carries no loopback signature (the exact shape of a
+            // blank Stripchat recording that retried a closed port and then
+            // failed with RECORDING_NO_DATA).
+            streamUrl: captureStream.streamUrl,
           });
           // plan §4: URL_EXPIRED re-resolves to a fresh URL; TRANSIENT (ffmpeg
           // reconnects exhausted, crash, blip) restarts capture on the SAME

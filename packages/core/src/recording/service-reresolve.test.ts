@@ -140,6 +140,54 @@ describe('RecordingService URL-expiry re-resolve (plan §4 class B)', () => {
     expect(repo.getJob(jobId)?.error).toContain('Connection reset');
   });
 
+  itNeedsFfmpeg(
+    're-resolves when the capture URL is a dead loopback proxy, even without a loopback error signature',
+    { timeout: 90_000 },
+    async () => {
+      // Real blank-Stripchat shape: the job read the plugin's local MouflonProxy
+      // (127.0.0.1:<port>) and ffmpeg died with an unclassifiable transport
+      // error. A same-URL retry re-read the dead port and the job ended with
+      // RECORDING_NO_DATA — only a fresh extraction can mint a new proxy.
+      const outputDir = await mkdtemp(join(tmpdir(), 'rekordly-loopback-'));
+      const { repo } = createRepo();
+      const freshUrl = 'http://127.0.0.1:7777/index.m3u8';
+      const resolveStream = vi.fn(async (job: RecordingJobRecord): Promise<StreamObject | null> => ({
+        ...baseStream,
+        streamUrl: freshUrl,
+        title: job.title,
+      }));
+      const { service, fakeYtDlp } = createService({
+        repo,
+        outputDir,
+        resolveStream,
+        minMeaningfulCaptureSeconds: 0,
+      });
+      service.updateSettings({ retryDelay: 50 });
+      const fixtureBytes = fixturePath as string;
+      let calls = 0;
+      fakeYtDlp.download.mockImplementation(async (_jobId: string, _url: string, outputPath: string) => {
+        calls += 1;
+        await copyFile(fixtureBytes, outputPath);
+        if (calls === 1) {
+          throw new AppError({
+            code: 'FFMPEG_HLS_DOWNLOAD_FAILED',
+            message: 'ffmpeg exited with code 1: Error number -10053 occurred',
+            recoverable: true,
+          });
+        }
+        return { filePath: outputPath, duration: 0, stopped: false, durationCapReached: false };
+      });
+
+      const deadProxyUrl = 'http://127.0.0.1:6153/index.m3u8';
+      const jobId = await service.startRecording({ ...baseStream, streamUrl: deadProxyUrl });
+      expect(await waitForStatus(repo, jobId, ['completed'])).toBe('completed');
+      expect(fakeYtDlp.download).toHaveBeenCalledTimes(2);
+      expect(fakeYtDlp.download.mock.calls[0]?.[1]).toBe(deadProxyUrl);
+      expect(fakeYtDlp.download.mock.calls[1]?.[1]).toBe(freshUrl);
+      expect(resolveStream).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it('preserves the ORIGINAL error when the stream is genuinely offline (re-resolve null)', async () => {
     const outputDir = await mkdtemp(join(tmpdir(), 'rekordly-reresolve-'));
     const { repo } = createRepo();
