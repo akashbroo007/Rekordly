@@ -26,14 +26,21 @@ const MIGRATIONS_DIR = join(__dirname, '..', 'packages', 'database', 'drizzle');
 const JOURNAL = join(MIGRATIONS_DIR, 'meta', '_journal.json');
 const BREAKPOINT = '--> statement-breakpoint';
 
-/** Strip `--` line comments and `/* *\/` block comments (string literals are
- * not expected inside migration DDL; a `--` inside one would be pathological). */
+/**
+ * Strip `--` line comments and `/* *\/` block comments (string literals are not
+ * expected inside migration DDL; a `--` inside one would be pathological).
+ *
+ * Line endings are normalised FIRST and the line-comment pattern uses `[^\n]*`
+ * rather than `.*`: in JavaScript `.` never matches `\r`, so on a CRLF checkout
+ * (Windows CI sets core.autocrlf=true) `--.*$` matches nothing, comments survive
+ * the strip, and every commented migration is misread as several statements.
+ * That false positive is what failed the v0.1.1 release run.
+ */
 function stripComments(sql) {
   return sql
+    .replace(/\r\n?/g, '\n')
     .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .split('\n')
-    .map((line) => line.replace(/--.*$/, ''))
-    .join('\n');
+    .replace(/--[^\n]*/g, '');
 }
 
 const problems = [];
