@@ -10,7 +10,7 @@ No. Both are vendored inside the app — download the installer, run it, and you
 
 ## Which platforms are supported?
 
-Twitch, YouTube, Kick, Chaturbate, Stripchat, BongaCams, CamSoda, MyFreeCams, and Dreamcam are supported out of the box for live detection and recording — Dreamcam including VR (3D) shows. New sites can be added as plugins without touching the core app — see [Plugins](plugins) and [Supported Platforms](platforms).
+Twitch, YouTube, Rumble, Kick, Chaturbate, Stripchat, BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, and Dreamcam are supported out of the box for live detection and recording — Dreamcam including VR (3D) shows. New sites can be added as plugins without touching the core app — see [Plugins](plugins) and [Supported Platforms](platforms).
 
 ## My ISP blocks one of the sites — can I still record?
 

@@ -6,8 +6,12 @@ Rekordly supports the following sites out of the box (Stripchat and Dreamcam inc
 | ---------- | :------------: | :-------: | :-------: | :-----: |
 | Twitch     |       ✓        |     ✓     |     ✓     |    —    |
 | YouTube    |       ✓        |     ✓     |     ✓     |    —    |
+| Rumble     |       ✓        |     ✓     |     ✓     |    —    |
 | Kick       |       ✓        |     ✓     |     ✓     |    —    |
 | Chaturbate |       ✓        |     ✓     |     ✓     |    —    |
+| Cam4       |       ✓        |     ✓     |     —     |    —    |
+| Jerkmate   |       ✓        |     ✓     |     —     |    —    |
+| Streamate  |       ✓        |     ✓     |     —     |    —    |
 | Stripchat  |       ✓        |     ✓     |     ✓     |    ✓    |
 | BongaCams  |       ✓        |     ✓     |     —     |    —    |
 | CamSoda    |       ✓        |     ✓     |     —     |    —    |

@@ -34,14 +34,63 @@ function matchesFilter(plugin: PluginEntry, filter: PluginFilterId): boolean {
   }
 }
 
+/**
+ * Brand-tinted icon tile. Renders the plugin's real site icon (from
+ * /public/plugins, mirroring the desktop app's per-site favicons) when the
+ * entry has one; anything else — e.g. the mock platform — keeps the generic
+ * puzzle glyph.
+ */
+const PLATFORM_TILE_COLORS: Record<string, string> = {
+  twitch: "#9147ff",
+  youtube: "#ff0033",
+  rumble: "#0dbf43",
+  kick: "#53fc18",
+  chaturbate: "#ff5c1f",
+  stripchat: "#e7245e",
+  bongacams: "#ff5a3c",
+  cam4: "#fb923c",
+  camsoda: "#f472b6",
+  dreamcam: "#ff4d8d",
+  jerkmate: "#e0455e",
+  myfreecams: "#22d3ee",
+  streamate: "#38bdf8",
+};
+
+function PluginIcon({ plugin }: { plugin: PluginEntry }) {
+  const color = PLATFORM_TILE_COLORS[plugin.id] ?? "#8b93a1";
+  if (!plugin.icon) {
+    return (
+      <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white">
+        <Puzzle className="h-5 w-5" aria-hidden="true" />
+      </div>
+    );
+  }
+  return (
+    <div
+      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/[0.04]"
+      style={{
+        boxShadow: `inset 0 0 0 1px ${color}55`,
+      }}
+    >
+      <img
+        src={`/plugins/${plugin.icon}`}
+        alt=""
+        width={40}
+        height={40}
+        loading="lazy"
+        draggable={false}
+        className="h-6 w-6 object-contain"
+      />
+    </div>
+  );
+}
+
 function PluginCard({ plugin }: { plugin: PluginEntry }) {
   return (
     <div className="group flex h-full flex-col rounded-xl border border-white/10 bg-white/[0.02] p-6 transition-all hover:border-white/25 hover:bg-white/[0.04]">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white">
-            <Puzzle className="h-5 w-5" aria-hidden="true" />
-          </div>
+          <PluginIcon plugin={plugin} />
           <div>
             <h3 className="font-semibold text-white">{plugin.name}</h3>
             <p className="text-xs text-white/50">

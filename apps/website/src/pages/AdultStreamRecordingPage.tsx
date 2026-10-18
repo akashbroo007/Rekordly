@@ -11,7 +11,7 @@ const pageFaqs = [
   {
     question: "Can Rekordly record adult live streams?",
     answer:
-      "Yes — for the platforms it supports. Rekordly ships with plugins for several live-cam platforms (Chaturbate, Stripchat, BongaCams, CamSoda, MyFreeCams, Dreamcam) alongside generic streaming platforms (Twitch, YouTube). Each plugin provides live detection and recording; some also support VOD downloads. Rekordly does not record from arbitrary adult websites — support is per-plugin, and the always-current capability matrix is on this page and in the docs.",
+      "Yes — for the platforms it supports. Rekordly ships with plugins for several live-cam platforms (Chaturbate, Stripchat, BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, Dreamcam) alongside generic streaming platforms (Twitch, YouTube, Rumble, Kick). Each plugin provides live detection and recording; some also support VOD downloads. Rekordly does not record from arbitrary adult websites — support is per-plugin, and the always-current capability matrix is on this page and in the docs.",
   },
   {
     question: "Does recording happen automatically?",

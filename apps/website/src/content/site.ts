@@ -50,7 +50,7 @@ export const hero = {
   },
   secondaryCta: { label: "View on GitHub", href: site.repoUrl },
   stats: [
-    { value: "8", label: "Sites supported" },
+    { value: "12", label: "Sites supported" },
     { value: "0", label: "Setup — yt-dlp & ffmpeg bundled" },
     { value: "100%", label: "Free for personal use" },
   ],
@@ -163,11 +163,15 @@ export const safetyRails = [
 export const platforms = [
   { name: "Twitch", live: true, recording: true, downloads: true, vr: false },
   { name: "YouTube", live: true, recording: true, downloads: true, vr: false },
+  { name: "Rumble", live: true, recording: true, downloads: true, vr: false },
   { name: "Kick", live: true, recording: true, downloads: true, vr: false },
   { name: "Chaturbate", live: true, recording: true, downloads: true, vr: false },
   { name: "Stripchat", live: true, recording: true, downloads: true, vr: true },
   { name: "BongaCams", live: true, recording: true, downloads: false, vr: false },
+  { name: "Cam4", live: true, recording: true, downloads: false, vr: false },
   { name: "CamSoda", live: true, recording: true, downloads: false, vr: false },
+  { name: "Jerkmate", live: true, recording: true, downloads: false, vr: false },
+  { name: "Streamate", live: true, recording: true, downloads: false, vr: false },
   { name: "MyFreeCams", live: true, recording: true, downloads: false, vr: false },
   { name: "Dreamcam", live: true, recording: true, downloads: false, vr: true },
 ] as const;
@@ -186,7 +190,7 @@ export const faqs = [
   {
     question: "Which platforms are supported?",
     answer:
-      "Twitch, YouTube, Kick, Chaturbate, Stripchat, BongaCams, CamSoda, MyFreeCams, and Dreamcam are supported out of the box for live detection and recording — Dreamcam including VR (3D) shows. New sites can be added as plugins without touching the core app.",
+      "Twitch, YouTube, Rumble, Kick, Chaturbate, Stripchat, BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, and Dreamcam are supported out of the box for live detection and recording — Dreamcam including VR (3D) shows. New sites can be added as plugins without touching the core app.",
   },
   {
     question: "My ISP blocks one of the sites — can I still record?",
@@ -269,7 +273,7 @@ export const roadmap: RoadmapGroup[] = [
       {
         title: "Bundled site plugins",
         description:
-          "Twitch, YouTube, Kick, Chaturbate, Stripchat, BongaCams, CamSoda, MyFreeCams, and Dreamcam — each with live detection, auto-record, and manual recording, plus VR (3D) capture on Dreamcam and Stripchat.",
+          "Twitch, YouTube, Rumble, Kick, Chaturbate, Stripchat, BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, and Dreamcam — each with live detection, auto-record, and manual recording, plus VR (3D) capture on Dreamcam and Stripchat.",
         target: "0.1.0",
       },
       {

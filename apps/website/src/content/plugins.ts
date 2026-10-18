@@ -38,6 +38,8 @@ export interface PluginEntry {
   streamTypes?: readonly string[];
   /** Optional note shown on the card, e.g. API key requirements. */
   setupHint?: string;
+  /** Real site icon shown on the card (filename under /public/plugins). */
+  icon?: string;
   /** True when the plugin ships bundled with the app. */
   bundled: boolean;
   /** True when the site supports video/VOD downloads (mirrors the platform matrix). */
@@ -67,6 +69,7 @@ export const plugins: PluginEntry[] = [
     permissions: ["network", "cookies", "recording"],
     setupHint:
       "Requires a free Twitch Client-ID and Secret. Open Settings for a step-by-step guide.",
+    icon: "twitch.png",
     bundled: true,
     downloads: true,
   },
@@ -90,6 +93,32 @@ export const plugins: PluginEntry[] = [
     permissions: ["network", "cookies", "recording"],
     setupHint:
       "Requires a free YouTube Data API v3 key. Open Settings for a step-by-step guide.",
+    icon: "youtube.png",
+    bundled: true,
+    downloads: true,
+  },
+  {
+    id: "rumble",
+    name: "Rumble",
+    description:
+      "Monitor and record livestreams from Rumble (rumble.com). Works without an account — add creators by channel handle.",
+    author: "Rekordly",
+    version: "0.1.0",
+    category: "platform",
+    domain: "rumble.com",
+    capabilities: [
+      "auth",
+      "creator-search",
+      "live-detection",
+      "stream-extraction",
+      "settings",
+      "health-check",
+      "metadata",
+    ],
+    permissions: ["network", "cookies", "recording"],
+    setupHint:
+      "Works without an account. Add creators by channel handle (rumble.com/c/handle or rumble.com/user/name).",
+    icon: "rumble.png",
     bundled: true,
     downloads: true,
   },
@@ -114,6 +143,7 @@ export const plugins: PluginEntry[] = [
     permissions: ["network", "cookies", "recording"],
     setupHint:
       "Works without an account. Optional session cookies raise API rate limits — paste them in the plugin settings.",
+    icon: "kick.png",
     bundled: true,
     downloads: true,
   },
@@ -137,6 +167,7 @@ export const plugins: PluginEntry[] = [
       "metadata",
     ],
     permissions: ["network", "cookies", "recording"],
+    icon: "chaturbate.png",
     bundled: true,
     downloads: true,
   },
@@ -160,6 +191,7 @@ export const plugins: PluginEntry[] = [
     ],
     permissions: ["network", "cookies", "recording"],
     streamTypes: ["2d", "vr"],
+    icon: "stripchat.png",
     bundled: true,
     downloads: true,
   },
@@ -180,6 +212,7 @@ export const plugins: PluginEntry[] = [
       "metadata",
     ],
     permissions: ["network", "cookies", "recording"],
+    icon: "bongacams.png",
     bundled: true,
   },
   {
@@ -200,6 +233,7 @@ export const plugins: PluginEntry[] = [
       "metadata",
     ],
     permissions: ["network", "cookies", "recording"],
+    icon: "cam4.png",
     bundled: true,
   },
   {
@@ -220,6 +254,7 @@ export const plugins: PluginEntry[] = [
       "metadata",
     ],
     permissions: ["network", "cookies", "recording"],
+    icon: "camsoda.png",
     bundled: true,
   },
   {
@@ -244,6 +279,7 @@ export const plugins: PluginEntry[] = [
     streamTypes: ["2d", "vr"],
     setupHint:
       "Works without an account. Optional session cookies enable logged-in quality.",
+    icon: "dreamcam.png",
     bundled: true,
   },
   {
@@ -264,6 +300,7 @@ export const plugins: PluginEntry[] = [
       "metadata",
     ],
     permissions: ["network", "cookies", "recording"],
+    icon: "jerkmate.png",
     bundled: true,
   },
   {
@@ -283,6 +320,7 @@ export const plugins: PluginEntry[] = [
       "metadata",
     ],
     permissions: ["network", "cookies", "recording"],
+    icon: "myfreecams.png",
     bundled: true,
   },
   {
@@ -302,6 +340,7 @@ export const plugins: PluginEntry[] = [
       "metadata",
     ],
     permissions: ["network", "cookies", "recording"],
+    icon: "streamate.png",
     bundled: true,
   },
   {

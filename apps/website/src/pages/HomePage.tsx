@@ -126,7 +126,7 @@ function Platforms() {
     <Section>
       <SectionHeading
         eyebrow="Supported platforms"
-        title="Eight sites out of the box, infinitely extensible"
+        title="Twelve sites out of the box, infinitely extensible"
         description="Site support ships as plugins with capability detection, health checks, and per-plugin settings — new sites can be added without touching the core app."
       />
       <div className="mx-auto mt-16 max-w-3xl">
