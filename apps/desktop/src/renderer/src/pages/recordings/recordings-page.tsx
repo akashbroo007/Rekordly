@@ -35,6 +35,7 @@ import {
   type RecordingsSort,
 } from './recordings-toolbar';
 import { SummaryStrip } from './summary-strip';
+import { usePrivacyMode } from '../../components/privacy-mode';
 
 const PAGE_SIZE = 50;
 
@@ -139,6 +140,9 @@ export function RecordingsPage() {
   const patchFilters = (patch: Partial<RecordingsFilterState>): void =>
     setFilters((prev) => ({ ...prev, ...patch }));
   const resetFilters = (): void => setFilters((prev) => ({ ...DEFAULT_FILTERS, tab: prev.tab }));
+
+  // Privacy mode — the global blur toggle (thumbnails + titles).
+  const [privacy, setPrivacy] = usePrivacyMode();
 
   // ponytail: dashboard deep-links mutate ?filter= while the page is mounted.
   useEffect(() => {
@@ -616,6 +620,7 @@ export function RecordingsPage() {
       indent={indent}
       maxLengthMinutes={maxLengthMinutes}
       onFilterPlatform={(pluginId) => patchFilters({ platforms: [pluginId], tab: filters.tab })}
+      privacy={privacy}
     />
   );
 
@@ -654,6 +659,7 @@ export function RecordingsPage() {
           }
           onRetryAllFailed={counts.failed > 0 ? retryAllFailedNow : undefined}
           retryAllFailedLoading={retryBulk.isPending}
+          privacy={{ on: privacy, onToggle: () => setPrivacy(!privacy) }}
           pageMenuItems={
             counts.failed > 0
               ? [
@@ -746,6 +752,7 @@ export function RecordingsPage() {
                 platformName={pluginNameFor(job.pluginId)}
                 creatorName={creatorNameFor(job)}
                 creatorAvatarUrl={avatarFor(job)}
+                privacy={privacy}
                 selectable={false}
                 selected={false}
                 onStopAndSave={() => cancelMutation.mutate(job.id)}

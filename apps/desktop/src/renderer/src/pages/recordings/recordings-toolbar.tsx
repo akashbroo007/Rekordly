@@ -10,6 +10,7 @@ import { Search, SlidersHorizontal, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button, Input, MultiSelect, type MultiSelectOption } from '@rekordly/ui';
 import { KebabMenu, type KebabItem } from '../../components/kebab-menu';
+import { PrivacyModeButton } from '../../components/privacy-mode';
 
 export type RecordingsFilterTab = 'all' | 'active' | 'completed' | 'failed';
 export type RecordingsSort = 'newest' | 'oldest' | 'longest' | 'largest';
@@ -46,6 +47,11 @@ export interface RecordingsToolbarProps {
   retryAllFailedLoading?: boolean;
   /** Extra "…" menu items (holds "Clear All Failed"). */
   pageMenuItems?: KebabItem[];
+  /** Privacy mode — the shared global toggle (blur thumbnails + titles). */
+  privacy: {
+    on: boolean;
+    onToggle: () => void;
+  };
   children?: ReactNode;
 }
 
@@ -69,6 +75,7 @@ export function RecordingsToolbar({
   onRetryAllFailed,
   retryAllFailedLoading,
   pageMenuItems,
+  privacy,
   children,
 }: RecordingsToolbarProps) {
   const hasDateRange = filters.from !== '' || filters.to !== '';
@@ -180,6 +187,9 @@ export function RecordingsToolbar({
         </select>
 
         <div className="ml-auto flex items-center gap-2">
+          {/* Privacy mode — blur thumbnails + titles for screen sharing */}
+          <PrivacyModeButton on={privacy.on} onToggle={privacy.onToggle} />
+
           {selectAll !== undefined && (
             <label className="flex cursor-pointer items-center gap-1.5 text-xs text-foreground-secondary">
               <input

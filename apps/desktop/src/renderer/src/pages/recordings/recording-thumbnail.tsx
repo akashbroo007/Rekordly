@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { toMediaUrl } from '../../components/video-player-dialog';
 import { platformColor } from '../../components/platform-config';
+import { PRIVACY_MEDIA_BLUR_CLASS } from '../../components/privacy-mode';
 
 export interface ThumbMeta {
   /** sf-media / data / remote image URL, when one resolved. */
@@ -163,6 +164,12 @@ export interface RecordingThumbProps {
    * the platform color for `job.pluginId` is used, unchanged.
    */
   tint?: string;
+  /**
+   * Privacy mode: blur the image/fallback content while keeping the crisp
+   * 16:9 tile — safe for screen shares. Optional and off by default; pages
+   * with a Privacy-mode toggle pass it per page (one global toggle).
+   */
+  blurred?: boolean;
   /** Notified with any extra metadata discovered while generating. */
   onMeta?: (meta: { resolution?: string; durationSeconds?: number }) => void;
 }
@@ -175,6 +182,7 @@ export function RecordingThumb({
   dimmed = false,
   large = false,
   tint: tintOverride,
+  blurred = false,
   onMeta,
 }: RecordingThumbProps) {
   // Track the current image source + retry chains: disk thumb → site
@@ -226,6 +234,10 @@ export function RecordingThumb({
           : null;
   const hasImage = src !== null;
 
+  // Privacy mode: blur the CONTENT (img / avatar / initials) while the tile
+  // keeps its crisp border; scale hides the blur's soft edges inside the tile.
+  const opaqueContentClass = blurred ? PRIVACY_MEDIA_BLUR_CLASS : '';
+
   return (
     <div
       ref={gateRef}
@@ -245,10 +257,10 @@ export function RecordingThumb({
             else if (generatedSrc !== null && src === generatedSrc) setGeneratedSrc(null);
             else if (src === job.thumbnail) setSiteBroken(true);
           }}
-          className="h-full w-full object-cover"
+          className={`h-full w-full object-cover ${opaqueContentClass}`}
         />
       ) : avatarUrl !== null && avatarUrl !== undefined && avatarUrl !== '' && !avatarBroken ? (
-        <div className="flex h-full w-full items-center justify-center" style={{ backgroundImage: gradient }}>
+        <div className={`flex h-full w-full items-center justify-center ${opaqueContentClass}`} style={{ backgroundImage: gradient }}>
           <img
             src={avatarUrl}
             alt=""
@@ -261,7 +273,7 @@ export function RecordingThumb({
         // ponytail: no image at all — platform-tinted gradient + initials,
         // same palette math as the creators page avatar fallback.
         <div
-          className="flex h-full w-full items-center justify-center"
+          className={`flex h-full w-full items-center justify-center ${opaqueContentClass}`}
           style={{ backgroundImage: `linear-gradient(135deg, ${palette[0]}, ${palette[1]})` }}
         >
           <span className="text-xs font-semibold text-white/80">{initialsFor(creatorName)}</span>

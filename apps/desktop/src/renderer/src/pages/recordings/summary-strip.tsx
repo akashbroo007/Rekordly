@@ -34,11 +34,13 @@ function formatTotalRecordedTime(seconds: number): string {
 }
 
 /**
- * Chip visual shared by the Recordings page and the Uploads page summary
- * strips (exported so both strips stay pixel-identical). `uploading` is an
- * in-flight tone: pulsing info dot, exactly like a queued/active upload.
+ * Chip visual shared by the Recordings page, the Uploads page AND the
+ * Downloads page summary strips (exported so all strips stay
+ * pixel-identical). `uploading` is an in-flight tone: pulsing info dot,
+ * exactly like a queued/active upload. The Downloads strip additionally
+ * uses `queued`, `paused` and `neutral`.
  */
-export type SummaryChipKind = 'active' | 'completed' | 'failed' | 'info' | 'uploading';
+export type SummaryChipKind = 'active' | 'completed' | 'failed' | 'info' | 'uploading' | 'queued' | 'paused' | 'neutral';
 
 export interface SummaryChipProps {
   kind: SummaryChipKind;
@@ -62,7 +64,11 @@ export function Chip({
         ? 'text-success'
         : kind === 'failed'
           ? 'text-error'
-          : 'text-info';
+          : kind === 'paused'
+            ? 'text-warning'
+            : kind === 'neutral'
+              ? 'text-foreground-secondary'
+              : 'text-info';
   const border = selected ? 'border-primary/70 bg-primary/10' : 'border-border hover:border-primary/40 hover:bg-hover';
   const Element = onFilter !== undefined ? 'button' : 'div';
   return (
@@ -83,7 +89,16 @@ export function Chip({
 
 /** 6px status dot; pulses while something is working (recording/uploading). */
 export function ChipDot({ kind }: { kind: SummaryChipKind }) {
-  const color = kind === 'uploading' || kind === 'info' ? 'bg-info' : kind === 'completed' ? 'bg-success' : 'bg-error';
+  const color =
+    kind === 'uploading' || kind === 'info' || kind === 'queued'
+      ? 'bg-info'
+      : kind === 'completed'
+        ? 'bg-success'
+        : kind === 'paused'
+          ? 'bg-warning'
+          : kind === 'neutral'
+            ? 'bg-foreground-disabled'
+            : 'bg-error';
   if (kind !== 'active' && kind !== 'uploading') {
     return <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${color}`} />;
   }

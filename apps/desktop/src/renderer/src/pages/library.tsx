@@ -57,6 +57,7 @@ import { toMediaUrl, VideoPlayerDialog, watchProgressFor } from '../components/v
 import { NetworkStreamDialog } from '../components/network-stream-dialog';
 import { ConcatDialog } from '../components/editor/concat-dialog';
 import { Pagination, usePaged } from '../components/pagination';
+import { PrivacyModeButton, PRIVACY_BLUR_CLASS, PRIVACY_MEDIA_BLUR_CLASS, usePrivacyMode } from '../components/privacy-mode';
 
 type ViewMode = 'grid' | 'list' | 'compact' | 'details';
 type SortField = 'title' | 'createdAt' | 'startedAt' | 'durationSeconds' | 'sizeBytes' | 'platformId';
@@ -84,8 +85,14 @@ export function LibraryPage() {
   const pushToast = useToastStore((state) => state.push);
   const queryClient = useQueryClient();
   const isFetching = useIsFetching();
+  // Privacy mode — the global blur toggle (thumbnails + titles). Shared with
+  // the Downloads / Recordings / Uploads pages; applies to all three tabs.
+  const [privacy, setPrivacy] = usePrivacyMode();
 
   const [tab, setTab] = useState<LibraryTab>(() => {
+    // ponytail: a Downloads-page "Open in library" push lands here — start on
+    // the Downloads tab so the handed-over file plays in context.
+    if (useDrilldownStore.getState().playDownload !== undefined) return 'downloads';
     try { return (localStorage.getItem(TAB_STORAGE_KEY) as LibraryTab) || 'recordings'; } catch { return 'recordings'; }
   });
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -123,6 +130,18 @@ export function LibraryPage() {
   const [filterDateFrom, setFilterDateFrom] = useState<string>(() => useDrilldownStore.getState().dateFrom ?? '');
   const [filterDateTo, setFilterDateTo] = useState<string>(() => useDrilldownStore.getState().dateTo ?? '');
   const pageSize = 50;
+
+  // ponytail: consume the Downloads page "Open in library" push once —
+  // the built-in player takes the handed-over download (the tab initializer
+  // above already started on Downloads); nothing re-plays on later visits.
+  useEffect(() => {
+    const pushed = useDrilldownStore.getState().playDownload;
+    if (pushed === undefined) return;
+    useDrilldownStore.getState().setPlayDownload(undefined);
+    if (pushed.filePath !== null && pushed.filePath !== undefined && pushed.filePath !== '') {
+      setPlayerDownload(pushed);
+    }
+  }, []);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, viewMode); } catch { /* noop */ }
@@ -343,6 +362,8 @@ export function LibraryPage() {
         }
         actions={
           <div className="flex items-center gap-2">
+            {/* Privacy mode — blur thumbnails + titles (all three tabs) */}
+            <PrivacyModeButton on={privacy} onToggle={() => setPrivacy(!privacy)} />
             <Button variant="secondary" size="sm" onClick={() => setNetworkDialogOpen(true)}>
               <Radio size={14} /> Network Stream
             </Button>
@@ -393,7 +414,7 @@ export function LibraryPage() {
         }
       />
 
-      {tab === 'downloads' && <DownloadsLibrary onPlay={setPlayerDownload} />}
+      {tab === 'downloads' && <DownloadsLibrary onPlay={setPlayerDownload} privacy={privacy} />}
 
       {(tab === 'recordings' || tab === 'edited') && (<>
       {/* Toolbar */}
@@ -584,6 +605,7 @@ export function LibraryPage() {
                   recording={rec}
                   creatorName={rec.creatorId ? creatorNameById.get(rec.creatorId) : undefined}
                   selected={selectedIds.has(rec.id)}
+                  privacy={privacy}
                   onSelect={toggleSelect}
                   onDetails={setDetailsRecording}
                   onEditNotes={setEditNotes}
@@ -604,6 +626,7 @@ export function LibraryPage() {
                   recording={rec}
                   creatorName={rec.creatorId ? creatorNameById.get(rec.creatorId) : undefined}
                   selected={selectedIds.has(rec.id)}
+                  privacy={privacy}
                   onSelect={toggleSelect}
                   onDetails={setDetailsRecording}
                   onEditNotes={setEditNotes}
@@ -623,6 +646,7 @@ export function LibraryPage() {
                   recording={rec}
                   creatorName={rec.creatorId ? creatorNameById.get(rec.creatorId) : undefined}
                   selected={selectedIds.has(rec.id)}
+                  privacy={privacy}
                   onSelect={toggleSelect}
                   onDetails={setDetailsRecording}
                 />
@@ -639,6 +663,7 @@ export function LibraryPage() {
                   recording={rec}
                   creatorName={rec.creatorId ? creatorNameById.get(rec.creatorId) : undefined}
                   selected={selectedIds.has(rec.id)}
+                  privacy={privacy}
                   onSelect={toggleSelect}
                   onDetails={setDetailsRecording}
                 />
@@ -750,9 +775,10 @@ export function LibraryPage() {
 
 // --- Downloads Library -------------------------------------------------------
 
-function DownloadsLibrary({ onPlay }: { onPlay: (item: DownloadQueueItemDto) => void }) {
+function DownloadsLibrary({ onPlay, privacy }: { onPlay: (item: DownloadQueueItemDto) => void; privacy?: boolean }) {
   const queryClient = useQueryClient();
   const pushToast = useToastStore((state) => state.push);
+  const privacyTitleClass = privacy === true ? PRIVACY_BLUR_CLASS : '';
 
   /** ponytail: thumb-card grid, 4 columns — 24 per page = exactly 6 rows.
    * Long generic-download histories stay browsable without scrolling forever. */
@@ -812,7 +838,11 @@ function DownloadsLibrary({ onPlay }: { onPlay: (item: DownloadQueueItemDto) => 
             >
               <div className="relative aspect-video w-full overflow-hidden rounded-sm bg-elevated">
                 {item.thumbnailPath ? (
-                  <img src={toMediaUrl(item.thumbnailPath)} alt="" className="h-full w-full object-cover" />
+                  <img
+                    src={toMediaUrl(item.thumbnailPath)}
+                    alt=""
+                    className={`h-full w-full object-cover ${privacy === true ? PRIVACY_MEDIA_BLUR_CLASS : ''}`}
+                  />
                 ) : (
                   <div className="flex h-full items-center justify-center text-foreground-muted">
                     <Play size={24} />
@@ -832,14 +862,19 @@ function DownloadsLibrary({ onPlay }: { onPlay: (item: DownloadQueueItemDto) => 
                 )}
               </div>
               <div className="flex flex-1 flex-col gap-1 px-2 pb-2">
-                <h3 className="line-clamp-1 text-sm font-medium text-foreground">{item.title ?? item.fileName}</h3>
+                <h3 className={`line-clamp-1 text-sm font-medium text-foreground ${privacyTitleClass}`}>
+                  {item.title ?? item.fileName}
+                </h3>
                 <div className="flex items-center gap-2 text-[10px] text-foreground-muted">
                   <Badge variant="muted">{siteFolderOf(item.url)}</Badge>
                   {item.totalBytes > 0 && <span>{formatBytes(item.totalBytes)}</span>}
                   {item.audioOnly && <span>MP3</span>}
                 </div>
                 {item.status === 'failed' && item.error && (
-                  <p className="line-clamp-2 text-[10px] text-error" title={item.error}>
+                  <p
+                    className={`line-clamp-2 text-[10px] text-error ${privacyTitleClass}`}
+                    title={item.error}
+                  >
                     {item.error}
                   </p>
                 )}
@@ -887,6 +922,7 @@ function RecordingGridCard({
   recording,
   creatorName,
   selected,
+  privacy,
   onSelect,
   onDetails,
   onEditNotes,
@@ -897,6 +933,8 @@ function RecordingGridCard({
   recording: RecordingDto;
   creatorName?: string;
   selected: boolean;
+  /** Privacy mode: blur thumbnails + titles (for screen sharing). */
+  privacy?: boolean;
   onSelect: (id: string) => void;
   onDetails: (r: RecordingDto) => void;
   onEditNotes: (r: RecordingDto) => void;
@@ -905,6 +943,7 @@ function RecordingGridCard({
   onEdit: (r: RecordingDto) => void;
 }) {
   const queryClient = useQueryClient();
+  const privacyTitleClass = privacy === true ? PRIVACY_BLUR_CLASS : '';
 
   const deleteRec = useMutation({
     mutationFn: () => window.desktop.library.bulkDelete([recording.id]),
@@ -924,7 +963,11 @@ function RecordingGridCard({
         >
           <div className="relative aspect-video w-full overflow-hidden rounded-sm bg-elevated">
             {recording.thumbnailPath ? (
-              <img src={toMediaUrl(recording.thumbnailPath)} alt="" className="h-full w-full object-cover" />
+              <img
+                src={toMediaUrl(recording.thumbnailPath)}
+                alt=""
+                className={`h-full w-full object-cover ${privacy === true ? PRIVACY_MEDIA_BLUR_CLASS : ''}`}
+              />
             ) : (
               <div className="flex h-full items-center justify-center text-foreground-muted">
                 <Play size={24} />
@@ -968,7 +1011,7 @@ function RecordingGridCard({
           <div className="flex flex-1 flex-col gap-1 px-2 pb-2">
             <div className="flex items-start justify-between gap-1">
               <h3
-                className="line-clamp-1 text-sm font-medium text-foreground"
+                className={`line-clamp-1 text-sm font-medium text-foreground ${privacyTitleClass}`}
                 title={recording.title}
               >
                 {creatorName ?? recording.title}
@@ -1031,6 +1074,7 @@ function RecordingListCard({
   recording,
   creatorName,
   selected,
+  privacy,
   onSelect,
   onDetails,
   onEditNotes,
@@ -1040,12 +1084,15 @@ function RecordingListCard({
   recording: RecordingDto;
   creatorName?: string;
   selected: boolean;
+  /** Privacy mode: blur thumbnails + titles (for screen sharing). */
+  privacy?: boolean;
   onSelect: (id: string) => void;
   onDetails: (r: RecordingDto) => void;
   onEditNotes: (r: RecordingDto) => void;
   onToggleFavorite: (id: string) => void;
   onEdit: (r: RecordingDto) => void;
 }) {
+  const privacyTitleClass = privacy === true ? PRIVACY_BLUR_CLASS : '';
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -1062,13 +1109,20 @@ function RecordingListCard({
           </button>
           <div className="h-12 w-20 shrink-0 overflow-hidden rounded-sm bg-elevated">
             {recording.thumbnailPath ? (
-              <img src={toMediaUrl(recording.thumbnailPath)} alt="" className="h-full w-full object-cover" />
+              <img
+                src={toMediaUrl(recording.thumbnailPath)}
+                alt=""
+                className={`h-full w-full object-cover ${privacy === true ? PRIVACY_MEDIA_BLUR_CLASS : ''}`}
+              />
             ) : (
               <div className="flex h-full items-center justify-center text-foreground-muted"><Play size={14} /></div>
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-sm font-medium text-foreground" title={recording.title}>
+            <h3
+              className={`truncate text-sm font-medium text-foreground ${privacyTitleClass}`}
+              title={recording.title}
+            >
               {creatorName ?? recording.title}
               {creatorName && recording.startedAt && (
                 <span className="text-foreground-muted"> · {new Date(recording.startedAt).toLocaleDateString()}</span>
@@ -1107,15 +1161,19 @@ function RecordingCompactRow({
   recording,
   creatorName,
   selected,
+  privacy,
   onSelect,
   onDetails,
 }: {
   recording: RecordingDto;
   creatorName?: string;
   selected: boolean;
+  /** Privacy mode: blur titles (this row has no thumbnail). */
+  privacy?: boolean;
   onSelect: (id: string) => void;
   onDetails: (r: RecordingDto) => void;
 }) {
+  const privacyTitleClass = privacy === true ? PRIVACY_BLUR_CLASS : '';
   return (
     <div
       className={`flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1 text-sm transition-colors hover:bg-elevated/50 ${selected ? 'bg-elevated ring-1 ring-primary' : ''}`}
@@ -1124,7 +1182,7 @@ function RecordingCompactRow({
       <button type="button" onClick={(e) => { e.stopPropagation(); onSelect(recording.id); }}>
         {selected ? <CheckSquare size={12} className="text-primary" /> : <Square size={12} className="text-foreground-muted" />}
       </button>
-      <span className="min-w-0 flex-1 truncate text-foreground" title={recording.title}>
+      <span className={`min-w-0 flex-1 truncate text-foreground ${privacyTitleClass}`} title={recording.title}>
         {creatorName ?? recording.title}
         {creatorName && recording.startedAt && (
           <span className="text-foreground-muted"> · {new Date(recording.startedAt).toLocaleDateString()}</span>
@@ -1143,15 +1201,19 @@ function RecordingDetailsRow({
   recording,
   creatorName,
   selected,
+  privacy,
   onSelect,
   onDetails,
 }: {
   recording: RecordingDto;
   creatorName?: string;
   selected: boolean;
+  /** Privacy mode: blur thumbnails + titles (for screen sharing). */
+  privacy?: boolean;
   onSelect: (id: string) => void;
   onDetails: (r: RecordingDto) => void;
 }) {
+  const privacyTitleClass = privacy === true ? PRIVACY_BLUR_CLASS : '';
   return (
     <Card
       className={`flex cursor-pointer items-center gap-3 transition-colors hover:bg-elevated/50 ${selected ? 'ring-1 ring-primary' : ''}`}
@@ -1162,13 +1224,20 @@ function RecordingDetailsRow({
       </button>
       <div className="h-16 w-24 shrink-0 overflow-hidden rounded-sm bg-elevated">
         {recording.thumbnailPath ? (
-          <img src={toMediaUrl(recording.thumbnailPath)} alt="" className="h-full w-full object-cover" />
+          <img
+            src={toMediaUrl(recording.thumbnailPath)}
+            alt=""
+            className={`h-full w-full object-cover ${privacy === true ? PRIVACY_MEDIA_BLUR_CLASS : ''}`}
+          />
         ) : (
           <div className="flex h-full items-center justify-center text-foreground-muted"><Play size={16} /></div>
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <h3 className="truncate text-sm font-medium text-foreground" title={recording.title}>
+        <h3
+          className={`truncate text-sm font-medium text-foreground ${privacyTitleClass}`}
+          title={recording.title}
+        >
           {creatorName ?? recording.title}
           {creatorName && recording.startedAt && (
             <span className="text-foreground-muted"> · {new Date(recording.startedAt).toLocaleDateString()}</span>

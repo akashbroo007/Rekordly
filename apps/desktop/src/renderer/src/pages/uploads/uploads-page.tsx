@@ -52,6 +52,7 @@ import {
 import { UploadsSummaryStrip } from './summary-strip';
 import { ChooseFromRecordingsDialog } from './recordings-picker-dialog';
 import type { KebabItem } from '../../components/kebab-menu';
+import { usePrivacyMode } from '../../components/privacy-mode';
 
 const DEFAULT_FILTERS: UploadsFilterState = {
   tab: 'all',
@@ -626,6 +627,9 @@ export function UploadsPage() {
     setFilters((prev) => ({ ...prev, ...patch }));
   const resetFilters = (): void => setFilters((prev) => ({ ...DEFAULT_FILTERS, tab: prev.tab }));
 
+  // Privacy mode — the global blur toggle (thumbnails + titles).
+  const [privacy, setPrivacy] = usePrivacyMode();
+
   const visibleBase = useMemo(() => {
     if (filters.tab === 'uploading') return uploadingItems;
     if (filters.tab === 'completed') return completedItems;
@@ -806,6 +810,7 @@ export function UploadsPage() {
             : 'The host rejected this upload. Finish its setup in Settings → Cloud Storage first.'
         }
         onRemove={actions.remove}
+        privacy={privacy}
         onCopyLink={(link) => {
           void navigator.clipboard.writeText(link).then(() => {
             pushToast({ title: 'Link copied', message: link, level: 'info' });
@@ -902,6 +907,7 @@ export function UploadsPage() {
             : undefined
         }
         pageMenuItems={clearHistoryItems}
+        privacy={{ on: privacy, onToggle: () => setPrivacy(!privacy) }}
       />
 
       {/* Drop zone — compact once the list below has rows */}

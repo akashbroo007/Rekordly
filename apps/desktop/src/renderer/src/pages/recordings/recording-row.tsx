@@ -17,6 +17,7 @@ import { Badge, Button, Tooltip } from '@rekordly/ui';
 import { Check, ChevronDown, Copy, Library, Pause, Play, RefreshCw, Square, Trash2, X } from 'lucide-react';
 import { PlatformBadge, StatusBadge } from '../../components/badges';
 import { KebabMenu } from '../../components/kebab-menu';
+import { PRIVACY_BLUR_CLASS } from '../../components/privacy-mode';
 import { RecordingThumb } from './recording-thumbnail';
 import {
   formatCompactDuration,
@@ -60,6 +61,8 @@ export interface RecordingRowProps {
   maxLengthMinutes?: number;
   /** Platform badge click → filter the page. */
   onFilterPlatform?: (pluginId: string) => void;
+  /** Privacy mode: blur thumbnails + titles (for screen sharing). */
+  privacy?: boolean;
 }
 
 /* --- formatting pieces ------------------------------------------------------- */
@@ -267,6 +270,7 @@ function ActiveRecordingCard({
   platformName,
   creatorName,
   creatorAvatarUrl,
+  privacy,
   onStopAndSave,
   onPause,
   onDiscard,
@@ -277,6 +281,8 @@ function ActiveRecordingCard({
   platformName: string;
   creatorName: string;
   creatorAvatarUrl?: string | null;
+  /** Privacy mode: blur thumbnails + titles (for screen sharing). */
+  privacy?: boolean;
   onStopAndSave?: () => void;
   onPause?: () => void;
   onDiscard?: () => void;
@@ -292,13 +298,14 @@ function ActiveRecordingCard({
   const retries = Math.max(0, job.attempts - 1);
   const retryQuota = Math.max(0, job.maxAttempts - 1);
   const [showDetails, setShowDetails] = useState(false);
+  const privacyTitleClass = privacy === true ? PRIVACY_BLUR_CLASS : '';
 
   return (
     <div
       className={`rounded-md border-2 border-error/60 bg-elevated p-3.5 transition-all duration-150 hover:-translate-y-0.5 hover:border-error/80 ${isPaused ? 'opacity-95 saturate-75' : ''}`}
     >
       <div className="flex items-start gap-3.5">
-        <RecordingThumb job={job} creatorName={creatorName} avatarUrl={creatorAvatarUrl} large dimmed={isPaused} />
+        <RecordingThumb job={job} creatorName={creatorName} avatarUrl={creatorAvatarUrl} large dimmed={isPaused} blurred={privacy === true} />
 
         <div className="min-w-0 flex-1">
           {/* Title + the ONE status indicator for the live card */}
@@ -314,7 +321,10 @@ function ActiveRecordingCard({
             ) : (
               <StatusBadge status={job.status} pulse={ticking} />
             )}
-            <h3 className="min-w-0 truncate text-sm font-bold tracking-tight text-foreground" title={creatorName}>
+            <h3
+              className={`min-w-0 truncate text-sm font-bold tracking-tight text-foreground ${privacyTitleClass}`}
+              title={creatorName}
+            >
               {creatorName}
             </h3>
             {retries > 0 && (
@@ -420,6 +430,7 @@ function MetaLine({
   durationSeconds,
   resolution,
   failureReason,
+  privacy,
 }: {
   job: RecordingJobDto;
   platformName: string;
@@ -427,17 +438,20 @@ function MetaLine({
   durationSeconds: number | null;
   resolution?: string;
   failureReason?: string;
+  /** Blurs the failure reason text when Privacy mode is on. */
+  privacy?: boolean;
 }) {
   const duration = formatCompactDuration(durationSeconds);
   const dead = job.status === 'failed' || job.status === 'cancelled';
   const stampSource = dead ? job.createdAt : (job.startedAt ?? job.createdAt);
+  const privacyReasonClass = privacy === true ? PRIVACY_BLUR_CLASS : '';
   return (
     <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs leading-none text-foreground-secondary">
       <PlatformBadge pluginId={job.pluginId} platformName={platformName} onFilterPlatform={onFilterPlatform} />
       {failureReason !== undefined && failureReason !== '' && (
         <>
           <span
-            className={`max-w-[36ch] truncate font-medium ${job.status === 'cancelled' ? 'text-foreground-secondary' : 'text-error'}`}
+            className={`max-w-[36ch] truncate font-medium ${job.status === 'cancelled' ? 'text-foreground-secondary' : 'text-error'} ${privacyReasonClass}`}
             title={failureReason}
           >
             {failureReason}
@@ -482,6 +496,7 @@ function CompactRecordingRow({
   platformName,
   creatorName,
   creatorAvatarUrl,
+  privacy,
   selected,
   selectable,
   onToggleSelect,
@@ -503,6 +518,8 @@ function CompactRecordingRow({
   platformName: string;
   creatorName: string;
   creatorAvatarUrl?: string | null;
+  /** Privacy mode: blur thumbnails + titles (for screen sharing). */
+  privacy?: boolean;
   selected: boolean;
   selectable: boolean;
   onToggleSelect?: () => void;
@@ -524,6 +541,7 @@ function CompactRecordingRow({
   const hasPartialFile = job.filePath !== null && job.filePath !== undefined && job.filePath !== '';
   const [showDetails, setShowDetails] = useState(false);
   const [probe, setProbe] = useState<ProbeMeta>({ durationSeconds: null });
+  const privacyTitleClass = privacy === true ? PRIVACY_BLUR_CLASS : '';
 
   const elapsed = jobElapsedSeconds(job.startedAt, job.finishedAt);
   const durationSeconds = probe.durationSeconds ?? elapsed;
@@ -552,6 +570,7 @@ function CompactRecordingRow({
           creatorName={creatorName}
           avatarUrl={creatorAvatarUrl}
           dimmed={dead}
+          blurred={privacy === true}
           onMeta={(m) => setProbe({ durationSeconds: m.durationSeconds ?? null, resolution: m.resolution })}
         />
 
@@ -559,7 +578,7 @@ function CompactRecordingRow({
           {/* Title line — the one status indicator lives here */}
           <div className="flex min-w-0 items-center gap-2">
             <h3
-              className="min-w-0 truncate text-sm font-semibold tracking-tight text-foreground"
+              className={`min-w-0 truncate text-sm font-semibold tracking-tight text-foreground ${privacyTitleClass}`}
               title={creatorName}
             >
               {creatorName}
@@ -591,6 +610,7 @@ function CompactRecordingRow({
             durationSeconds={dead && durationSeconds !== null && durationSeconds < 1 ? null : durationSeconds}
             resolution={probe.resolution}
             failureReason={dead ? failureReasonFor(job) : undefined}
+            privacy={privacy}
           />
         </div>
 
@@ -692,6 +712,7 @@ export function RecordingRow(props: RecordingRowProps) {
       platformName,
       creatorName,
       creatorAvatarUrl,
+      privacy,
       onStopAndSave,
       onPause,
       onDiscard,
@@ -704,6 +725,7 @@ export function RecordingRow(props: RecordingRowProps) {
         platformName={platformName}
         creatorName={creatorName}
         creatorAvatarUrl={creatorAvatarUrl}
+        privacy={privacy}
         onStopAndSave={onStopAndSave}
         onPause={onPause}
         onDiscard={onDiscard}
@@ -717,6 +739,7 @@ export function RecordingRow(props: RecordingRowProps) {
     platformName,
     creatorName,
     creatorAvatarUrl,
+    privacy,
     selected,
     selectable,
     onToggleSelect,
@@ -741,6 +764,7 @@ export function RecordingRow(props: RecordingRowProps) {
       platformName={platformName}
       creatorName={creatorName}
       creatorAvatarUrl={creatorAvatarUrl}
+      privacy={privacy}
       selected={selected}
       selectable={selectable}
       onToggleSelect={onToggleSelect}

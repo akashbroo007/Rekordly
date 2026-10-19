@@ -38,6 +38,7 @@ import {
 import { ProviderTile } from './provider-tile';
 import { maskHomeDir, mapUploadError, type MappedUploadError } from './upload-errors';
 import { formatRelativeTime } from './uploads-format';
+import { PRIVACY_BLUR_CLASS } from '../../components/privacy-mode';
 
 export type UploadRowVariant = 'queued' | 'uploading' | 'completed' | 'failed';
 
@@ -176,6 +177,8 @@ export interface UploadRowProps {
   onCopyLink?: (link: string) => void;
   onOpenLink?: (link: string) => void;
   onShowInFolder?: () => void;
+  /** Privacy mode: blur thumbnails + titles + share link (screen sharing). */
+  privacy?: boolean;
 }
 
 /** Quiet share-link text (protocol dropped; the full URL stays in tooltip + copy). */
@@ -209,12 +212,15 @@ export function UploadRow({
   onCopyLink,
   onOpenLink,
   onShowInFolder,
+  privacy,
 }: UploadRowProps) {
   const status = item.status as UploadRowStatus;
   const failed = variant === 'failed';
   const completed = variant === 'completed';
   const paused = status === 'paused';
   const [showDetails, setShowDetails] = useState(false);
+  const hasPrivacy = privacy === true;
+  const privacyTitleClass = hasPrivacy ? PRIVACY_BLUR_CLASS : '';
 
   const mapped: MappedUploadError = failed
     ? mapUploadError(item.error ?? null, status)
@@ -285,12 +291,16 @@ export function UploadRow({
           creatorName={title}
           avatarUrl={creatorAvatarUrl ?? null}
           dimmed={failed}
+          blurred={hasPrivacy}
         />
 
         <div className="min-w-0 flex-1">
           {/* Title = creator name (raw file name lives in the tooltip) */}
           <div className="flex min-w-0 items-center gap-2">
-            <h3 className="min-w-0 truncate text-sm font-bold tracking-tight text-foreground" title={fileName}>
+            <h3
+              className={`min-w-0 truncate text-sm font-bold tracking-tight text-foreground ${privacyTitleClass}`}
+              title={fileName}
+            >
               {title}
             </h3>
             <UploadStatusDot status={status} />
@@ -369,7 +379,10 @@ export function UploadRow({
           {/* Completed: short muted share link with one-click copy */}
           {completed && shareLink !== '' && (
             <p className="mt-1.5 flex min-w-0 items-center gap-1">
-              <span className="min-w-0 max-w-[48ch] truncate text-xs text-foreground-muted" title={shareLink}>
+              <span
+                className={`min-w-0 max-w-[48ch] truncate text-xs text-foreground-muted ${privacyTitleClass}`}
+                title={shareLink}
+              >
                 {shortLinkText(shareLink)}
               </span>
               {onCopyLink !== undefined && (
@@ -394,7 +407,7 @@ export function UploadRow({
           {/* Failed: one-line human reason (+ collapsed technical details) */}
           {failed && mapped.reason !== '' && (
             <p
-              className={`mt-1.5 truncate text-xs font-medium ${status === 'cancelled' ? 'text-foreground-secondary' : 'text-error'}`}
+              className={`mt-1.5 truncate text-xs font-medium ${status === 'cancelled' ? 'text-foreground-secondary' : 'text-error'} ${privacyTitleClass}`}
               title={mapped.reason}
             >
               {mapped.reason}

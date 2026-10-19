@@ -12,6 +12,7 @@ import type { ReactNode } from 'react';
 import { Search, X } from 'lucide-react';
 import { Input, MultiSelect, type MultiSelectOption } from '@rekordly/ui';
 import { KebabMenu, type KebabItem } from '../../components/kebab-menu';
+import { PrivacyModeButton } from '../../components/privacy-mode';
 
 export type UploadFilterTab = 'all' | 'uploading' | 'completed' | 'failed';
 export type UploadSort = 'newest' | 'oldest' | 'largest';
@@ -41,6 +42,11 @@ export interface UploadsToolbarProps {
   };
   /** "Clear history…" menu items (Clear completed… / Clear failed…). */
   pageMenuItems?: KebabItem[];
+  /** Privacy mode — the shared global toggle (blur thumbnails + titles). */
+  privacy: {
+    on: boolean;
+    onToggle: () => void;
+  };
   children?: ReactNode;
 }
 
@@ -62,6 +68,7 @@ export function UploadsToolbar({
   providerOptions,
   selectAll,
   pageMenuItems,
+  privacy,
   children,
 }: UploadsToolbarProps) {
   return (
@@ -129,6 +136,9 @@ export function UploadsToolbar({
         </select>
 
         <div className="ml-auto flex items-center gap-2">
+          {/* Privacy mode — blur thumbnails + titles for screen sharing */}
+          <PrivacyModeButton on={privacy.on} onToggle={privacy.onToggle} />
+
           {selectAll !== undefined && (
             <label className="flex cursor-pointer items-center gap-1.5 text-xs text-foreground-secondary">
               <input
