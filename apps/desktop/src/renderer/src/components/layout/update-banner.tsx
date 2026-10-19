@@ -1,6 +1,7 @@
 import { CheckCircle2, Download, RotateCw, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { UpdateStatusDto } from '@rekordly/shared/contracts';
+import { releaseNotesUrl } from '../../lib/site-links';
 
 /**
  * ponytail: slim in-app update strip shown under the TitleBar. It replaces
@@ -56,6 +57,14 @@ export function UpdateBanner() {
           <span className="text-xs text-foreground-secondary">
             Rekordly v{version ?? 'newer version'} is available — install the patched build without reinstalling
           </span>
+          <button
+            type="button"
+            onClick={() => void window.desktop.app.openUrl(releaseNotesUrl(version))}
+            title="See what changed in this release"
+            className="cursor-pointer text-xs font-medium text-primary underline-offset-2 transition-colors duration-150 hover:underline"
+          >
+            What&apos;s new
+          </button>
           <button
             type="button"
             onClick={() => void window.desktop.updates.download()}

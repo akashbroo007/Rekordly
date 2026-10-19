@@ -2,7 +2,7 @@ import { CheckCircle2, Download, ExternalLink, RefreshCw, RotateCw } from 'lucid
 import { useEffect, useState } from 'react';
 import { Button } from '@rekordly/ui';
 import type { AppInfo, UpdateStatusDto } from '@rekordly/shared/contracts';
-import { FEATURE_URLS } from '../../lib/site-links';
+import { FEATURE_URLS, releaseNotesUrl } from '../../lib/site-links';
 
 /**
  * ponytail: Settings → General card for the in-app updater — the same
@@ -84,6 +84,18 @@ export function AppUpdatesCard() {
           <Button size="sm" className="gap-1.5" onClick={() => void window.desktop.updates.download()}>
             <Download size={14} />
             Download update
+          </Button>
+        ) : null}
+
+        {status.supported && status.state === 'available' ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => void window.desktop.app.openUrl(releaseNotesUrl(status.version))}
+          >
+            <ExternalLink size={14} />
+            What&apos;s new
           </Button>
         ) : null}
 

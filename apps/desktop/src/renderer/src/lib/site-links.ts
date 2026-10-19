@@ -24,3 +24,15 @@ export const FEATURE_URLS = {
   // the manual-download fallback goes straight to the releases list.
   releases: 'https://github.com/akashbroo007/Rekordly/releases',
 } as const;
+
+/**
+ * Release-notes page for a specific version (falls back to the releases
+ * list when no target version is known yet). The "What's new" link on the
+ * update banner and the Settings card points here — the notes live on the
+ * release itself, so they're always accurate without shipping text in the
+ * app build.
+ */
+export function releaseNotesUrl(version?: string): string {
+  return version !== undefined ? `${FEATURE_URLS.releases}/tag/v${version}` : FEATURE_URLS.releases;
+}
+
