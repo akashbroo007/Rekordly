@@ -13,6 +13,13 @@ export const PLUGIN_MANIFEST_SCHEMA = z.object({
   homepage: z.string().url().optional(),
   /** Short setup hint shown on the plugin card in the Plugins page. */
   setupHint: z.string().optional(),
+  /**
+   * ponytail: icon file bundled with the plugin (relative to the plugin
+   * directory, e.g. "icon.png"). Served to the renderer through the local
+   * sf-media:// protocol so marketplace-installed plugins show their real
+   * logo without web favicon lookups. Absent = generic fallback chain.
+   */
+  icon: z.string().min(1).optional(),
   /** Path to the plugin entry module, relative to the plugin directory. */
   entry: z.string().min(1),
   /** Minimum app version the plugin is compatible with. */

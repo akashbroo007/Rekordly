@@ -1,0 +1,23 @@
+{
+  "id": "tango",
+  "name": "Tango Live",
+  "version": "0.1.0",
+  "description": "Monitor and record livestreams from Tango Live (tango.me).",
+  "author": "Rekordly",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "homepage": "https://github.com/Rekordly/Rekordly",
+  "entry": "dist/index.js",
+  "minAppVersion": "0.1.0",
+  "capabilities": [
+    "auth",
+    "creator-search",
+    "live-detection",
+    "stream-extraction",
+    "settings",
+    "health-check",
+    "metadata"
+  ],
+  "permissions": ["network", "cookies", "recording"],
+  "setupHint": "No account needed — the plugin uses an anonymous visitor session automatically.",
+  "icon": "icon.png"
+}

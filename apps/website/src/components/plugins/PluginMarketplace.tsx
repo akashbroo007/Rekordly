@@ -25,6 +25,15 @@ function matchesFilter(plugin: PluginEntry, filter: PluginFilterId): boolean {
   switch (filter) {
     case "all":
       return true;
+    case "bundled":
+      // Ships inside the installer — nothing to download.
+      return plugin.bundled;
+    case "marketplace":
+      // Non-bundled plugins the user must download (zip) and install from the
+      // app — the same condition that shows the card's Marketplace badge, so
+      // the filter matches exactly the cards it describes. The mock example
+      // plugin (bundled: false, no download) stays in "All" only.
+      return !plugin.bundled && plugin.download !== undefined;
     case "recording":
       return plugin.permissions.includes("recording");
     case "vr":
@@ -45,6 +54,9 @@ const PLATFORM_TILE_COLORS: Record<string, string> = {
   youtube: "#ff0033",
   rumble: "#0dbf43",
   kick: "#53fc18",
+  // Tango's logo is a red→purple gradient swoosh; the tile tint reads on the
+  // purple end so it doesn't collide with stripchat's rose.
+  tango: "#d946ef",
   chaturbate: "#ff5c1f",
   stripchat: "#e7245e",
   bongacams: "#ff5a3c",
@@ -106,6 +118,15 @@ function PluginCard({ plugin }: { plugin: PluginEntry }) {
             <BadgeCheck className="h-3 w-3" aria-hidden="true" />
             Bundled
           </span>
+        ) : plugin.download ? (
+          <span
+            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-white/80"
+            title="Install via the plugin marketplace zip"
+            aria-label="Marketplace plugin"
+          >
+            <Puzzle className="h-3 w-3" aria-hidden="true" />
+            Marketplace
+          </span>
         ) : (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-medium text-white/60">
             <FlaskConical className="h-3 w-3" aria-hidden="true" />
@@ -124,6 +145,17 @@ function PluginCard({ plugin }: { plugin: PluginEntry }) {
         </p>
       )}
 
+      {plugin.download && (
+        <a
+          href={plugin.download}
+          download
+          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/[0.05] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:border-white/35 hover:bg-white/10"
+        >
+          <Download className="h-3.5 w-3.5" aria-hidden="true" />
+          Download zip (v{plugin.version})
+          <span className="text-white/40">· marketplace</span>
+        </a>
+      )}
       <div className="mt-4 flex flex-wrap gap-1.5">
         {plugin.capabilities.map((capability) => (
           <span
@@ -201,13 +233,23 @@ export function PluginMarketplace() {
               type="button"
               onClick={() => setFilter(option.id)}
               aria-pressed={filter === option.id}
+              title={
+                option.id === "bundled"
+                  ? "Ships bundled with the Rekordly installer"
+                  : option.id === "marketplace"
+                    ? "Not included in the installer — download the zip and install it from the app"
+                    : undefined
+              }
               className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
                 filter === option.id
                   ? "border-white/30 bg-white/10 text-white"
                   : "border-white/10 bg-transparent text-white/60 hover:border-white/20 hover:text-white"
               }`}
             >
-              {option.id === "downloads" && (
+              {option.id === "bundled" && (
+                <BadgeCheck className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              {(option.id === "marketplace" || option.id === "downloads") && (
                 <Download className="h-3.5 w-3.5" aria-hidden="true" />
               )}
               {option.label}

@@ -56,3 +56,5 @@ apps/desktop/resources/binaries/*.exe
 # Old/backup files
 *.old
 *.backup
+# Plugin marketplace zip artifacts (canonical zips live in website public/);
+plugins/*/artifacts/

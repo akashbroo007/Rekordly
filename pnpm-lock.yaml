@@ -377,6 +377,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
 
+  plugins/tango:
+    devDependencies:
+      '@rekordly/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+
   plugins/twitch:
     devDependencies:
       '@rekordly/plugin-sdk':

@@ -22,6 +22,9 @@ export const PLATFORM_CONFIG: Record<string, PlatformBadgeConfig> = {
   rumble: { color: '#0dbf43' },
   streamate: { color: '#38bdf8' },
   stripchat: { color: '#e7245e' },
+  // Tango's logo is a red→purple gradient swoosh; the tint reads on the
+  // purple end so it doesn't collide with stripchat's rose.
+  tango: { color: '#d946ef' },
   twitch: { color: '#9147ff' },
   youtube: { color: '#ff0033' },
 };

@@ -52,6 +52,7 @@ const PLUGIN_SITES: Record<string, string> = {
   jerkmate: 'jerkmate.com',
   stripchat: 'stripchat.com',
   myfreecams: 'myfreecams.com',
+  tango: 'tango.me',
 };
 
 /**

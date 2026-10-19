@@ -560,6 +560,8 @@ export interface PluginInfoDto {
   license?: string;
   homepage?: string;
   setupHint?: string;
+  /** Loadable URL of the plugin's bundled icon (sf-media://…), undefined when none. */
+  iconUrl?: string;
   minAppVersion: string;
   state: PluginStateDto;
   enabled: boolean;

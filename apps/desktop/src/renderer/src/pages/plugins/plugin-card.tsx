@@ -80,7 +80,7 @@ export function PluginCard({ vm, callbacks }: { vm: PluginViewModel; callbacks: 
           aria-label={`Details for ${plugin.name}`}
           className="shrink-0 cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-primary"
         >
-          <PluginTile pluginId={plugin.id} name={plugin.name} homepage={plugin.homepage} dimmed={disabled} />
+          <PluginTile pluginId={plugin.id} name={plugin.name} homepage={plugin.homepage} iconUrl={plugin.iconUrl} dimmed={disabled} />
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">

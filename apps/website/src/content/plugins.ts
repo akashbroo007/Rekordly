@@ -42,6 +42,8 @@ export interface PluginEntry {
   icon?: string;
   /** True when the plugin ships bundled with the app. */
   bundled: boolean;
+  /** Marketplace-only plugin zip (site-relative URL, e.g. /plugins/x-0.1.0.zip). */
+  download?: string;
   /** True when the site supports video/VOD downloads (mirrors the platform matrix). */
   downloads?: boolean;
 }
@@ -344,6 +346,32 @@ export const plugins: PluginEntry[] = [
     bundled: true,
   },
   {
+    id: "tango",
+    name: "Tango Live",
+    description:
+      "Monitor and record livestreams from Tango Live (tango.me). Works without an account — anonymous visitor sessions are minted automatically.",
+    author: "Rekordly",
+    version: "0.1.0",
+    category: "platform",
+    domain: "tango.me",
+    capabilities: [
+      "auth",
+      "creator-search",
+      "live-detection",
+      "stream-extraction",
+      "settings",
+      "health-check",
+      "metadata",
+    ],
+    permissions: ["network", "cookies", "recording"],
+    setupHint:
+      "Marketplace plugin — install the zip from the link below (not included in the installer).",
+    download: "/plugins/tango-0.1.0.zip",
+    icon: "tango.png",
+    bundled: false,
+    downloads: true,
+  },
+  {
     id: "mock-platform",
     name: "Mock Platform",
     description:
@@ -410,9 +438,13 @@ export function sortForMarketplace(list: PluginEntry[]): PluginEntry[] {
   });
 }
 
-/** Filters offered above the marketplace grid. */
+/** Filters offered above the marketplace grid. Bundled/Marketplace separate
+ * the distribution channel: plugins riding inside the installer vs. plugins
+ * the user downloads as a zip and installs from the app themselves. */
 export const pluginFilters = [
   { id: "all", label: "All plugins" },
+  { id: "bundled", label: "Bundled" },
+  { id: "marketplace", label: "Marketplace" },
   { id: "recording", label: "Recording" },
   { id: "vr", label: "VR (3D)" },
   { id: "downloads", label: "Downloads" },

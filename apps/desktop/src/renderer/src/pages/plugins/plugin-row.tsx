@@ -93,7 +93,7 @@ export function PluginRow({ vm, callbacks }: { vm: PluginViewModel; callbacks: P
         aria-label={`Details for ${plugin.name}`}
         className="shrink-0 cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-primary"
       >
-        <PluginTile pluginId={plugin.id} name={plugin.name} homepage={plugin.homepage} dimmed={disabled} />
+        <PluginTile pluginId={plugin.id} name={plugin.name} homepage={plugin.homepage} iconUrl={plugin.iconUrl} dimmed={disabled} />
       </button>
 
       {/* Name + version + Developer chip + capability exceptions (one style) */}

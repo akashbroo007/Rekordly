@@ -89,6 +89,7 @@ function DrawerHeader({
         pluginId={plugin.id}
         name={plugin.name}
         homepage={plugin.homepage}
+        iconUrl={plugin.iconUrl}
         size={48}
         dimmed={!plugin.enabled}
       />

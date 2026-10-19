@@ -34,6 +34,12 @@ extraResources:
     filter:
       - "*/dist/**"
       - "*/manifest.json"
+      # ponytail: optional plugin-shipped icon (manifest.icon, marketplace
+      # tiles render it through sf-media://) — ships when a plugin declares one.
+      - "*/icon.png"
+      # ponytail: tango ships via the website Marketplace (self-contained zip)
+      # — it must NOT ride inside the desktop installer.
+      - "!tango/**"
   # ponytail: bundled plugins may value-import '@rekordly/plugin-sdk' at
   # runtime (e.g. ProxyRegistry). Plugins live OUTSIDE app.asar with stripped
   # node_modules, so one shared copy ships beside them — Node walks up from

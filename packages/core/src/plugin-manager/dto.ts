@@ -1,5 +1,23 @@
 import type { PluginInfoDto, PluginDiagnosticsDto } from '@rekordly/shared';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import type { ManagedPlugin } from './manager';
+
+/**
+ * Local plugin icon (manifest.icon) as a renderer-loadable URL through the
+ * app's sf-media:// file protocol — plugins live on disk (resources/plugins
+ * or userData/plugins), the sandboxed renderer cannot use file:// URLs.
+ * Undefined when the manifest declares none or the file is missing: the
+ * plugin tile then falls back to the usual favicon chain.
+ */
+function pluginIconUrl(managed: ManagedPlugin): string | undefined {
+  const iconPath = managed.record.manifest.icon;
+  if (iconPath === undefined || iconPath === '') return undefined;
+  const absolute = join(managed.discovered.dir, iconPath);
+  if (!existsSync(absolute)) return undefined;
+  // Same shaping the media dialog uses for local recordings.
+  return `sf-media:///${absolute.replace(/\\/g, '/').replace(/^\/+/, '')}`;
+}
 
 /** Maps managed plugins to the IPC DTO consumed by the renderer. */
 export function toPluginInfo(managed: ManagedPlugin): PluginInfoDto {
@@ -13,6 +31,7 @@ export function toPluginInfo(managed: ManagedPlugin): PluginInfoDto {
     license: manifest.license,
     homepage: manifest.homepage,
     setupHint: manifest.setupHint,
+    iconUrl: pluginIconUrl(managed),
     minAppVersion: manifest.minAppVersion,
     state: managed.status.state,
     enabled: managed.record.enabled,
