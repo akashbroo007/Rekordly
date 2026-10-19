@@ -136,7 +136,7 @@ export function useSeo(options: SeoOptions): void {
         node.parentNode?.removeChild(node);
       }
       document.title =
-        "Rekordly — Monitor, record, and download live streams";
+        "Rekordly — Free Stream & Cam Site Recorder for Windows";
       const desc = document.head.querySelector('meta[name="description"]');
       if (desc) desc.remove();
     };

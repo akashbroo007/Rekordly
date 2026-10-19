@@ -103,7 +103,7 @@ export function DocsSearch({ open, onClose }: DocsSearchProps) {
           </kbd>
         </div>
 
-        <div className="max-h-[45vh] overflow-y-auto p-2">
+        <div data-lenis-prevent className="max-h-[45vh] overflow-y-auto p-2 overscroll-contain">
           {query.trim() && results.length === 0 && (
             <p className="px-3 py-6 text-center text-sm text-white/50">
               No results for "{query}"

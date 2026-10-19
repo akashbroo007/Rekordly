@@ -40,13 +40,13 @@ export const site = {
  * Primary links shown in the navbar pill, after the Features dropdown.
  * "Features" itself is NOT here — the navbar renders the FeaturesDropdown
  * (with all 7 feature pages) before these; adding it here would duplicate it
- * (see Navbar). Ordered by value: learn (Docs, Blog), extend (Marketplace),
- * then act (Download — also echoed by the pill's "Get Started" CTA).
+ * (see Navbar). Ordered: sell the ecosystem (Marketplace), then learn
+ * (Docs, Blog), then act (Download — also echoed by the pill's CTA).
  */
 export const navLinks = [
+  { label: "Marketplace", href: "/marketplace" },
   { label: "Docs", href: "/docs" },
   { label: "Blog", href: "/blog" },
-  { label: "Marketplace", href: "/marketplace" },
   { label: "Download", href: "/download" },
 ] as const;
 
@@ -225,6 +225,11 @@ export const faqs = [
     question: "Where is my data stored?",
     answer:
       "Everything — creators, recordings, the library database — lives locally on your machine in an SQLite database. Nothing is uploaded anywhere unless you explicitly configure a cloud provider.",
+  },
+  {
+    question: "Can I record shows from Stripchat, BongaCams, or Chaturbate?",
+    answer:
+      "Yes — all three are supported out of the box with automatic recording: the moment a creator goes live, Rekordly records the stream at original quality and files it into your library. Stripchat and Chaturbate also support VOD/clip downloads, and Stripchat plus Dreamcam include VR (3D) show recording. Support is per-plugin — see the platform guides and the capability matrix on the cam recording page.",
   },
   {
     question: "Is recording streams allowed?",

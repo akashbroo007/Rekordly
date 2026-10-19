@@ -373,9 +373,9 @@ function FinalCta() {
 
 export function HomePage() {
   useSeo({
-    title: "Rekordly — Monitor, record, and download live streams",
+    title: "Rekordly — Free Stream & Cam Site Recorder for Windows",
     description:
-      "A free, source-available Windows desktop app for monitoring creators, automatically recording live streams, downloading videos and VODs, and organizing your recordings.",
+      "Free Windows app to record live streams and cam sites (Stripchat, BongaCams, Chaturbate & more) automatically — monitor creators, download VODs, and organize everything in a local library.",
     path: "/",
     schema: [faqSchema(faqs), softwareAppSchema()],
   });

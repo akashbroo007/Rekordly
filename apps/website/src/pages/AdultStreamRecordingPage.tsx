@@ -39,6 +39,16 @@ const pageFaqs = [
       "Rekordly is free for personal, educational, and other noncommercial use, under the PolyForm Noncommercial license. Everything is included — unlimited creator monitoring, unlimited live recordings, and unlimited downloads. Commercial use requires a separate commercial license.",
   },
   {
+    question: "Is there a completely free Stripchat or BongaCams recorder?",
+    answer:
+      "Yes — Rekordly is free for personal use (PolyForm Noncommercial license) and supports both platforms out of the box. For Stripchat you get automatic live recording, VR (3D) capture, and VOD/clip downloads; for BongaCams, automatic live recording of shows (VOD downloads are not offered there, so live capture is how shows get archived). There is no watermark and no paywalled recording limits.",
+  },
+  {
+    question: "How do I record a cam show automatically?",
+    answer:
+      "Three steps: install Rekordly, add the creator (pick their site's plugin and type the username), and flip the Auto-Record switch. Rekordly then starts recording by itself every time that creator goes live and files each capture into the library — you never need to press record or keep a browser open. Platform-level guides with the details are linked in the section above the FAQ.",
+  },
+  {
     question: "Is recording streams allowed?",
     answer:
       "That depends on the platform's terms and the laws in your jurisdiction. You are responsible for ensuring that your recording and downloading activity complies with applicable laws, platform terms, copyright requirements, and any required permissions. Rekordly provides the tooling; it does not grant permission to record any content.",
@@ -115,9 +125,9 @@ function HowItWorks() {
 
 export default function AdultStreamRecordingPage() {
   useSeo({
-    title: "Adult Live Stream Recording Software",
+    title: "Free Cam Site Recorder — Stripchat, BongaCams & More",
     description:
-      "Rekordly is Windows software for monitoring supported creators and automatically recording live streams from supported platforms — including live-cam sites. Free for personal use.",
+      "Free cam site recorder for Windows: automatically record live shows from Stripchat, BongaCams, Chaturbate, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams & Dreamcam at original quality.",
     path: "/adult-stream-recording",
     schema: [faqSchema(pageFaqs), softwareAppSchema()],
   });
@@ -128,8 +138,8 @@ export default function AdultStreamRecordingPage() {
         <SectionHeading
           eyebrow="Use case"
           as="h1"
-          title="Adult Live Stream Recording Software"
-          description="Rekordly is a Windows desktop application for monitoring supported creators and automatically recording live streams from supported platforms — including age-restricted live-cam platforms — with a searchable local library for everything you capture."
+          title="Free Cam Site Recorder for Windows"
+          description="Rekordly is a free Windows desktop app that monitors major live-cam platforms — Stripchat, BongaCams, Chaturbate, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, and Dreamcam — and automatically records live shows at original quality into a searchable local library."
         />
         <Reveal className="mx-auto mt-10 max-w-3xl">
           <div className="rounded-xl border border-white/10 bg-white/[0.02] p-6">
@@ -212,6 +222,66 @@ export default function AdultStreamRecordingPage() {
       </Section>
 
       <HowItWorks />
+
+      <Section className="border-t border-white/10">
+        <SectionHeading
+          eyebrow="Platform guides"
+          title="Step-by-step guides for the sites people record most"
+          description="Each guide covers setup exactly for that platform — including honest notes on what is and is not supported there, from VR shows to VOD downloads."
+        />
+        <div className="mt-16 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {[
+            {
+              title: "Stripchat recorder guide",
+              text: "Record Stripchat shows automatically at original quality — including VR (3D) streams — with VOD and clip downloads.",
+              href: "/blog/stripchat-recorder",
+            },
+            {
+              title: "BongaCams recorder guide",
+              text: "The free way to archive BongaCams: automatic stream-copy recording, no screen capture, no account needed.",
+              href: "/blog/bongacams-recorder",
+            },
+            {
+              title: "Chaturbate recorder guide",
+              text: "Auto-record Chaturbate shows and grab VODs, clips, and highlights with the bundled download manager.",
+              href: "/blog/chaturbate-recorder",
+            },
+            {
+              title: "VR cam shows: Dreamcam & Stripchat",
+              text: "Record true 3D broadcasts and play them back in the built-in look-around player — not a flat fisheye capture.",
+              href: "/blog/vr-cam-recorder",
+            },
+            {
+              title: "Tango recorder guide",
+              text: "Tango Live is a phone-first app; here it records automatically on your PC — add the creator once and forget the rest.",
+              href: "/blog/tango-recorder",
+            },
+            {
+              title: "The general cam site recorder guide",
+              text: "Why screen recorders fail for cam shows, and how stream-copy recording turns archiving into a system.",
+              href: "/blog/free-cam-site-recorder",
+            },
+          ].map((guide, index) => (
+            <Reveal key={guide.href} delay={(index % 3) * 0.08}>
+              <a
+                href={guide.href}
+                className="group flex h-full flex-col rounded-xl border border-white/10 bg-white/[0.02] p-6 transition-colors hover:border-white/25"
+              >
+                <h3 className="text-lg font-semibold text-white">
+                  {guide.title}
+                </h3>
+                <p className="mt-2 flex-1 text-sm leading-6 text-white/70">
+                  {guide.text}
+                </p>
+                <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-white/70 transition-colors group-hover:text-white">
+                  Read the guide
+                  <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                </span>
+              </a>
+            </Reveal>
+          ))}
+        </div>
+      </Section>
 
       <Section className="border-t border-white/10">
         <SectionHeading eyebrow="FAQ" title="Common questions" />

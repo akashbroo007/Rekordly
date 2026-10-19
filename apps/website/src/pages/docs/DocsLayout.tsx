@@ -31,7 +31,10 @@ export default function DocsLayout() {
     <div className="relative">
       <div className="mx-auto flex max-w-7xl gap-10 px-6 py-10 lg:px-8">
         {/* Sidebar */}
-        <aside className="sticky top-24 hidden h-[calc(100vh-8rem)] w-60 shrink-0 overflow-y-auto pb-16 md:block">
+        <aside
+          data-lenis-prevent
+          className="sticky top-24 hidden h-[calc(100vh-8rem)] w-60 shrink-0 overflow-y-auto pb-16 md:block overscroll-contain"
+        >
           <Link
             to="/docs"
             className="mb-6 block text-lg font-bold text-white"

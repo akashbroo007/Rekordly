@@ -151,9 +151,9 @@ function SystemRequirements() {
 
 export default function DownloadPage() {
   useSeo({
-    title: "Download Rekordly for Windows — free installer & portable",
+    title: "Download Rekordly — Free Stream & Cam Recorder for Windows",
     description:
-      "Download Rekordly free for Windows 10 and 11. Installer or portable build, yt-dlp and ffmpeg bundled, automatic updates, and no account required.",
+      "Download Rekordly free: record live streams and cam sites (Stripchat, BongaCams, Chaturbate & more) automatically on Windows 10/11. Installer or portable, yt-dlp and ffmpeg bundled, no account.",
     path: "/download",
   });
 

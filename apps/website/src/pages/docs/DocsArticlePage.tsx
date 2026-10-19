@@ -90,7 +90,10 @@ export default function DocsArticlePage() {
       </article>
 
       {/* On this page */}
-      <aside className="sticky top-24 hidden h-[calc(100vh-8rem)] w-56 shrink-0 overflow-y-auto pb-16 xl:block">
+      <aside
+        data-lenis-prevent
+        className="sticky top-24 hidden h-[calc(100vh-8rem)] w-56 shrink-0 overflow-y-auto pb-16 xl:block overscroll-contain"
+      >
         <Toc entries={headings} />
       </aside>
     </div>
