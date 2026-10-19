@@ -1,6 +1,6 @@
 {
   "name": "@rekordly/plugin-sdk",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "private": true,
   "license": "PolyForm-Noncommercial-1.0.0",
   "main": "dist/index.js",

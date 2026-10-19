@@ -6,20 +6,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-19
+
 ### Added
 
-- Camsoda plugin: creator discovery via the /girls SSR listing, cheap vtoken-based
-  live polling, token-authed HLS stream extraction, cookie auth, metadata
-  (tags, followers, thumbnails, quality variants). Cloudflare bot management is
-  handled by the plugin's system-curl (schannel TLS) transport with a node
-  fallback — no browser automation needed.
+- Dedicated Downloads page: an add-download bar, grouped rows with
+  pause/resume/retry, a filterable summary strip, and an "Open in library"
+  handover that lands on the Library's Downloads tab and plays the finished
+  file in the built-in player.
+- Privacy mode: a one-toggle blur across the Library, Recordings, and Uploads
+  pages (thumbnails, titles, failure reasons, share links) for safe screen
+  sharing; the toggle lives in every page toolbar.
+- Tango Live (tango.me) plugin — the first Marketplace-only plugin. Ships as a
+  self-contained zip from rekordly.in instead of riding inside the installer;
+  the site marketplace gains Bundled/Marketplace filters and install-a-zip
+  steps.
+- Bundled plugins can declare an icon (`manifest.icon`); the Plugins page
+  tile/card/row render the plugin's own logo through the local media protocol
+  instead of a favicon chain.
+- In-app bug reporting, a GitHub-driven public roadmap, and Pro licensing
+  (website v1 reboot shipped mid-cycle and nests in this release).
+- The update notification's "What's new" button now opens the matching
+  release-notes page on GitHub.
 
-### Fixed
+### Changed
 
-- Recorder: fragmented-MP4 HLS (segments named `*.hls.fmp4`) is now accepted
-  by the direct-ffmpeg capture path (`-extension_picky 0`); ffmpeg's HLS
-  demuxer previously rejected such segment URLs before reading a single
-  segment. Generic capability — no platform knowledge involved.
+- Website SEO/content refresh: sharper titles and descriptions ("Free Stream &
+  Cam Site Recorder for Windows"), keyword FAQs, new blog posts, navbar
+  reorder, sitemap update.
+
+## [0.1.1] – [0.1.4] — interim patch releases (2026)
+
+- Platform plugin expansion (including the Camsoda plugin) and the platform
+  guides shipped across these patch releases.
+- Recorder: fragmented-MP4 HLS (segments named `*.hls.fmp4`) is now accepted by
+  the direct-ffmpeg capture path (`-extension_picky 0`); ffmpeg's HLS demuxer
+  previously rejected such segment URLs before reading a single segment.
+  Generic capability — no platform knowledge involved. Shipped with the
+  vendored-ffmpeg blank-recording fixes in v0.1.4.
+- Full per-version details live on the GitHub Releases page:
+  https://github.com/akashbroo007/Rekordly/releases
 
 ## [0.1.0] - 2026-08-01
 
