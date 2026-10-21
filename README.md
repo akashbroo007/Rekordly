@@ -199,13 +199,22 @@ The table below reflects what each bundled plugin currently implements.
 | ---------- | :------------: | :---------: | :--------------: | :-------: | :-----: |
 | Twitch     |       ✓        |      ✓      |        ✓         |     ✓     |    —    |
 | YouTube    |       ✓        |      ✓      |        ✓         |     ✓     |    —    |
+| Rumble     |       ✓        |      ✓      |        ✓         |     ✓     |    —    |
 | Kick       |       ✓        |      ✓      |        ✓         |     ✓     |    —    |
 | Chaturbate |       ✓        |      ✓      |        ✓         |     ✓     |    —    |
+| Cam4       |       ✓        |      ✓      |        ✓         |     —     |    —    |
+| Jerkmate   |       ✓        |      ✓      |        ✓         |     —     |    —    |
+| Streamate  |       ✓        |      ✓      |        ✓         |     —     |    —    |
 | Stripchat  |       ✓        |      ✓      |        ✓         |     ✓     |    ✓    |
 | BongaCams  |       ✓        |      ✓      |        ✓         |     —     |    —    |
 | CamSoda    |       ✓        |      ✓      |        ✓         |     —     |    —    |
 | MyFreeCams |       ✓        |      ✓      |        ✓         |     —     |    —    |
 | Dreamcam   |       ✓        |      ✓      |        ✓         |     —     |    ✓    |
+
+These 13 sites ship inside the installer; the Tango Live plugin is available
+from the website Marketplace. Twitch and YouTube monitoring use their
+providers' free public APIs (a free Client-ID/Secret or Data API key, created
+once in Settings) — every other site works with no account.
 
 The Dreamcam and Stripchat plugins also support **VR (3D) shows** — the
 stereoscopic feed is bridged to a local HLS playlist and recorded like any

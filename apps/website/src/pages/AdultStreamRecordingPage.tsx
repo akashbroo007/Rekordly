@@ -11,7 +11,7 @@ const pageFaqs = [
   {
     question: "Can Rekordly record adult live streams?",
     answer:
-      "Yes — for the platforms it supports. Rekordly ships with plugins for several live-cam platforms (Chaturbate, Stripchat, BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, Dreamcam) alongside generic streaming platforms (Twitch, YouTube, Rumble, Kick). Each plugin provides live detection and recording; some also support VOD downloads. Rekordly does not record from arbitrary adult websites — support is per-plugin, and the always-current capability matrix is on this page and in the docs.",
+      "Yes — for the platforms it supports. Rekordly ships with plugins for several live-cam platforms (Chaturbate, Stripchat, BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, Dreamcam) alongside generic streaming platforms (Twitch, YouTube, Rumble, Kick). Every plugin provides live detection and recording, and VODs/clips on sites yt-dlp supports download through the generic download manager — paste a URL and pick a quality. Rekordly does not record from arbitrary adult websites — support is per-plugin, and the always-current capability matrix is on this page and in the docs.",
   },
   {
     question: "Does recording happen automatically?",
@@ -170,7 +170,7 @@ export default function AdultStreamRecordingPage() {
         <div className="mt-10 flex flex-wrap justify-center gap-4">
           <ShimmerLinkButton
             size="lg"
-            href={site.releasesUrl}
+            href={site.installerDownloadUrl}
             external
             className="font-semibold shadow-lg shadow-white/10"
           >
@@ -300,14 +300,14 @@ export default function AdultStreamRecordingPage() {
             Ready to try it?
           </h2>
           <p className="mx-auto mt-3 max-w-md text-white/70">
-            Free for personal use, installed in minutes, and it looks the same
+            Free for personal and commercial use, installed in minutes, and it looks the same
             as it does for every other Rekordly user — one professional
             desktop app for stream recording.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <ShimmerLinkButton
               size="lg"
-              href={site.releasesUrl}
+              href={site.installerDownloadUrl}
               external
               className="font-semibold shadow-lg shadow-white/10"
             >
@@ -318,7 +318,7 @@ export default function AdultStreamRecordingPage() {
               Browse platform plugins
             </ShimmerLinkButton>
           </div>
-          <p className="mx-auto mt-10 max-w-2xl text-xs leading-5 text-white/40">
+          <p className="mx-auto mt-10 max-w-2xl text-xs leading-5 text-white/60">
             Users are responsible for ensuring that their recording and
             downloading activity complies with applicable laws, platform
             terms, copyright requirements, and any required permissions.

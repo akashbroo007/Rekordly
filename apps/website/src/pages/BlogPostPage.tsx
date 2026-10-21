@@ -158,7 +158,7 @@ function PostArticle({
           Put it into practice
         </h2>
         <p className="mx-auto mt-3 max-w-md text-white/70">
-          Rekordly is free for personal use and installs in minutes on
+          Rekordly is free for personal and commercial use and installs in minutes on
           Windows 10 and 11.
         </p>
         <div className="mt-6 flex flex-wrap items-center justify-center gap-4">

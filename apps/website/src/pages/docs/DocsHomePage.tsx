@@ -21,14 +21,24 @@ export default function DocsHomePage() {
           Everything about Rekordly — from your first install to writing your
           own site plugin. Press{" "}
           <kbd className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-xs text-white/80">
-            ⌘K
+            Ctrl K
           </kbd>{" "}
           to search.
         </p>
         <button
           type="button"
           onClick={() =>
-            document.dispatchEvent(new KeyboardEvent("keydown", { key: "k" }))
+            document.dispatchEvent(
+              // bubbles:true is required — constructor events default to
+              // non-bubbling, so a document-dispatched keydown never reaches
+              // the window-level Ctrl+K listener in DocsLayout.
+              new KeyboardEvent("keydown", {
+                key: "k",
+                ctrlKey: true,
+                bubbles: true,
+                cancelable: true,
+              }),
+            )
           }
           className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white/70 transition-colors hover:border-white/20 hover:text-white md:hidden"
         >

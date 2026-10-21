@@ -19,7 +19,7 @@ const builds = [
     title: "Portable",
     file: "Rekordly-<version>-portable.exe",
     description:
-      "No installation step. Runs standalone from any folder — great for USB sticks and locked-down machines.",
+      "No installation step. Runs standalone from any folder — great for USB sticks and locked-down machines. No automatic updates in portable mode.",
   },
 ] as const;
 
@@ -30,7 +30,7 @@ const highlights = [
   },
   {
     icon: <RefreshCw className="h-4 w-4" />,
-    text: "Self-updating against GitHub Releases",
+    text: "The installer self-updates against GitHub Releases",
   },
   {
     icon: <Download className="h-4 w-4" />,
@@ -47,12 +47,12 @@ const tiers = [
   {
     name: "Medium",
     verdict:
-      "Comfortable defaults: 2–3 recordings at once, staggered starts, live checks every 120 seconds.",
+      "Comfortable defaults: 3 recordings at once, staggered starts, live checks every 120 seconds.",
   },
   {
     name: "High-end",
     verdict:
-      "Built for bulk: ~30 simultaneous recordings stay copy-only — under 85% CPU and 6 GB RAM.",
+      "Built for bulk: capture is copy-only, so the real load lands on your disk — raise the concurrency caps in Settings to match your drives.",
   },
 ] as const;
 
@@ -62,9 +62,9 @@ const specRows = [
   { label: "Storage", values: ["HDD or SSD", "SSD", "SSD"] },
   {
     label: "Concurrent recordings",
-    values: ["1", "2–3", "10–30"],
+    values: ["1", "3 (default)", "Your own cap in Settings"],
   },
-  { label: "Concurrent downloads", values: ["1", "3", "Up to 10"] },
+  { label: "Concurrent downloads", values: ["1", "3 (default)", "Adjustable in Settings"] },
   { label: "Live site checks", values: ["2 at a time", "5 at a time", "5 at a time"] },
   {
     label: "Recommended mode",
@@ -126,13 +126,13 @@ function SystemRequirements() {
             </tbody>
           </table>
         </div>
-        <p className="mt-4 text-xs leading-6 text-white/50">
+        <p className="mt-4 text-xs leading-6 text-white/60">
           Recording is a straight copy — never a live transcode — so disk writes
-          happen at stream bitrate, and the number of simultaneous recordings
-          is bounded only by your hardware, not the app. The Download Manager
-          has no duration limits on normal video/VOD downloads. Rekordly
-          detects your hardware on first launch and suggests the right mode
-          for you.
+          happen at stream bitrate, and quality never costs CPU. Recording
+          concurrency defaults to 3 and is yours to change in Settings →
+          Recording; Low-Resource Mode temporarily caps everything at one for
+          older machines. The Download Manager has no duration limits on normal
+          video/VOD downloads.
         </p>
         <div className="mt-6 flex flex-wrap gap-4">
           <ShimmerLinkButton
@@ -196,8 +196,17 @@ export default function DownloadPage() {
             <Download className="mr-2 h-4 w-4" />
             Download for Windows
           </ShimmerLinkButton>
-          <p className="mt-3 text-xs text-white/40">
-            Installer .exe · Windows 10+ (64-bit) · free, no account
+          <p className="mt-3 text-xs text-white/60">
+            v{site.appVersion} installer .exe · Windows 10+ (64-bit) · free, no
+            account ·{" "}
+            <a
+              href={`${site.releasesUrl}/tag/v${site.appVersion}`}
+              target="_blank"
+              rel="noreferrer"
+              className="underline decoration-white/30 underline-offset-2 transition-colors hover:text-white hover:decoration-white/60"
+            >
+              release notes
+            </a>
           </p>
           <div className="mt-4">
             <Link

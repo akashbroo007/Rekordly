@@ -1,10 +1,9 @@
 import { lazy, Suspense, type ReactNode } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { Navbar } from "./components/layout/Navbar";
 import { Footer } from "./components/layout/Footer";
 import { ScrollToTop } from "./components/layout/ScrollToTop";
 import { SmoothScroll } from "./components/layout/SmoothScroll";
-import { CurrencyProvider } from "./lib/CurrencyContext";
 import { HomePage } from "./pages/HomePage";
 
 const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
@@ -43,13 +42,17 @@ function Lazy({ children }: { children: ReactNode }) {
 export default function App() {
   return (
     <SmoothScroll>
-      <CurrencyProvider>
-        <div className="flex min-h-screen flex-col bg-black">
-          <ScrollToTop />
-          <Navbar />
-          <main className="flex-1">
+      <div className="flex min-h-screen flex-col bg-black">
+        <ScrollToTop />
+        <Navbar />
+        <main className="flex-1">
         <Routes>
           <Route path="/" element={<HomePage />} />
+          {/* Legacy path redirects: /about and /faq were never real routes on
+              this site, but sending old external links to useful content
+              beats a 404. */}
+          <Route path="/about" element={<Navigate to="/" replace />} />
+          <Route path="/faq" element={<Navigate to="/docs/faq" replace />} />
           <Route
             path="/features"
             element={
@@ -178,9 +181,8 @@ export default function App() {
           />
         </Routes>
       </main>
-          <Footer />
-        </div>
-      </CurrencyProvider>
+      <Footer />
+    </div>
     </SmoothScroll>
   );
 }

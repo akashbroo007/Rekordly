@@ -14,7 +14,10 @@ export default function PrivacyPage() {
           analytics, does not fingerprint visitors, and does not collect
           personal information. Standard, ephemeral server logs may exist
           depending on where the site is hosted, but they are not used to track
-          or profile visitors.
+          or profile visitors. The roadmap page saves a small, temporary cache
+          of public GitHub issue data in your browser's session storage so it
+          reloads quickly; it contains no personal data and disappears when the
+          browser session ends.
         </p>
 
         <h2>2. The desktop app</h2>
@@ -38,8 +41,9 @@ export default function PrivacyPage() {
         <ul>
           <li>
             <strong>Monitoring and recording</strong> — the app connects to the
-            streaming sites you choose to track, as necessary to check status
-            and capture streams.
+            streaming sites you choose to track (directly or to their public
+            APIs, such as Twitch Helix or the YouTube Data API), as necessary
+            to check status and capture streams.
           </li>
           <li>
             <strong>Cloud uploads</strong> — files are sent to a cloud provider
@@ -47,8 +51,22 @@ export default function PrivacyPage() {
             that provider and upload.
           </li>
           <li>
-            <strong>Updates</strong> — the app contacts GitHub Releases to
-            check for new versions.
+            <strong>Push notifications</strong> — events are sent to Discord or
+            Telegram only when you configure an incoming webhook or bot.
+          </li>
+          <li>
+            <strong>Secure Proxy</strong> — for creators you mark as proxied,
+            the embedded Tor proxy runtime is downloaded from the Tor Project's
+            distribution mirrors on first use, and that creator's traffic is
+            routed through the Tor network.
+          </li>
+          <li>
+            <strong>Plugins</strong> — installing a plugin from the Marketplace
+            downloads its package from the Rekordly GitHub Releases.
+          </li>
+          <li>
+            <strong>Updates</strong> — the installer version of the app
+            contacts GitHub Releases to check for new versions.
           </li>
         </ul>
         <p>

@@ -186,7 +186,7 @@ export function PluginRequest() {
           </button>
         </div>
 
-        <p className="mt-4 text-xs leading-5 text-white/40">
+        <p className="mt-4 text-xs leading-5 text-white/60">
           Nothing is sent from this page — the button opens GitHub with your
           request pre-filled. Prefer email? Write to{" "}
           <a

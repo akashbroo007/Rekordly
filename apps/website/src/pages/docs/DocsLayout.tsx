@@ -49,7 +49,7 @@ export default function DocsLayout() {
             <Search className="h-3.5 w-3.5" />
             Search docs...
             <kbd className="ml-auto rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px]">
-              ⌘K
+              Ctrl K
             </kbd>
           </button>
 

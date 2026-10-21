@@ -80,7 +80,7 @@ export default function BlogIndexPage() {
             Ready to try it yourself?
           </h2>
           <p className="mx-auto mt-3 max-w-md text-white/70">
-            Rekordly is free for personal use — yt-dlp and ffmpeg are bundled,
+            Rekordly is free for personal and commercial use — yt-dlp and ffmpeg are bundled,
             so install is one step.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
@@ -97,7 +97,7 @@ export default function BlogIndexPage() {
             </ShimmerLinkButton>
           </div>
         </Reveal>
-        <p className="mt-10 text-sm text-white/40">
+        <p className="mt-10 text-sm text-white/60">
           Looking for something specific? The{" "}
           <Link
             to="/docs"

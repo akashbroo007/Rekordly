@@ -21,6 +21,16 @@ Rekordly supports the following 13 sites out of the box (Stripchat and Dreamcam 
 
 Tango Live is distributed as a **marketplace plugin**: download the zip from the [Marketplace](/marketplace) and install it from inside the app (Plugins → Install plugin). The 13 sites above ship inside the installer itself.
 
+> **One free setup step, twice:** Twitch monitoring uses the Helix API (a free
+> Client-ID + Secret) and YouTube monitoring uses the Data API v3 (a free API
+> key). You create each key once in Rekordly's Settings — everything else
+> works with no account at all.
+
+The **Downloads** column refers to VODs, clips, and past broadcasts handled by
+the generic download manager (powered by yt-dlp) — paste a supported URL and
+pick a quality. Live-cam sites are archived through live capture, which every
+listed site supports.
+
 Stripchat and Dreamcam recordings can capture the **VR (3D) stereoscopic feed** and play it back in the built-in look-around player — see [VR Playback & Recording](vr).
 
 ## Blocked networks

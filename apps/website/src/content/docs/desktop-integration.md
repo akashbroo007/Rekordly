@@ -5,7 +5,7 @@ Rekordly is a native-feeling Windows desktop app, not a browser tab pretending t
 ## System tray
 
 - **Live status tooltip** — hover the tray icon to see what's happening at a glance (live creators, active recordings).
-- **Close-to-tray mode** — closing the window keeps the app recording in the background. Disabled by default; enable it in **Settings → General**.
+- **Close-to-tray mode** — closing the window keeps the app recording in the background. Enabled by default; turn it off in **Settings → General**.
 - **Launch at startup / start minimized** — boot your PC and Rekordly is already watching.
 
 ## Notifications

@@ -4,12 +4,16 @@ export const siteUrl = "https://rekordly.in";
 /**
  * Desktop app version this site build links against — injected by Vite from
  * REKORDLY_VERSION (set by the deploy pipeline from the latest git tag),
- * falling back to 0.1.0 for local builds.
+ * falling back to 0.1.0 for local builds. The release workflow rewrites
+ * public/app-version.json on every release, so `site.appVersion` always
+ * equals the version whose installer asset the download links point at.
  */
 declare const __APP_VERSION__: string;
 
 export const site = {
   name: "Rekordly",
+  /** Version of the release this build's download links are pinned to. */
+  appVersion: __APP_VERSION__,
   tagline: "Monitor, record, and download live streams — automatically.",
   description:
     "A free, open-source Windows desktop app for monitoring creators, automatically recording live streams, downloading videos and VODs, and organizing your recordings.",
@@ -75,7 +79,7 @@ export const hero = {
   stats: [
     { value: "13", label: "Sites supported" },
     { value: "0", label: "Setup — yt-dlp & ffmpeg bundled" },
-    { value: "100%", label: "Free for personal use" },
+    { value: "100%", label: "Free — personal and commercial use" },
   ],
 } as const;
 
@@ -213,7 +217,7 @@ export const faqs = [
   {
     question: "Which platforms are supported?",
     answer:
-      "Twitch, YouTube, Rumble, Kick, Chaturbate, Stripchat, BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, and Dreamcam are supported out of the box for live detection and recording — Dreamcam including VR (3D) shows. A Tango Live plugin is also available from the Plugin Marketplace. New sites can be added as plugins without touching the core app.",
+      "Twitch, YouTube, Rumble, Kick, Chaturbate, Stripchat, BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, and Dreamcam are supported out of the box for live detection and recording — Stripchat and Dreamcam including VR (3D) shows. A Tango Live plugin is also available from the Plugin Marketplace. New sites can be added as plugins without touching the core app.",
   },
   {
     question: "My ISP blocks one of the sites — can I still record?",
@@ -415,6 +419,6 @@ export const roadmap: RoadmapGroup[] = [
 ];
 
 export const legal = {
-  lastUpdated: "September 12, 2026",
+  lastUpdated: "October 21, 2026",
   contactLine: `Questions about this document? Contact us at ${site.email} or open a discussion on GitHub.`,
 } as const;

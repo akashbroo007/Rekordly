@@ -10,7 +10,9 @@ No. Both are vendored inside the app — download the installer, run it, and you
 
 ## Which platforms are supported?
 
-Twitch, YouTube, Rumble, Kick, Chaturbate, Stripchat, BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, and Dreamcam are supported out of the box for live detection and recording — Dreamcam including VR (3D) shows. A Tango Live plugin is also available from the [Marketplace](/marketplace). New sites can be added as plugins without touching the core app — see [Plugins](plugins) and [Supported Platforms](platforms).
+Twitch, YouTube, Rumble, Kick, Chaturbate, Stripchat, BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, and Dreamcam are supported out of the box for live detection and recording — Stripchat and Dreamcam including VR (3D) shows. A Tango Live plugin is also available from the [Marketplace](/marketplace). New sites can be added as plugins without touching the core app — see [Plugins](plugins) and [Supported Platforms](platforms).
+
+One setup note: Twitch and YouTube monitoring go through their providers' free public APIs, so you create a free Twitch Client-ID/Secret or a free YouTube Data API key once, in Settings. Every other site needs no account and no keys.
 
 ## My ISP blocks one of the sites — can I still record?
 

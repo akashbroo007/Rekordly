@@ -39,10 +39,10 @@
 - **Key Differentiator:** VR recording, proxy mode, cross-site grouping, built-in editor
 
 ### Rekordly
-- **Type:** Source-available desktop app (PolyForm Noncommercial licensed, free for personal use)
+- **Type:** Open-source desktop app (Apache-2.0, free for personal and commercial use)
 - **Tech Stack:** Electron 37 + React 19 + TypeScript 5.9 + Tailwind CSS v4 + SQLite (Drizzle ORM)
 - **Platforms:** Windows only (build config; codebase is cross-platform)
-- **Pricing:** Free for personal/noncommercial use; commercial use requires a paid license
+- **Pricing:** Free for everyone — Apache-2.0 includes commercial use, no tiers and no locked features
 - **Supported Sites:** 4 plugins (YouTube, Twitch, Stripchat, Chaturbate) + yt-dlp generic support for 1000+ sites
 - **Key Differentiator:** Plugin architecture, source-available, analytics, generic download manager
 
@@ -321,7 +321,7 @@ Beyond cam sites, Rekordly plans generic live-streaming platform plugins built o
 | Windows | Yes | Yes | **Tie** |
 | macOS | Yes (Apple Silicon + Intel) | No (build config only) | **CaptureGem** |
 | Linux | Yes | No (build config only) | **CaptureGem** |
-| Source-available | No (closed-source) | Yes (PolyForm Noncommercial) | **Rekordly** |
+| Source-available | No (closed-source) | Yes (open source, Apache-2.0) | **Rekordly** |
 | No signup required | Yes | Yes (local app) | **Tie** |
 
 ### 4.5 Community & Ecosystem
@@ -342,9 +342,9 @@ Beyond cam sites, Rekordly plans generic live-streaming platform plugins built o
 | Feature | CaptureGem | Rekordly | Winner |
 |---------|-----------|----------|--------|
 | Free tier | Yes (limited) | Yes (unlimited, all features) | **Rekordly** |
-| Premium tier | $10.99/month | Commercial license for business use | N/A |
+| Premium tier | $10.99/month | None needed — free for commercial use too (Apache-2.0) | **Rekordly** |
 | Crypto payment | Yes (Bitcoin) | None | N/A |
-| Source-available | No | Yes (PolyForm Noncommercial) | **Rekordly** |
+| Source-available | No | Yes (open source, Apache-2.0) | **Rekordly** |
 
 ---
 
@@ -352,9 +352,9 @@ Beyond cam sites, Rekordly plans generic live-streaming platform plugins built o
 
 These are features where Rekordly **already beats** CaptureGem and should be leveraged in marketing:
 
-### 5.1 Free for Personal Use
-- **No $10.99/month subscription** — all features free for personal use, including auto-record, unlimited recordings, unlimited duration
-- PolyForm Noncommercial licensed — community can contribute, fork, and audit code
+### 5.1 Free for Everyone
+- **No $10.99/month subscription** — all features free, including auto-record, unlimited recordings, unlimited duration (personal and commercial use under Apache-2.0)
+- Apache-2.0 licensed — community can contribute, fork, and audit code
 - No account required, no data sent to servers
 - **Marketing angle:** "CaptureGem charges $10.99/mo for features we give you for free"
 

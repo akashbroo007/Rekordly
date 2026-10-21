@@ -1,9 +1,7 @@
 import { Link } from "react-router-dom";
-import { Github, Globe } from "lucide-react";
+import { Github } from "lucide-react";
 import { navLinks, site } from "../../content/site";
 import { navFeaturePages } from "../../content/featuresConfig";
-import { useCurrency } from "../../lib/CurrencyContext";
-import { CURRENCY_OPTIONS } from "../../lib/currency";
 
 const footerNav = [
   {
@@ -41,8 +39,6 @@ const footerNav = [
 ] as const;
 
 export function Footer() {
-  const { currency, setCurrency } = useCurrency();
-
   return (
     <footer className="border-t border-white/10 bg-black">
       <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
@@ -71,29 +67,6 @@ export function Footer() {
                 <Github className="h-4 w-4" />
                 GitHub
               </a>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 transition-colors focus-within:border-white/30 hover:bg-white/10">
-                <Globe
-                  className="h-4 w-4 shrink-0 text-white/60"
-                  aria-hidden="true"
-                />
-                <label htmlFor="footer-currency" className="sr-only">
-                  Currency
-                </label>
-                <select
-                  id="footer-currency"
-                  value={currency}
-                  onChange={(event) =>
-                    setCurrency(event.target.value as typeof currency)
-                  }
-                  className="cursor-pointer bg-transparent pr-1 text-sm text-white/90 focus:outline-none [&>option]:bg-black [&>option]:text-white"
-                >
-                  {CURRENCY_OPTIONS.map((option) => (
-                    <option key={option.code} value={option.code}>
-                      {option.code} — {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
             </div>
           </div>
 

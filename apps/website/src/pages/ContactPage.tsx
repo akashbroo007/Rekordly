@@ -164,7 +164,7 @@ function QuickBugReport() {
               {copied ? "Copied!" : "Copy instead"}
             </button>
           </div>
-          <p className="mt-4 text-xs leading-5 text-white/40">
+          <p className="mt-4 text-xs leading-5 text-white/60">
             Nothing is sent from this page — the button only opens GitHub with
             the text filled in. Prefer email? Write to{" "}
             <a

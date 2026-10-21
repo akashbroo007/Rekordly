@@ -336,13 +336,13 @@ export default function FeaturesPage() {
             Ready to try it?
           </h2>
           <p className="mx-auto mt-3 max-w-md text-white/70">
-            Free for personal use and installed in minutes — yt-dlp and
+            Free for everyone and installed in minutes — yt-dlp and
             ffmpeg are already inside.
           </p>
           <div className="mt-8">
             <ShimmerLinkButton
               size="lg"
-              href={site.releasesUrl}
+              href={site.installerDownloadUrl}
               external
               className="font-semibold shadow-lg shadow-white/10"
             >

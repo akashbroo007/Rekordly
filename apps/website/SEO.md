@@ -10,9 +10,9 @@ complete the manual steps.
 | --- | --- |
 | Unique meta titles + descriptions per page | `src/lib/seo.ts` via `useSeo()` on every page |
 | Canonical tags (absolute, one per page) | `src/lib/seo.ts` — `upsertLink("canonical", …)` |
-| Open Graph + Twitter cards, og:image 1200×630 | `index.html` defaults + per-page overrides; asset at `public/og-image.png` |
+| Open Graph + Twitter cards, og:image 1200×600 (2:1) | `index.html` defaults + per-page overrides; asset at `public/og-image.png` |
 | `robots.txt` (crawlers allowed, AI scrapers blocked, sitemap pointer) | `public/robots.txt` |
-| `sitemap.xml` — 28 URLs incl. all blog posts & docs | `public/sitemap.xml` |
+| `sitemap.xml` — 49 URLs incl. all blog posts & docs | `public/sitemap.xml` |
 | HTTPS + HSTS preload, nosniff, frame-deny, referrer policy | `public/_headers` (Cloudflare Pages also force-HTTPS by default; enable "Always Use HTTPS" + HSTS in the dashboard) |
 | Schema.org JSON-LD: WebSite, SoftwareApplication, FAQPage, Blog, BlogPosting | `src/lib/seo.ts` helpers used per page |
 | Exactly one `<h1>` per page; logical h2/h3 below | `SectionHeading as="h1"` on landing pages; article h1s in blog/docs/legal |

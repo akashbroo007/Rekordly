@@ -98,7 +98,7 @@ export function useSeo(options: SeoOptions): void {
     upsertMeta("property", "og:url", canonical);
     upsertMeta("property", "og:image", ogImage);
     upsertMeta("property", "og:image:width", "1200");
-    upsertMeta("property", "og:image:height", "630");
+    upsertMeta("property", "og:image:height", "600");
     upsertMeta("property", "og:image:alt", `${site.name} — ${title}`);
 
     // Twitter / X

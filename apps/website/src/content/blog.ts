@@ -185,7 +185,7 @@ There is a specific kind of annoyance that everyone who watches Stripchat knows.
 
 The usual reflex is a screen recorder aimed at the browser tab. I won't pretend that never works. It works once, it eats your CPU, and it records the show at your monitor's resolution with every Discord ping baked into the audio. Then the laptop sleeps and the file dies mid-show.
 
-This guide is about the other way to record Stripchat. Rekordly doesn't capture your screen. It copies the live stream itself, starts on its own the second a model goes live, and files the finished recording in a library you can actually search. It's a Windows app, it's free for personal use, and setup happens once.
+This guide is about the other way to record Stripchat. Rekordly doesn't capture your screen. It copies the live stream itself, starts on its own the second a model goes live, and files the finished recording in a library you can actually search. It's a Windows app, it's free and open source, and setup happens once.
 
 ## Screen capture vs stream copy, in one paragraph
 
@@ -235,7 +235,7 @@ Install, add one creator, flip the switch, sleep. The capture will be in the lib
     slug: "bongacams-recorder",
     title: "Recording BongaCams shows automatically (free setup)",
     description:
-      "Set up automatic BongaCams recording in one evening: Rekordly checks models for you and captures every show at original quality on Windows. Free for personal use.",
+      "Set up automatic BongaCams recording in one evening: Rekordly checks models for you and captures every show at original quality on Windows. Free and open source.",
     category: "Guides",
     date: "2026-10-03",
     updated: "2026-10-06",
@@ -304,7 +304,7 @@ Chaturbate's biggest fans live in the wrong time zones. The show starts at 4 a.m
 
 You can throw OBS at the problem. Lots of people do, once. What they get is a video where the show is one monitor-shaped crop of the whole broadcast, the CPU fans are screaming, and something always breaks when you alt-tab. That's screen recording doing its best; it just wasn't built for this.
 
-The fix that actually sticks is to stop recording pixels and start copying the stream. Rekordly, a free Windows app with a bundled Chaturbate plugin, does the copy automatically whenever the broadcaster goes live, then fetches their past VODs, clips, and highlights on top of that. It's the whole pipeline, and it costs nothing for personal use.
+The fix that actually sticks is to stop recording pixels and start copying the stream. Rekordly, a free Windows app with a bundled Chaturbate plugin, does the copy automatically whenever the broadcaster goes live, then fetches their past VODs, clips, and highlights on top of that. It's the whole pipeline, and it costs nothing.
 
 ## Your four-a.m. problem gets solved by a switch
 
@@ -535,7 +535,7 @@ Four jobs, no overlap:
 - **Downloads.** Past videos, VODs, shorts, and clips sit behind the built-in Download Manager with pause, resume, and retry. Audio-only extraction is included, which covers the "I only want the podcast this channel did once on stream" case that real life produces constantly.
 - **A local library.** Everything files into one searchable place on your disk: tags, collections, favorites, notes. It's a database, not a swamp of mp4s with timestamp names.
 
-No cloud bucket in the middle. Nothing uploads unless you turn on a provider yourself. The library runs on SQLite on your own machine, and the whole thing is free for personal use.
+No cloud bucket in the middle. Nothing uploads unless you turn on a provider yourself. The library runs on SQLite on your own machine, and the whole thing is free and open source.
 
 ## The one key you'll need (it's free)
 
