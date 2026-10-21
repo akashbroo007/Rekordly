@@ -27,7 +27,12 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          # ponytail: pinned to the pnpm that actually resolved pnpm-lock.yaml.
+          # pnpm 9 reads overrides only from the root package.json — it cannot
+          # see the `overrides:` block in pnpm-workspace.yaml (pnpm 10+), so a
+          # frozen install under pnpm 9 fails ERR_PNPM_LOCKFILE_CONFIG_MISMATCH
+          # as soon as workspace-level overrides exist.
+          version: 11.18.0
 
       - name: Setup Node 22
         uses: actions/setup-node@v4
