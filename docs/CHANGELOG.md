@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-22
+
+### Fixed
+
+- Settings → Recording: editing the recording-only controls (output directory,
+  default quality, max concurrent, retries, thumbnails, metadata, verify,
+  naming template) no longer left the Save button permanently disabled —
+  the dirty check ignored the recording settings draft. Edits made before the
+  settings loaded are also no longer silently dropped.
+
 ## [1.0.0] - 2026-10-21
 
 The first stable release. Rekordly is feature-complete for its core
