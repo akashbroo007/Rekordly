@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-21
+
+The first stable release. Rekordly is feature-complete for its core
+mission — record livestreams, monitor creators, organize the library,
+manage downloads, uploads, and plugins — and hardened for daily use.
+
+### Added
+
+- Redesigned app shell: a new top bar with status chips (recording,
+  monitoring, disk space, updater — materializing only while relevant),
+  a quick-search trigger, a New button, and a Help menu replaces the
+  old toolbar.
+- Sidebar refinement: accent-bar active state, static count badges,
+  Settings pinned above the bottom hairline.
+- OLED true-black dark theme: pure neutral-gray surfaces above
+  #000000, WCAG-AA-checked text ramp, and disciplined accent use
+  (primary button, active nav, progress, focus ring only).
+- A shared dropdown system in the UI kit — select, multi-select,
+  combobox, and menus on a custom listbox core — replaces every native
+  select; a typecheck gate (check-native-selects.mjs) keeps native
+  selects out of the renderer.
+- Privacy modes card in Settings alongside the page-toolbar toggle.
+
+### Fixed
+
+- Menus, selects, and popovers opened inside modal dialogs no longer
+  treat panel clicks as outside-dismissals or render the dialog inert
+  (workspace overrides pin a single copy of
+  react-dismissable-layer/react-focus-scope).
+
+### Changed
+
+- Website: hero animation cleanup, refreshed 404 page, content and
+  style touch-ups.
+
 ## [0.2.0] - 2026-10-19
 
 ### Added
