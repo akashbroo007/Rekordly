@@ -133,7 +133,13 @@ export function SettingsPage() {
     }
   }, [recSettings]);
 
-  const dirty = draft !== null && current !== undefined && JSON.stringify(draft) !== JSON.stringify(current);
+  const recDirty =
+    recDraft !== null && recSettings !== undefined && JSON.stringify(recDraft) !== JSON.stringify(recSettings);
+  // ponytail: the Recording tab edits recDraft (RecordingService settings),
+  // not draft — without the rec check the Save button stayed disabled no
+  // matter what the user changed there.
+  const dirty =
+    (draft !== null && current !== undefined && JSON.stringify(draft) !== JSON.stringify(current)) || recDirty;
 
   if (!isLoading && current === undefined) {
     return (
@@ -192,7 +198,14 @@ export function SettingsPage() {
           setDraft={setDraft}
           activeTab={activeTab}
           recDraft={recDraft}
-          patchRec={(partial) => setRecDraft((prev) => (prev !== null ? { ...prev, ...partial } : prev))}
+          patchRec={(partial) =>
+            // ponytail: hydrate from the fetched server copy when the user
+            // edits before the query landed — otherwise every keystroke was
+            // dropped and the inputs looked dead.
+            setRecDraft((prev) =>
+              prev !== null ? { ...prev, ...partial } : recSettings !== undefined ? { ...recSettings, ...partial } : prev,
+            )
+          }
         />
       </div>
     </PageContainer>
