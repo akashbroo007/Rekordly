@@ -17,7 +17,7 @@ export function Input({ label, hint, error, className, id, ...props }: InputProp
       )}
       <input
         id={inputId}
-        className={`h-9 rounded-sm border bg-elevated px-3 text-sm text-foreground placeholder:text-foreground-disabled transition-colors duration-150 focus:border-primary focus:outline-none ${error ? 'border-error' : 'border-border'} ${className ?? ''}`}
+        className={`h-9 rounded-md border bg-elevated px-3 text-sm text-foreground placeholder:text-foreground-disabled transition-colors duration-150 focus:border-primary focus:outline-none ${error ? 'border-error' : 'border-border'} ${className ?? ''}`}
         {...props}
       />
       {error ? (

@@ -18,7 +18,7 @@ export function ContextMenuContent({ children, className }: ContextMenuContentPr
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.1 }}
-          className={`min-w-[180px] rounded-md border border-border bg-surface p-1 shadow-md ${className ?? ''}`}
+          className={`min-w-[180px] rounded-lg border border-border bg-elevated p-1 shadow-menu ${className ?? ''}`}
         >
           {children}
         </motion.div>
@@ -81,7 +81,7 @@ export function ContextMenuSubContent({ children, className }: ContextMenuSubCon
   return (
     <RadixContextMenu.Portal>
       <RadixContextMenu.SubContent
-        className={`min-w-[160px] max-h-64 overflow-y-auto rounded-md border border-border bg-surface p-1 shadow-md ${className ?? ''}`}
+        className={`min-w-[160px] max-h-64 overflow-y-auto rounded-lg border border-border bg-elevated p-1 shadow-menu ${className ?? ''}`}
       >
         {children}
       </RadixContextMenu.SubContent>

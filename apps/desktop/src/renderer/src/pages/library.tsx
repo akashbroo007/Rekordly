@@ -85,9 +85,10 @@ export function LibraryPage() {
   const pushToast = useToastStore((state) => state.push);
   const queryClient = useQueryClient();
   const isFetching = useIsFetching();
-  // Privacy mode — the global blur toggle (thumbnails + titles). Shared with
-  // the Downloads / Recordings / Uploads pages; applies to all three tabs.
-  const [privacy, setPrivacy] = usePrivacyMode();
+  // Privacy mode — this page's own blur toggle (thumbnails + titles);
+  // applies across the Library page's tabs (Recordings / Edited / Downloads).
+  // Writes ONLY the 'library' key; other pages keep independent modes.
+  const [privacy, setPrivacy] = usePrivacyMode('library');
 
   const [tab, setTab] = useState<LibraryTab>(() => {
     // ponytail: a Downloads-page "Open in library" push lands here — start on
@@ -362,8 +363,9 @@ export function LibraryPage() {
         }
         actions={
           <div className="flex items-center gap-2">
-            {/* Privacy mode — blur thumbnails + titles (all three tabs) */}
-            <PrivacyModeButton on={privacy} onToggle={() => setPrivacy(!privacy)} />
+            {/* Privacy mode — blur thumbnails + titles (Library page only:
+                applies across its recordings / edited / downloads tabs). */}
+            <PrivacyModeButton on={privacy} onToggle={() => setPrivacy(!privacy)} section="Library" />
             <Button variant="secondary" size="sm" onClick={() => setNetworkDialogOpen(true)}>
               <Radio size={14} /> Network Stream
             </Button>
@@ -429,8 +431,9 @@ export function LibraryPage() {
           />
         </div>
         <Select
+          small
           value={sortField}
-          onChange={(e) => setSortField(e.target.value as SortField)}
+          onChange={(value) => setSortField(value as SortField)}
           options={[
             { value: 'createdAt', label: 'Date Added' },
             { value: 'startedAt', label: 'Recording Date' },
@@ -439,6 +442,7 @@ export function LibraryPage() {
             { value: 'sizeBytes', label: 'File Size' },
             { value: 'platformId', label: 'Platform' },
           ]}
+          ariaLabel="Sort library"
         />
         {/* ponytail: A-Z only makes sense for an alphabetical field — clicking
             it while a date/numeric sort is active switches to Title first. */}
@@ -498,7 +502,7 @@ export function LibraryPage() {
           <Select
             label="Platform"
             value={filterPluginId}
-            onChange={(e) => setFilterPluginId(e.target.value)}
+            onChange={setFilterPluginId}
             options={[
               { value: '', label: 'All platforms' },
               ...(plugins ?? []).map((p) => ({ value: p.id, label: p.name })),
@@ -507,7 +511,7 @@ export function LibraryPage() {
           <Select
             label="Resolution"
             value={filterResolution}
-            onChange={(e) => setFilterResolution(e.target.value)}
+            onChange={setFilterResolution}
             options={[
               { value: '', label: 'Any resolution' },
               { value: '1080p', label: '1080p' },
@@ -1544,7 +1548,7 @@ function EditNotesDialog({
 
 function DetailRow({ label, value }: { label: string; value: string }) {  return (
     <div className="flex items-start justify-between gap-4 py-2 first:pt-0 last:pb-0">
-      <dt className="text-[11px] font-medium uppercase tracking-wide text-foreground-muted">{label}</dt>
+      <dt className="text-xs font-medium text-foreground-muted">{label}</dt>
       <dd className="max-w-[60%] truncate text-right tabular-nums text-foreground-secondary" title={value}>{value}</dd>
     </div>
   );

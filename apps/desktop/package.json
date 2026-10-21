@@ -11,7 +11,8 @@
     "build": "electron-vite build",
     "package": "electron-builder --win",
     "start": "electron-vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "typecheck": "node scripts/check-native-selects.mjs && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "check:dropdowns": "node scripts/check-native-selects.mjs",
     "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {

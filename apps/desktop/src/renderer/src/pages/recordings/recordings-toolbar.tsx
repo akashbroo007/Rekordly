@@ -8,7 +8,7 @@
  */
 import { Search, SlidersHorizontal, X } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Button, Input, MultiSelect, type MultiSelectOption } from '@rekordly/ui';
+import { Button, Input, MultiSelect, Select, type MultiSelectOption } from '@rekordly/ui';
 import { KebabMenu, type KebabItem } from '../../components/kebab-menu';
 import { PrivacyModeButton } from '../../components/privacy-mode';
 
@@ -47,7 +47,7 @@ export interface RecordingsToolbarProps {
   retryAllFailedLoading?: boolean;
   /** Extra "…" menu items (holds "Clear All Failed"). */
   pageMenuItems?: KebabItem[];
-  /** Privacy mode — the shared global toggle (blur thumbnails + titles). */
+  /** Privacy mode — this page's own toggle (blur thumbnails + titles). */
   privacy: {
     on: boolean;
     onToggle: () => void;
@@ -124,6 +124,7 @@ export function RecordingsToolbar({
 
         {/* Creator filter */}
         <MultiSelect
+          small
           className="w-44 shrink-0"
           placeholder="All creators"
           options={creatorOptions}
@@ -133,6 +134,7 @@ export function RecordingsToolbar({
 
         {/* Platform filter */}
         <MultiSelect
+          small
           className="w-40 shrink-0"
           icon={<SlidersHorizontal size={13} className="text-foreground-muted" />}
           placeholder="All platforms"
@@ -143,14 +145,16 @@ export function RecordingsToolbar({
 
         {/* Date range */}
         <div
-          className={`flex h-9 shrink-0 items-center gap-1 rounded-sm border px-2 transition-colors ${hasDateRange ? 'border-primary/50' : 'border-border'} bg-elevated`}
+          className={`flex h-9 shrink-0 items-center gap-1 rounded-md border bg-surface px-2 transition-colors hover:bg-elevated ${
+            hasDateRange ? 'border-foreground/25' : 'border-border'
+          }`}
         >
           <input
             type="date"
             aria-label="Recorded from"
             value={filters.from}
             onChange={(e) => onChange({ from: e.target.value })}
-            className="w-[7rem] bg-transparent text-xs text-foreground [color-scheme:dark] focus:outline-none"
+            className="w-[7rem] bg-transparent text-xs text-foreground focus:outline-none"
           />
           <span aria-hidden="true" className="text-foreground-disabled">→</span>
           <input
@@ -158,7 +162,7 @@ export function RecordingsToolbar({
             aria-label="Recorded to"
             value={filters.to}
             onChange={(e) => onChange({ to: e.target.value })}
-            className="w-[7rem] bg-transparent text-xs text-foreground [color-scheme:dark] focus:outline-none"
+            className="w-[7rem] bg-transparent text-xs text-foreground focus:outline-none"
           />
           {hasDateRange && (
             <button
@@ -174,21 +178,24 @@ export function RecordingsToolbar({
         </div>
 
         {/* Sort */}
-        <select
+        <Select
+          small
+          className="w-36 shrink-0"
           value={filters.sort}
-          onChange={(e) => onChange({ sort: e.target.value as RecordingsSort })}
-          aria-label="Sort recordings"
-          className="h-9 shrink-0 cursor-pointer rounded-sm border border-border bg-elevated px-2.5 text-sm text-foreground transition-colors duration-150 focus:border-primary focus:outline-none"
-        >
-          <option value="newest">Newest</option>
-          <option value="oldest">Oldest</option>
-          <option value="longest">Longest</option>
-          <option value="largest">Largest</option>
-        </select>
+          onChange={(sort) => onChange({ sort: sort as RecordingsSort })}
+          options={[
+            { value: 'newest', label: 'Newest' },
+            { value: 'oldest', label: 'Oldest' },
+            { value: 'longest', label: 'Longest' },
+            { value: 'largest', label: 'Largest' },
+          ]}
+          ariaLabel="Sort recordings"
+        />
 
         <div className="ml-auto flex items-center gap-2">
-          {/* Privacy mode — blur thumbnails + titles for screen sharing */}
-          <PrivacyModeButton on={privacy.on} onToggle={privacy.onToggle} />
+          {/* Privacy mode — blur thumbnails + titles for screen sharing
+              (Recordings only — other pages have their own toggles). */}
+          <PrivacyModeButton on={privacy.on} onToggle={privacy.onToggle} section="Recordings" />
 
           {selectAll !== undefined && (
             <label className="flex cursor-pointer items-center gap-1.5 text-xs text-foreground-secondary">
@@ -199,7 +206,7 @@ export function RecordingsToolbar({
                   if (node !== null) node.indeterminate = selectAll.indeterminate === true;
                 }}
                 onChange={(e) => selectAll.onChange(e.target.checked)}
-                className="h-[15px] w-[15px] cursor-pointer accent-[var(--color-primary)]"
+                className="h-[15px] w-[15px] cursor-pointer"
                 aria-label={selectAll.label}
               />
               Select all

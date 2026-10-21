@@ -40,6 +40,7 @@ import { SupportedSitesContent } from '../components/settings/supported-sites';
 import { CloudStorageSettings } from '../components/settings/cloud-storage-settings';
 import { BugReportSettings } from '../components/settings/bug-report';
 import { AppUpdatesCard } from '../components/settings/app-updates-card';
+import { PrivacyModesCard } from '../components/settings/privacy-modes-card';
 
 
 const LOG_LEVELS: readonly LogLevel[] = ['debug', 'info', 'warn', 'error', 'fatal'];
@@ -363,8 +364,10 @@ function SettingsForm({
             hint="Controls the verbosity of application logs."
             options={LOG_LEVELS.map((l) => ({ value: l, label: l.charAt(0).toUpperCase() + l.slice(1) }))}
             value={draft.logLevel}
-            onChange={(event) => patch({ logLevel: event.target.value as LogLevel })}
+            onChange={(value) => patch({ logLevel: value as LogLevel })}
           />
+
+          <PrivacyModesCard />
 
           <div className="rounded-sm border border-border bg-surface p-4">
             <p className="text-sm font-medium text-foreground">Welcome tour</p>
@@ -402,8 +405,8 @@ function SettingsForm({
               { value: 'light', label: 'Light' },
             ]}
             value={draft.theme}
-            onChange={(event) => {
-              const theme = event.target.value as AppSettings['theme'];
+            onChange={(value) => {
+              const theme = value as AppSettings['theme'];
               patch({ theme });
               // ponytail: apply immediately — the setting alone did nothing.
               setThemeMode(theme);
@@ -479,7 +482,7 @@ function SettingsForm({
               { value: '360p', label: '360p' },
             ]}
             value={recDraft?.defaultQuality ?? 'best'}
-            onChange={(event) => patchRec({ defaultQuality: event.target.value })}
+            onChange={(value) => patchRec({ defaultQuality: value })}
           />
 
           <Input
@@ -567,9 +570,7 @@ function SettingsForm({
                   { value: 'size', label: 'Smaller files (low storage)' },
                 ]}
                 value={draft.recordingCompression}
-                onChange={(event) =>
-                  patch({ recordingCompression: event.target.value as AppSettings['recordingCompression'] })
-                }
+                onChange={(value) => patch({ recordingCompression: value as AppSettings['recordingCompression'] })}
               />
             </div>
           </div>
@@ -827,7 +828,7 @@ function SettingsForm({
           </div>
 
           <div className="rounded-sm border-l-2 border-error bg-elevated p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-error">Danger Zone</p>
+            <p className="text-xs font-semibold text-error">Danger zone</p>
             <p className="mt-1.5 text-xs text-foreground-muted">
               Resetting the database will remove all recordings, creators, and settings. This action cannot be undone.
             </p>
@@ -849,7 +850,7 @@ function SettingsForm({
 
       {/* Save bar */}
       <div className="sticky bottom-0 z-10 mt-2 flex shrink-0 items-center justify-between gap-2 border-t border-border bg-canvas py-3">
-        <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-foreground-muted">
+        <p className="text-xs text-foreground-muted">
           {dirty ? 'Unsaved changes' : 'All changes saved'}
           {dirty && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-warning align-middle" aria-hidden="true" />}
         </p>
@@ -1159,7 +1160,7 @@ function PushNotificationsSection({
         onChange={(event) => patchPush({ discordWebhookUrl: event.target.value })}
       />
 
-      <div className="rounded-sm border border-border bg-background px-3 py-2.5 text-xs text-foreground-muted">
+      <div className="rounded-sm border border-border bg-canvas px-3 py-2.5 text-xs text-foreground-muted">
         <p className="font-medium text-foreground">Setting up Telegram (3 steps)</p>
         <ol className="mt-1 list-inside list-decimal space-y-0.5">
           <li>
@@ -1341,7 +1342,7 @@ function AutomationSettings({
           { value: 'google-drive', label: 'Google Drive' },
         ]}
         value={auto.uploadProviderId}
-        onChange={(event) => patchAuto({ uploadProviderId: event.target.value })}
+        onChange={(value) => patchAuto({ uploadProviderId: value })}
       />
 
       <div className="flex items-center justify-between gap-4 rounded-sm border border-border bg-surface px-3 py-2.5">

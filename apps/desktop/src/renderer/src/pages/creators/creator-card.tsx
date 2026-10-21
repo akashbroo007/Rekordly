@@ -125,12 +125,7 @@ function useHeartbeat(intervalMs = 1000): void {
 
 function PingDot({ tone = 'success' }: { tone?: 'success' | 'error' }) {
   const color = tone === 'error' ? 'bg-error' : 'bg-success';
-  return (
-    <span className="relative flex h-2 w-2" aria-hidden="true">
-      <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${color}`} />
-      <span className={`relative inline-flex h-2 w-2 rounded-full ${color}`} />
-    </span>
-  );
+  return <span className={`h-2 w-2 shrink-0 rounded-full ${color}`} aria-hidden="true" />;
 }
 
 // ponytail: PlatformBadge and the kebab menu now live in components/
@@ -415,8 +410,8 @@ export function CreatorCard({
         `gap-2.5 rounded-md border border-border bg-surface p-3 transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/40 ${selected ? 'bg-primary/5 ring-1 ring-primary/50 ring-offset-1 ring-offset-surface' : ''}`
       : isRecording
         ? `gap-3 rounded-md border-2 border-error/60 bg-elevated p-4 transition-all duration-150 hover:-translate-y-0.5 hover:border-error/80 ${selected ? 'ring-2 ring-primary/70' : ''}`
-        : // Live: brighter surface + green border (no glow — per user preference).
-          `gap-3 rounded-md border-2 border-success/60 bg-elevated p-4 transition-all duration-150 hover:-translate-y-0.5 hover:border-success/80 ${selected ? 'ring-2 ring-primary/70' : ''}`;
+        : // Live: brighter surface + plain 1px green border (no glow — per user preference).
+          `gap-3 rounded-md border border-success/60 bg-elevated p-4 transition-all duration-150 hover:-translate-y-0.5 hover:border-success/80 ${selected ? 'ring-2 ring-primary/70' : ''}`;
 
   const gridCard = (
     <div data-status={status} className={`group relative flex flex-col overflow-visible ${shellClasses}`}>
@@ -444,7 +439,7 @@ export function CreatorCard({
               <RecordElapsedBadge startedAt={recordingStartedAt} />
             ) : isLive ? (
               <span className="inline-flex shrink-0 items-center gap-1 rounded-sm border border-success/40 bg-success/10 px-1.5 py-0.5 text-xs font-semibold leading-none text-success">
-                <span aria-hidden="true" className="h-2 w-2 rounded-full bg-success" /> LIVE
+                <span aria-hidden="true" className="h-2 w-2 rounded-full bg-success" /> Live
               </span>
             ) : null}
           </div>
@@ -550,7 +545,7 @@ export function CreatorCard({
             <RecordElapsedBadge startedAt={recordingStartedAt} />
           ) : isLive ? (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-sm border border-success/40 bg-success/10 px-1.5 py-0.5 text-xs font-semibold leading-none text-success">
-              <span aria-hidden="true" className="h-2 w-2 rounded-full bg-success" /> LIVE
+              <span aria-hidden="true" className="h-2 w-2 rounded-full bg-success" /> Live
             </span>
           ) : null}
           {creator.autoRecord && !isLive && !isRecording && (
@@ -582,7 +577,7 @@ export function CreatorCard({
       <div className="w-36 shrink-0 text-right">
         {isRecording ? (
           <span className="flex items-center justify-end gap-1.5 text-xs font-medium text-error">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-error" aria-hidden="true" />
+            <span className="h-1.5 w-1.5 rounded-full bg-error" aria-hidden="true" />
             <span className="truncate tabular-nums">
               REC {formatElapsed(recordingStartedAt) ?? '0:00'}
             </span>
@@ -640,12 +635,12 @@ export function CreatorCard({
             disabled
             title="Already recording this creator."
           >
-            <span className="h-2 w-2 animate-pulse rounded-full bg-error" aria-hidden="true" />
+            <span className="h-2 w-2 rounded-full bg-error" aria-hidden="true" />
             REC
           </Button>
         ) : isLive ? (
           <Button size="sm" onClick={() => onRecord(creator)}>
-            <span className="h-2 w-2 animate-pulse rounded-full bg-white" aria-hidden="true" />
+            <span className="h-2 w-2 rounded-full bg-white" aria-hidden="true" />
             Record
           </Button>
         ) : (

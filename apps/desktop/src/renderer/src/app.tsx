@@ -11,6 +11,7 @@ import { useNotificationEvents } from './lib/use-notification-events';
 import { AnalyticsPage } from './pages/analytics';
 import { CreatorsPage } from './pages/creators/creators-page';
 import { DashboardPage } from './pages/dashboard';
+import { DesignKitPage } from './pages/design-kit';
 import { DownloadsPage } from './pages/downloads';
 import { UploadsPage } from './pages/uploads';
 import { LibraryPage } from './pages/library';
@@ -90,6 +91,9 @@ function AppShell() {
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="logs" element={<LogsPage />} />
               <Route path="settings" element={<SettingsPage />} />
+              {/* Hidden visual test page (not in the sidebar): the shared
+                  dropdown system's states — see pages/design-kit.tsx. */}
+              <Route path="design-kit" element={<DesignKitPage />} />
             </Route>
           </Routes>
           <CommandPalette />

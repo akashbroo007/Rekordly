@@ -174,7 +174,7 @@ export function CreatorDetailsDialog({
 function StatTile({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="rounded-sm border border-border bg-elevated px-3 py-2">
-      <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-foreground-muted">
+      <p className="flex items-center gap-1.5 text-xs font-medium text-foreground-muted">
         {icon} {label}
       </p>
       <p className="mt-0.5 text-sm font-semibold tabular-nums text-foreground">{value}</p>

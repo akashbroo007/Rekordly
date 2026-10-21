@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, Info, Trash2 } from 'lucide-react';
 import type { PluginInfoDto, SettingDefDto } from '@rekordly/shared/contracts';
-import { Button, Dialog, DialogContent, Input, Switch } from '@rekordly/ui';
+import { Button, Dialog, DialogContent, Input, Select, Switch } from '@rekordly/ui';
 import { useToastStore } from '../../stores/toast-store';
 
 /** DetailRow — normal-case, minimum 12px (WCAG AA) labels. */
@@ -158,20 +158,16 @@ function SettingField({
 
   if (def.type === 'select' && def.options !== undefined) {
     return (
-      <label className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium text-foreground-secondary">{def.label}</span>
-        <select
-          value={String(value ?? def.defaultValue ?? '')}
-          onChange={(event) => onChange(event.target.value)}
-          className="h-9 rounded-sm border border-border bg-elevated px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-        >
-          {def.options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <Select
+        label={def.label}
+        hint={def.description}
+        value={String(value ?? def.defaultValue ?? '')}
+        onChange={onChange}
+        options={def.options.map((option) => ({
+          value: option.value,
+          label: option.label,
+        }))}
+      />
     );
   }
 

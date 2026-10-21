@@ -1,6 +1,7 @@
 import { CheckCircle2, Download, RotateCw, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { UpdateStatusDto } from '@rekordly/shared/contracts';
+import { Button } from '@rekordly/ui';
 import { releaseNotesUrl } from '../../lib/site-links';
 
 /**
@@ -39,21 +40,17 @@ export function UpdateBanner() {
         </>
       ) : state === 'downloaded' ? (
         <>
-          <CheckCircle2 size={14} className="shrink-0 text-primary" />
+          <CheckCircle2 size={14} className="shrink-0 text-success" />
           <span className="text-xs text-foreground-secondary">
             Update ready{version !== undefined ? ` (v${version})` : ''} — restart to install
           </span>
-          <button
-            type="button"
-            onClick={() => void window.desktop.updates.install()}
-            className="cursor-pointer rounded-md border border-primary/40 bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary transition-colors duration-150 hover:bg-primary/25"
-          >
+          <Button size="sm" onClick={() => void window.desktop.updates.install()}>
             Restart &amp; update
-          </button>
+          </Button>
         </>
       ) : (
         <>
-          <Download size={14} className="shrink-0 text-primary" />
+          <Download size={14} className="shrink-0 text-foreground-secondary" />
           <span className="text-xs text-foreground-secondary">
             Rekordly v{version ?? 'newer version'} is available — install the patched build without reinstalling
           </span>
@@ -61,17 +58,13 @@ export function UpdateBanner() {
             type="button"
             onClick={() => void window.desktop.app.openUrl(releaseNotesUrl(version))}
             title="See what changed in this release"
-            className="cursor-pointer text-xs font-medium text-primary underline-offset-2 transition-colors duration-150 hover:underline"
+            className="cursor-pointer text-xs font-medium text-foreground-muted underline-offset-2 transition-colors duration-150 hover:text-foreground hover:underline"
           >
             What&apos;s new
           </button>
-          <button
-            type="button"
-            onClick={() => void window.desktop.updates.download()}
-            className="cursor-pointer rounded-md border border-primary/40 bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary transition-colors duration-150 hover:bg-primary/25"
-          >
+          <Button size="sm" variant="secondary" onClick={() => void window.desktop.updates.download()}>
             Download update
-          </button>
+          </Button>
           {version !== undefined ? (
             <button
               type="button"

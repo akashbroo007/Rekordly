@@ -29,6 +29,7 @@ import { Button, EmptyState, PageContainer, SectionHeader, Skeleton } from '@rek
 import type { PluginInfoDto } from '@rekordly/shared/contracts';
 import { logger } from '../lib/logger';
 import { useToastStore } from '../stores/toast-store';
+import { useUiPreferencesStore } from '../stores/ui-preferences-store';
 import { PluginRow } from './plugins/plugin-row';
 import { PluginCard } from './plugins/plugin-card';
 import { PluginDetailsDrawer } from './plugins/plugin-details-drawer';
@@ -176,6 +177,13 @@ export function PluginsPage() {
     setState((prev) => ({ ...prev, ...patch }));
   const resetToolbar = (): void =>
     setState((prev) => ({ ...DEFAULT_TOOLBAR, view: prev.view, showDeveloper: prev.showDeveloper }));
+
+  // Mirrors the toolbar switch into the shared UI-preferences store so other
+  // plugin lists (e.g. the Add Creator picker) honor "Show developer plugins".
+  const setShowDeveloperPlugins = useUiPreferencesStore((s) => s.setShowDeveloperPlugins);
+  useEffect(() => {
+    setShowDeveloperPlugins(state.showDeveloper);
+  }, [state.showDeveloper, setShowDeveloperPlugins]);
 
   // Visible pool: developer/example plugins hide until enabled.
   const pool = useMemo(

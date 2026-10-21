@@ -2,7 +2,7 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './sidebar';
 import { StatusBar } from './status-bar';
 import { TitleBar } from './title-bar';
-import { Toolbar } from './toolbar';
+import { TopBar } from '../top-bar/top-bar';
 import { UpdateBanner } from './update-banner';
 
 export function AppLayout() {
@@ -13,7 +13,7 @@ export function AppLayout() {
       <div className="flex min-h-0 flex-1">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
-          <Toolbar />
+          <TopBar />
           <main className="min-h-0 flex-1 overflow-hidden">
             <Outlet />
           </main>

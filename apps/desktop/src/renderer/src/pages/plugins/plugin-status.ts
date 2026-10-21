@@ -285,3 +285,70 @@ export function useTicker(intervalMs = 30_000): number {
 export function pluginBrandColor(pluginId: string): string {
   return platformColor(pluginId);
 }
+
+// --- required-setting probes (shared picker/setup surfaces) -------------------
+
+/** A required setting counts as configured when any stored value exists. */
+export function hasSettingValue(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === 'string') return value.trim() !== '';
+  if (typeof value === 'number') return Number.isFinite(value);
+  // Booleans/select values are explicit choices — they count as configured.
+  return true;
+}
+
+/** "clientSecret" → "Client Secret" for the Needs-setup surface. */
+export function prettySettingKey(key: string): string {
+  return key
+    .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+    .replace(/[-_]/g, ' ')
+    .replace(/^./, (char) => char.toUpperCase());
+}
+
+/**
+ * ponytail: shared read-only aggregate over the existing per-plugin IPC
+ * (settings schema + stored values) — keyed by the plugin id list. Used by
+ * the Plugins page and any dropdown that lists plugins (Add Creator), so a
+ * needs-setup plugin can carry its reason + "Set up" action into pickers.
+ */
+export function usePluginSetupChecks(
+  plugins: readonly PluginInfoDto[] | undefined,
+): Record<string, PluginSetupCheck> {
+  const [checks, setChecks] = useState<Record<string, PluginSetupCheck>>({});
+  const idsKey = setupCheckKey(plugins ?? []);
+
+  useEffect(() => {
+    const list = plugins ?? [];
+    if (list.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      const relevant = list.filter(
+        (plugin) => plugin.enabled && plugin.state !== 'error' && plugin.lastError === undefined,
+      );
+      const entries = await Promise.all(
+        relevant.map(async (plugin): Promise<[string, PluginSetupCheck]> => {
+          try {
+            const [schema, values] = await Promise.all([
+              window.desktop.plugins.getSettingsSchema(plugin.id).catch(() => []),
+              window.desktop.plugins.getSettings(plugin.id).catch(() => ({})),
+            ]);
+            const missing = (schema as { key: string; required?: boolean; type?: string }[])
+              .filter((def) => def.required === true && !hasSettingValue((values as Record<string, unknown>)[def.key]))
+              .map((def) => prettySettingKey(def.key));
+            return [plugin.id, { missing } satisfies PluginSetupCheck];
+          } catch {
+            // A broken schema fetch must never break the picker/page.
+            return [plugin.id, { missing: [] } satisfies PluginSetupCheck] as [string, PluginSetupCheck];
+          }
+        }),
+      );
+      if (!cancelled) setChecks(Object.fromEntries(entries));
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey]);
+
+  return checks;
+}

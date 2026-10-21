@@ -66,7 +66,11 @@ export const hero = {
     "A free, source-available Windows app for monitoring creators, automatically recording live streams, downloading videos and VODs, and organizing your recordings.",
   primaryCta: {
     label: "Download for Windows",
-    href: "https://rekordly.in/download",
+    // One-click: straight to the pinned `Rekordly Setup <ver>.exe` asset on
+    // GitHub Releases (version comes from app-version.json/REKORDLY_VERSION,
+    // so the release pipeline keeps it in sync). The full /download page
+    // stays available from the navbar "Download" link.
+    href: site.installerDownloadUrl,
   },  secondaryCta: { label: "View on GitHub", href: site.repoUrl },
   stats: [
     { value: "12", label: "Sites supported" },

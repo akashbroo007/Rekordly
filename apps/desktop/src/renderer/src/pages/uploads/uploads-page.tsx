@@ -627,8 +627,9 @@ export function UploadsPage() {
     setFilters((prev) => ({ ...prev, ...patch }));
   const resetFilters = (): void => setFilters((prev) => ({ ...DEFAULT_FILTERS, tab: prev.tab }));
 
-  // Privacy mode — the global blur toggle (thumbnails + titles).
-  const [privacy, setPrivacy] = usePrivacyMode();
+  // Privacy mode — this page's own blur toggle (thumbnails + titles). Reads
+  // and writes ONLY the 'uploads' key; other pages keep independent modes.
+  const [privacy, setPrivacy] = usePrivacyMode('uploads');
 
   const visibleBase = useMemo(() => {
     if (filters.tab === 'uploading') return uploadingItems;

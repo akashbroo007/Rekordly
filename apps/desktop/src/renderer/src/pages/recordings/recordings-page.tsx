@@ -141,8 +141,9 @@ export function RecordingsPage() {
     setFilters((prev) => ({ ...prev, ...patch }));
   const resetFilters = (): void => setFilters((prev) => ({ ...DEFAULT_FILTERS, tab: prev.tab }));
 
-  // Privacy mode — the global blur toggle (thumbnails + titles).
-  const [privacy, setPrivacy] = usePrivacyMode();
+  // Privacy mode — this page's own blur toggle (thumbnails + titles). Reads
+  // and writes ONLY the 'recordings' key; other pages keep independent modes.
+  const [privacy, setPrivacy] = usePrivacyMode('recordings');
 
   // ponytail: dashboard deep-links mutate ?filter= while the page is mounted.
   useEffect(() => {

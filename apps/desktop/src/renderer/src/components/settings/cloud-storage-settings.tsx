@@ -108,7 +108,7 @@ export function CloudStorageSettings({
             label: n === 1 ? '1 upload at a time' : `${n} uploads at a time`,
           }))}
           value={String(draft.maxConcurrentUploads ?? 1)}
-          onChange={(e) => patch({ maxConcurrentUploads: Number(e.target.value) })}
+          onChange={(value) => patch({ maxConcurrentUploads: Number(value) })}
           hint="How many files upload simultaneously. Low-Resource Mode keeps this at 1."
         />
       </div>
@@ -273,7 +273,7 @@ function ProviderCard({
         <div className="border-t border-border px-4 py-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-success">Pros</p>
+              <p className="mb-1.5 text-xs font-semibold text-success">Pros</p>
               <ul className="space-y-1">
                 {meta.pros.map((pro, i) => (
                   <li key={i} className="flex items-start gap-1.5 text-xs text-foreground-muted">
@@ -284,7 +284,7 @@ function ProviderCard({
               </ul>
             </div>
             <div>
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-error">Cons</p>
+              <p className="mb-1.5 text-xs font-semibold text-error">Cons</p>
               <ul className="space-y-1">
                 {meta.cons.map((con, i) => (
                   <li key={i} className="flex items-start gap-1.5 text-xs text-foreground-muted">
@@ -298,7 +298,7 @@ function ProviderCard({
 
           {meta.setupInstructions.length > 0 && (
             <div className="mt-3">
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-foreground-muted">Setup</p>
+              <p className="mb-1.5 text-xs font-semibold text-foreground-muted">Setup</p>
               <ol className="space-y-1">
                 {meta.setupInstructions.map((step, i) => (
                   <li key={i} className="text-xs text-foreground-muted">

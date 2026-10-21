@@ -154,7 +154,7 @@ export function LogsPage() {
               </button>
             );
           })}
-          <span className="ml-auto text-[10px] font-medium uppercase tracking-[0.12em] tabular-nums text-foreground-muted">
+          <span className="ml-auto text-xs font-medium tabular-nums text-foreground-muted">
             {filtered.length} {filtered.length === 1 ? 'entry' : 'entries'}
           </span>
         </div>
@@ -221,14 +221,14 @@ function LogRow({ entry, expanded, onToggle }: { entry: LogEntry; expanded: bool
         <span className={`w-14 shrink-0 text-[9px] font-semibold uppercase tracking-wider ${color}`}>
           {entry.level}
         </span>
-        <span className="w-24 shrink-0 truncate text-[10px] uppercase tracking-wide text-foreground-muted">
+        <span className="w-24 shrink-0 truncate text-xs text-foreground-muted">
           {entry.scope}
         </span>
         <span className="min-w-0 flex-1 truncate text-xs text-foreground">
           {entry.message}
         </span>
         {hasData && (
-          <span className="shrink-0 rounded-sm border border-border px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide text-foreground-muted">
+          <span className="shrink-0 rounded-sm border border-border px-1 py-0.5 text-[10px] font-medium text-foreground-muted">
             data
           </span>
         )}

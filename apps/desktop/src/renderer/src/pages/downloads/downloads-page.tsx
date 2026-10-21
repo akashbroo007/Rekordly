@@ -191,7 +191,9 @@ export function DownloadsPage() {
     setFilters((prev) => ({ ...prev, ...patch }));
   const resetFilters = (): void => setFilters((prev) => ({ ...DEFAULT_FILTERS, tab: prev.tab }));
 
-  const [privacy, setPrivacy] = usePrivacyMode();
+  // Privacy mode — this page's own blur toggle; writes ONLY the 'downloads'
+  // key (independent of the Library page's Downloads tab and every other page).
+  const [privacy, setPrivacy] = usePrivacyMode('downloads');
 
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 

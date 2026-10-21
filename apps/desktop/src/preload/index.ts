@@ -85,6 +85,7 @@ const desktopApi: DesktopApi = {
     markRead: (id) => ipcRenderer.invoke(IPC_CHANNELS.notificationsMarkRead, id),
     markAllRead: () => ipcRenderer.invoke(IPC_CHANNELS.notificationsMarkAllRead),
     unreadCount: () => ipcRenderer.invoke(IPC_CHANNELS.notificationsUnreadCount),
+    dismiss: (id) => ipcRenderer.invoke(IPC_CHANNELS.notificationsDismiss, id),
     onNotification: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, notification: NotificationDto): void => {
         callback(notification);

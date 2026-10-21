@@ -1,4 +1,4 @@
-import { statSync, readdirSync, rmSync } from 'node:fs';
+import { statSync, statfsSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Logger } from '@rekordly/shared';
 import type { RecordingRepo } from '@rekordly/database';
@@ -7,8 +7,10 @@ import type { AppDirs } from '../fs/paths';
 export interface StorageStats {
   totalRecordings: number;
   totalSizeBytes: number;
-  availableBytes: number;
-  totalBytes: number;
+  /** Free disk space in bytes; null when the filesystem stats are unreadable. */
+  availableBytes: number | null;
+  /** Total disk capacity in bytes; null when the filesystem stats are unreadable. */
+  totalBytes: number | null;
   cacheSizeBytes: number;
   logSizeBytes: number;
   tempSizeBytes: number;
@@ -37,16 +39,14 @@ export class StorageService {
     const recordings = this.repo.listRecordings();
     const totalSizeBytes = recordings.reduce((sum, r) => sum + (r.sizeBytes ?? 0), 0);
 
-    let availableBytes = 0;
-    let totalBytes = 0;
+    let availableBytes: number | null = null;
+    let totalBytes: number | null = null;
     try {
-      const stat = statSync(this.dirs.recordingsDir);
-      totalBytes = stat.size;
-      // statSync doesn't provide available space; use 0 as placeholder
-      // In production, use a native module or shell command for disk space
-      availableBytes = 0;
-    } catch {
-      this.logger.warn('failed to read disk stats');
+      const fsStats = statfsSync(this.dirs.recordingsDir);
+      availableBytes = fsStats.bsize * fsStats.bavail;
+      totalBytes = fsStats.bsize * fsStats.blocks;
+    } catch (error) {
+      this.logger.warn({ error }, 'failed to read disk filesystem stats');
     }
 
     const cacheSizeBytes = this.getDirSize(this.dirs.cacheDir);

@@ -87,7 +87,7 @@ export function Chip({
   );
 }
 
-/** 6px status dot; pulses while something is working (recording/uploading). */
+/** 6px solid status dot; color alone distinguishes working states. */
 export function ChipDot({ kind }: { kind: SummaryChipKind }) {
   const color =
     kind === 'uploading' || kind === 'info' || kind === 'queued'
@@ -99,15 +99,7 @@ export function ChipDot({ kind }: { kind: SummaryChipKind }) {
           : kind === 'neutral'
             ? 'bg-foreground-disabled'
             : 'bg-error';
-  if (kind !== 'active' && kind !== 'uploading') {
-    return <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${color}`} />;
-  }
-  return (
-    <span aria-hidden="true" className="relative flex h-2 w-2 shrink-0">
-      <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${color}`} />
-      <span className={`relative inline-flex h-2 w-2 rounded-full ${color}`} />
-    </span>
-  );
+  return <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${color}`} />;
 }
 
 export function SummaryStrip({ counts, jobs, filterTab, onFilterTab }: SummaryStripProps) {

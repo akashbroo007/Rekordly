@@ -36,7 +36,6 @@ export function ShimmerButton({
       {...props}
     >
       <span className="relative z-10 flex items-center">{children}</span>
-      <div className="absolute inset-0 -top-2 -bottom-2 -translate-x-full skew-x-12 bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 ease-out group-hover:translate-x-full" />
     </button>
   );
 }
@@ -80,7 +79,6 @@ export function ShimmerLinkButton({
     return (
       <a href={href} target="_blank" rel="noreferrer" className={classes}>
         <span className="relative z-10 flex items-center">{children}</span>
-        <div className="absolute inset-0 -top-2 -bottom-2 -translate-x-full skew-x-12 bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 ease-out group-hover:translate-x-full" />
       </a>
     );
   }
@@ -88,7 +86,6 @@ export function ShimmerLinkButton({
   return (
     <Link to={href} className={classes}>
       <span className="relative z-10 flex items-center">{children}</span>
-      <div className="absolute inset-0 -top-2 -bottom-2 -translate-x-full skew-x-12 bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-1000 ease-out group-hover:translate-x-full" />
     </Link>
   );
 }

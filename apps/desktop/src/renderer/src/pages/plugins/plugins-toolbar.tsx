@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { LayoutGrid, List, Search, X } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Input, Switch } from '@rekordly/ui';
+import { Input, Select, Switch } from '@rekordly/ui';
 
 export type PluginsFilterTab = 'all' | 'enabled' | 'disabled' | 'needs-setup' | 'updates' | 'errors';
 export type PluginsSort = 'name' | 'status' | 'most-used' | 'last-checked';
@@ -107,17 +107,19 @@ export function PluginsToolbar({
         </div>
 
         {/* Sort */}
-        <select
+        <Select
+          small
+          className="w-40 shrink-0"
           value={state.sort}
-          onChange={(event) => onChange({ sort: event.target.value as PluginsSort })}
-          aria-label="Sort plugins"
-          className="h-9 shrink-0 cursor-pointer rounded-sm border border-border bg-elevated px-2.5 text-sm text-foreground transition-colors duration-150 focus:border-primary focus:outline-none"
-        >
-          <option value="status">Status</option>
-          <option value="name">Name</option>
-          <option value="most-used">Most used</option>
-          <option value="last-checked">Last checked</option>
-        </select>
+          onChange={(sort) => onChange({ sort: sort as PluginsSort })}
+          options={[
+            { value: 'status', label: 'Status' },
+            { value: 'name', label: 'Name' },
+            { value: 'most-used', label: 'Most used' },
+            { value: 'last-checked', label: 'Last checked' },
+          ]}
+          ariaLabel="Sort plugins"
+        />
 
         <div className="ml-auto flex items-center gap-2">
           {/* View toggle: compact rows (default) ⇄ card grid */}
@@ -180,7 +182,7 @@ export function PluginsToolbar({
 
         {/* Last-checked stamp lives next to the header button it belongs to */}
         <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-foreground-muted">
-          {checking && <span aria-hidden="true" className="h-1.5 w-1.5 animate-pulse rounded-full bg-info" />}
+          {checking && <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-info" />}
           {lastCheckedAt !== null && (
             <UpdatedAgo lastCheckedAt={lastCheckedAt} prefix="Updates last checked" />
           )}

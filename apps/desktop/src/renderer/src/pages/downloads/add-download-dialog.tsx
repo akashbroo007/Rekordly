@@ -187,7 +187,7 @@ export function AddDownloadDialog({
               hint="Only the qualities this link actually offers are listed."
               options={probe.formats.map((f) => ({ value: f.value, label: f.label }))}
               value={quality}
-              onChange={(e) => setQuality(e.target.value)}
+              onChange={setQuality}
             />
           )}
 

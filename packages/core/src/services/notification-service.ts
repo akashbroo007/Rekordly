@@ -65,6 +65,11 @@ export class NotificationService {
     this.deps.logRepo.markAllNotificationsRead();
   }
 
+  /** Remove one notification from the center entirely (the item's ✕). */
+  dismiss(id: number): void {
+    this.deps.logRepo.deleteNotification(id);
+  }
+
   unreadCount(): number {
     return this.deps.logRepo.unreadNotificationCount();
   }

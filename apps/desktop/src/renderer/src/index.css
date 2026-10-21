@@ -13,6 +13,19 @@ html[data-lowres='true'] *::after {
   transition-duration: 0.01ms !important;
 }
 
+/* Respect prefers-reduced-motion: collapse every animation and transition
+ * (motion is feedback, not content — nothing here is essential to it). */
+@media (prefers-reduced-motion: reduce) {
+  html *,
+  html *::before,
+  html *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ponytail: status-card glows (live/recording) were removed per user
  * preference — the 2px colored borders alone carry the state. No box-shadow
  * animations on the creator grid. */

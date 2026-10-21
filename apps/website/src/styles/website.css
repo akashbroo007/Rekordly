@@ -23,7 +23,6 @@
   --radius-xl: 20px;
 
   --animate-fade-up: fade-up 0.7s cubic-bezier(0.21, 1.02, 0.73, 1) both;
-  --animate-blink: blink 1.2s ease-in-out infinite;
 }
 
 @keyframes fade-up {
@@ -37,19 +36,21 @@
   }
 }
 
-@keyframes blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.35;
-  }
-}
-
 @layer base {
   html {
     scroll-behavior: smooth;
+  }
+
+  /* Respect prefers-reduced-motion: collapse every animation and transition. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   body {

@@ -1,6 +1,6 @@
 /**
  * RecordingRow — one recording presentation across three variants:
- *   active    → larger live card pinned at the top (REC pulse, big live
+ *   active    → larger live card pinned at the top (REC badge, big live
  *               timer, size/speed/live-bitrate sparkline, labeled actions)
  *   completed → compact 16:9-thumb row (Open in library · Upload · …)
  *   failed    → compact row incl. cancelled (Retry / Resume · Play partial · …)
@@ -312,14 +312,11 @@ function ActiveRecordingCard({
           <div className="flex flex-wrap items-center gap-2">
             {running ? (
               <span className="inline-flex shrink-0 items-center gap-1.5 rounded-sm border border-error/50 bg-error/15 px-1.5 py-0.5 text-xs font-bold leading-none text-error">
-                <span aria-hidden="true" className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-error opacity-70" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-error" />
-                </span>
+                <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-error" />
                 REC
               </span>
             ) : (
-              <StatusBadge status={job.status} pulse={ticking} />
+              <StatusBadge status={job.status} />
             )}
             <h3
               className={`min-w-0 truncate text-sm font-bold tracking-tight text-foreground ${privacyTitleClass}`}

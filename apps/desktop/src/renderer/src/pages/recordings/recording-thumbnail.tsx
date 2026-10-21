@@ -167,7 +167,7 @@ export interface RecordingThumbProps {
   /**
    * Privacy mode: blur the image/fallback content while keeping the crisp
    * 16:9 tile — safe for screen shares. Optional and off by default; pages
-   * with a Privacy-mode toggle pass it per page (one global toggle).
+   * with a Privacy-mode toggle pass it per page (one key per section).
    */
   blurred?: boolean;
   /** Notified with any extra metadata discovered while generating. */
@@ -221,7 +221,7 @@ export function RecordingThumb({
   // platform shares the same hue family. The Uploads page overrides it with
   // the provider's brand tint via the optional `tint` prop.
   const tint = tintOverride ?? platformColor(job.pluginId);
-  const gradient = `linear-gradient(135deg, color-mix(in srgb, ${tint} 22%, #101014), color-mix(in srgb, ${tint} 10%, #17171c))`;
+  const gradient = `linear-gradient(135deg, color-mix(in srgb, ${tint} 22%, var(--color-panel)), color-mix(in srgb, ${tint} 10%, var(--color-elevated)))`;
   const palette = AVATAR_PALETTES[hashString(creatorName.toLowerCase()) % AVATAR_PALETTES.length] ?? AVATAR_PALETTES[0]!;
 
   const src =
@@ -245,7 +245,7 @@ export function RecordingThumb({
       className={`relative shrink-0 overflow-hidden rounded-sm border border-border ${dimmed ? 'saturate-50 opacity-70' : ''} ${
         large ? 'h-[72px] w-[128px]' : 'h-[54px] w-[96px]'
       }`}
-      style={{ backgroundColor: '#101014' }}
+      style={{ backgroundColor: 'var(--color-panel)' }}
     >
       {hasImage ? (
         <img

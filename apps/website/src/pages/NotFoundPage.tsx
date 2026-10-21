@@ -212,11 +212,9 @@ function DotMatrix404() {
 
     let raf = 0;
     let running = true;
-    const start = performance.now();
 
     const draw = (now: number): void => {
       if (!running) return;
-      const t = (now - start) / 1000;
 
       const rect = canvas.getBoundingClientRect();
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -249,11 +247,9 @@ function DotMatrix404() {
           const px = cx + x * cell + cell / 2;
           const py = cy + y * cell + cell / 2;
 
-          // Gentle ambient shimmer (disabled for reduced motion).
-          const idle =
-            reduceMotion === true
-              ? 1
-              : 0.85 + 0.15 * Math.sin(t * dot.speed * 1.6 + dot.phase * Math.PI * 2);
+          // ponytail: ambient time-based shimmer removed — dots keep a constant
+          // brightness; the interactive pointer reveal is the only motion left.
+          const idle = 1;
 
           if (dot.digit) {
             // Each digit dot chases its own mottled target brightness.
@@ -386,17 +382,14 @@ export default function NotFoundPage() {
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col bg-black px-6 lg:px-8">
       <div className="mx-auto w-full max-w-7xl flex-1 pt-10">
-        {/* Eyebrow: pulsing orange dot + ERROR */}
+        {/* Eyebrow: static orange dot + ERROR */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
           className="flex items-center gap-2.5"
         >
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#ff5900] opacity-60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-[#ff5900]" />
-          </span>
+          <span className="h-2 w-2 rounded-full bg-[#ff5900]" aria-hidden="true" />
           <span className="font-mono text-xs uppercase tracking-[0.2em] text-white/80">
             Error
           </span>

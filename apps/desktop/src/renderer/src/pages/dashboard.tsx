@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { motion } from 'framer-motion';
+import { useEffect, useMemo, useState } from 'react';
 import { useIsFetching, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
   AlertTriangle,
   CheckCircle,
   Circle,
-  Clock,
   Cpu,
   Database,
   DownloadCloud,
@@ -70,7 +68,7 @@ import { friendlyErrorMessage } from '../lib/errors';
  * the UI filter previously dropped paused/verifying/processing/stopping,
  * so those jobs vanished from this card while still being counted. */
 const ACTIVE_JOB_STATUSES = ['queued', 'preparing', 'recording', 'paused', 'verifying', 'processing', 'stopping'];
-/** Pipeline states where byte progress is meaningless — show a shimmer bar. */
+/** Pipeline states where byte progress is meaningless — show a static muted bar. */
 const INDETERMINATE_STATUSES = ['preparing', 'verifying', 'processing', 'stopping'];
 
 /** ponytail: MonitoringJobDto.creatorId is the plugin-scoped composite id —
@@ -153,20 +151,6 @@ function useTick(enabled: boolean): number {
   return tick;
 }
 
-/** Staggered entrance for the page's major sections. */
-function FadeIn({ delay = 0, className, children }: { delay?: number; className?: string; children: ReactNode }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, delay, ease: 'easeOut' }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
 /* ------------------------------------------------------------------ */
 /*  Page                                                               */
 /* ------------------------------------------------------------------ */
@@ -209,38 +193,31 @@ export function DashboardPage() {
       <SecureProxyBanner />
       <WelcomeHeader onQuickDownload={openQuickDownload} />
       <SetupChecklist onQuickDownload={openQuickDownload} />
-      <FadeIn delay={0.04}>
-        <LiveNowStrip onQuickDownload={openQuickDownload} />
-      </FadeIn>
-      <QuickActions onQuickDownload={openQuickDownload} />
-      <StatsRow onQuickDownload={openQuickDownload} />
+      {/* Live now is the page's visual hero — it leads the content flow. */}
+      <LiveNowStrip onQuickDownload={openQuickDownload} />
+      <QuickActions />
+      <StatsRow />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <FadeIn delay={0.05} className="lg:col-span-2">
+        <div className="lg:col-span-2">
           <MonitoringStatus />
-        </FadeIn>
-        <FadeIn delay={0.08} className="lg:col-span-3">
+        </div>
+        <div className="lg:col-span-3">
           <ActiveRecordings />
-        </FadeIn>
+        </div>
       </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <FadeIn delay={0.05}>
-          <RecentRecordings />
-        </FadeIn>
-        <FadeIn delay={0.08}>
-          <RecentActivity />
-        </FadeIn>
+        <RecentRecordings />
+        <RecentActivity />
       </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <FadeIn delay={0.05} className="lg:col-span-3">
+        <div className="lg:col-span-3">
           <PluginHealth />
-        </FadeIn>
-        <FadeIn delay={0.08} className="lg:col-span-2">
+        </div>
+        <div className="lg:col-span-2">
           <StorageUsage />
-        </FadeIn>
+        </div>
       </div>
-      <FadeIn delay={0.05}>
-        <SystemStatus />
-      </FadeIn>
+      <SystemStatus />
       <QuickDownloadDialog open={quickDownloadOpen} onOpenChange={setQuickDownloadOpen} />
     </PageContainer>
   );
@@ -345,7 +322,6 @@ function SecureProxyBanner() {
 }
 
 function WelcomeHeader({ onQuickDownload }: { onQuickDownload: () => void }) {
-  const navigate = useNavigate();
   const { data: info } = useQuery({
     queryKey: ['app-info'],
     queryFn: () => window.desktop.app.getInfo(),
@@ -375,13 +351,14 @@ function WelcomeHeader({ onQuickDownload }: { onQuickDownload: () => void }) {
     <Card>
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/10">
-            <LayoutDashboard size={20} className="text-primary" />
+          {/* Neutral icon tile — decorative icons carry no accent tint. */}
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-elevated">
+            <LayoutDashboard size={18} className="text-foreground-secondary" />
           </div>
           <div className="min-w-0">
             <h2 className="text-lg font-semibold tracking-tight text-foreground">{greeting}</h2>
             {hasData ? (
-              <p className="text-sm text-foreground-muted">
+              <p className="text-xs text-foreground-muted">
                 <span className="font-medium tabular-nums text-foreground-secondary">{last24h.length}</span> captured
                 in the last 24h
                 {capturedBytes > 0 ? <> · {formatBytes(capturedBytes)}</> : null}
@@ -392,16 +369,15 @@ function WelcomeHeader({ onQuickDownload }: { onQuickDownload: () => void }) {
                 ) : null}
               </p>
             ) : (
-              <p className="text-sm text-foreground-muted">
+              <p className="text-xs text-foreground-muted">
                 Rekordly {info?.version ? `v${info.version}` : ''} is running — set things up below to start capturing.
               </p>
             )}
           </div>
         </div>
+        {/* Single page-level Quick Download entry — QuickActions no longer
+            repeats it (duplicate-CTA rules). */}
         <div className="hidden shrink-0 items-center gap-2 sm:flex">
-          <Button variant="secondary" size="sm" onClick={() => navigate('/analytics')}>
-            <Activity size={14} /> Analytics
-          </Button>
           <Button size="sm" onClick={onQuickDownload}>
             <DownloadCloud size={14} /> Quick Download
           </Button>
@@ -509,7 +485,7 @@ function SetupChecklist({ onQuickDownload }: { onQuickDownload: () => void }) {
         </div>
         <div className="flex h-1.5 w-28 overflow-hidden rounded-full bg-elevated">
           <div
-            className="h-full bg-primary transition-all duration-500"
+            className="h-full bg-primary transition-[width] duration-150"
             style={{ width: `${(doneCount / steps.length) * 100}%` }}
           />
         </div>
@@ -629,11 +605,12 @@ function LiveNowStrip({ onQuickDownload }: { onQuickDownload: () => void }) {
   const hasTrackedCreators = (creators?.length ?? 0) > 0;
 
   if (creators === undefined || monitoringJobs === undefined || monitorStatus === undefined) {
+    // Static placeholder blocks — no shimmer.
     return (
-      <div className="flex gap-3 overflow-hidden">
-        <Skeleton className="h-24 flex-1" />
-        <Skeleton className="h-24 flex-1" />
-        <Skeleton className="h-24 hidden flex-1 sm:block" />
+      <div className="flex gap-3">
+        <Skeleton className="h-40 w-72" />
+        <Skeleton className="h-40 w-72" />
+        <Skeleton className="h-40 w-72 hidden sm:block" />
       </div>
     );
   }
@@ -641,66 +618,68 @@ function LiveNowStrip({ onQuickDownload }: { onQuickDownload: () => void }) {
   if (!monitoringOn) {
     if (!hasTrackedCreators) return null;
     return (
-      <Card className="flex flex-col items-center justify-center gap-2 py-6 text-center">
-        <Radio size={18} className="text-foreground-muted" />
-        <p className="text-sm text-foreground-secondary">Monitoring is off — live creators can't be detected.</p>
-        <div className="flex items-center gap-2">
-          <Button size="sm" loading={startMonitoring.isPending} onClick={() => startMonitoring.mutate()}>
-            <Play size={12} /> Start Monitoring
-          </Button>
-          <Button variant="ghost" size="sm" onClick={onQuickDownload}>
-            Browse manually
-          </Button>
+      <Card className="flex flex-col items-start gap-3 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <h2 className="flex items-center gap-2.5 text-lg font-semibold tracking-tight text-foreground">
+            <span className="h-2 w-2 rounded-full bg-foreground-disabled" aria-hidden="true" />
+            Live now
+          </h2>
+          <p className="text-sm text-foreground-secondary">Monitoring is off — live creators can't be detected.</p>
         </div>
+        <Button size="sm" loading={startMonitoring.isPending} onClick={() => startMonitoring.mutate()}>
+          <Play size={12} /> Start monitoring
+        </Button>
       </Card>
     );
   }
 
+  // Hero section: the biggest card on the page — live creators get extra
+  // breathing room and 1px status-tinted borders (no glow, no gradient).
   return (
-    <div className="space-y-2">
+    <Card className="flex flex-col gap-4 p-5">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-error opacity-60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-error" />
-          </span>
-          <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-foreground-secondary">Live Now</h3>
+        <div className="flex items-center gap-2.5">
+          <span className="h-2 w-2 rounded-full bg-success" aria-hidden="true" />
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Live now</h2>
+          {live.length > 0 && (
+            <span className="flex h-5 items-center rounded-sm bg-success/15 px-1.5 text-xs font-medium leading-none tabular-nums text-success">
+              {live.length}
+            </span>
+          )}
         </div>
-        <span className="text-[11px] tabular-nums text-foreground-muted">
-          {live.length} live of {monitoringJobs.length} tracked
+        <span className="text-xs text-foreground-muted">
+          <span className="tabular-nums">{live.length}</span> live of{' '}
+          <span className="tabular-nums">{monitoringJobs.length}</span> tracked
         </span>
       </div>
       {live.length === 0 ? (
-        <Card className="flex items-center justify-between gap-3 py-3">
-          <p className="text-sm text-foreground-muted">
-            No creators are live right now — this strip lights up the moment one starts streaming.
-          </p>
-          <Button variant="secondary" size="sm" onClick={onQuickDownload}>
-            <DownloadCloud size={14} /> Quick Download
-          </Button>
-        </Card>
+        <p className="rounded-lg bg-elevated px-4 py-6 text-center text-sm text-foreground-muted">
+          No creators are live right now — this hero lights up the moment one starts streaming.
+        </p>
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-1">
           {live.map(({ creator, job }) => {
             const isRecording = recordingCreatorIds.has(creator.id);
             const result = job.lastResult;
             return (
-              <Card
+              <div
                 key={creator.id}
-                className="flex w-64 shrink-0 flex-col gap-2 border-border/80 bg-gradient-to-br from-surface to-elevated/60 p-3"
+                className={`flex w-72 shrink-0 flex-col gap-3 rounded-lg border bg-elevated p-4 ${
+                  isRecording ? 'border-error/40' : 'border-success/25'
+                }`}
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-3">
                   {creator.avatarUrl ? (
-                    <img src={creator.avatarUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
+                    <img src={creator.avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
                   ) : (
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-elevated text-xs font-semibold text-foreground-secondary">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface text-xs font-semibold text-foreground-secondary">
                       {creator.displayName.slice(0, 1).toUpperCase()}
                     </span>
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">{creator.displayName}</p>
                     {result?.viewerCount != null ? (
-                      <p className="flex items-center gap-1 text-[11px] tabular-nums text-foreground-muted">
+                      <p className="flex items-center gap-1 text-xs tabular-nums text-foreground-muted">
                         <Eye size={11} />
                         {formatViewerCount(result.viewerCount)}
                       </p>
@@ -708,16 +687,24 @@ function LiveNowStrip({ onQuickDownload }: { onQuickDownload: () => void }) {
                       // ponytail: the platform has no viewer count (or the
                       // payload didn't carry one) — show the platform name as
                       // plain text, not an eye-icon "count".
-                      <p className="truncate text-[11px] text-foreground-muted">{creator.pluginId}</p>
+                      <p className="truncate text-xs text-foreground-muted">{creator.pluginId}</p>
                     )}
                   </div>
-                  <Badge variant="success" className="shrink-0">
-                    LIVE
-                  </Badge>
+                  <span
+                    className={`flex h-6 shrink-0 items-center gap-1.5 rounded-sm px-1.5 text-xs font-medium leading-none ${
+                      isRecording ? 'bg-error/15 text-error' : 'bg-success/15 text-success'
+                    }`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${isRecording ? 'bg-error' : 'bg-success'}`}
+                      aria-hidden="true"
+                    />
+                    {isRecording ? 'REC' : 'Live'}
+                  </span>
                 </div>
                 <div className="mt-auto">
                   {isRecording ? (
-                    <Badge variant="success" className="w-full justify-center py-1">
+                    <Badge variant="error" className="w-full justify-center py-1">
                       Recording in progress
                     </Badge>
                   ) : (
@@ -727,28 +714,28 @@ function LiveNowStrip({ onQuickDownload }: { onQuickDownload: () => void }) {
                       loading={startRecording.isPending && startRecording.variables?.id === creator.id}
                       onClick={() => startRecording.mutate(creator)}
                     >
-                      <Play size={12} /> Record Now
+                      <Play size={12} /> Record now
                     </Button>
                   )}
                 </div>
-              </Card>
+              </div>
             );
           })}
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  Quick actions                                                      */
+/*  Quick actions — compact secondary row of ghost buttons             */
 /* ------------------------------------------------------------------ */
 
-function QuickActions({ onQuickDownload }: { onQuickDownload: () => void }) {
+function QuickActions() {
   const navigate = useNavigate();
-  const actions: { label: string; icon: typeof Users; path?: string; onClick?: () => void }[] = [
-    { label: 'Quick Download', icon: DownloadCloud, onClick: onQuickDownload },
-    { label: 'Add Creator', icon: Users, path: '/creators' },
+  // The page's two primary CTAs live elsewhere (Quick Download in the
+  // welcome card, Add Creator in the top bar) — this row carries the rest.
+  const actions: { label: string; icon: typeof Users; path: string }[] = [
     { label: 'Recordings', icon: Video, path: '/recordings' },
     { label: 'Open Library', icon: Library, path: '/library' },
     { label: 'Install Plugin', icon: FolderInput, path: '/plugins' },
@@ -757,24 +744,19 @@ function QuickActions({ onQuickDownload }: { onQuickDownload: () => void }) {
   ];
 
   return (
-    <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+    <div className="flex flex-wrap items-center gap-2">
       {actions.map((action) => (
-        <button
-          key={action.label}
-          type="button"
-          onClick={() => (action.onClick ? action.onClick() : navigate(action.path!))}
-          className="group flex flex-col items-center gap-2 rounded-md border border-border bg-surface p-3 text-foreground-secondary transition-all duration-150 hover:border-primary/40 hover:bg-elevated hover:text-foreground"
-        >
-          <action.icon size={18} className="transition-colors duration-150 group-hover:text-primary" />
-          <span className="text-[11px] font-medium">{action.label}</span>
-        </button>
+        <Button key={action.label} variant="ghost" size="sm" onClick={() => navigate(action.path)}>
+          <action.icon size={14} />
+          {action.label}
+        </Button>
       ))}
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
-/*  Stat cards — clickable, with trend deltas and a success ring       */
+/*  Stat cards — four primary metrics + a compact secondary row        */
 /* ------------------------------------------------------------------ */
 
 interface StatCardDef {
@@ -782,14 +764,10 @@ interface StatCardDef {
   value: string;
   sub?: string;
   icon: typeof Users;
-  accent: string;
-  /** When set, the icon tile renders as a conic success-ring instead. */
-  ringPercent?: number;
   to?: string;
-  onClick?: () => void;
 }
 
-function StatsRow({ onQuickDownload }: { onQuickDownload: () => void }) {
+function StatsRow() {
   const navigate = useNavigate();
   const { data: stats, isLoading } = useQuery({
     queryKey: ['dashboard-stats'],
@@ -802,8 +780,6 @@ function StatsRow({ onQuickDownload }: { onQuickDownload: () => void }) {
     queryFn: () => window.desktop.monitoring.getDashboard(),
     refetchInterval: 10000,
   });
-
-  const { data: plugins } = useQuery({ queryKey: ['plugins'], queryFn: () => window.desktop.plugins.list() });
 
   const { data: recordings } = useQuery({
     queryKey: ['recordings-list', 100],
@@ -831,86 +807,66 @@ function StatsRow({ onQuickDownload }: { onQuickDownload: () => void }) {
     return Math.round(((weekNow - weekPrev) / weekPrev) * 100);
   }, [recordings]);
 
-  const enabledPlugins = (plugins ?? []).filter((p) => p.enabled).length;
-
   const completed = stats?.jobStatusCounts['completed'] ?? 0;
   const failed = stats?.failedRecordings ?? 0;
   const successRate = completed + failed > 0 ? Math.round((completed / (completed + failed)) * 100) : 0;
 
-  const cards: StatCardDef[] = stats
+  /** Free-space sub-line — "unknown" when the disk capacity couldn't be read. */
+  const storageSub: string | undefined = storageStats
+    ? storageStats.availableBytes === null
+      ? 'Free space unknown'
+      : `${formatBytes(storageStats.availableBytes)} free`
+    : undefined;
+
+  // Primary metrics only — the rest moved to the compact secondary row.
+  const primaryCards: StatCardDef[] = stats
     ? [
         {
           label: 'Creators',
           value: String(stats.totalCreators),
           sub: `${monitorDashboard?.liveCreators ?? 0} live now`,
           icon: Users,
-          accent: 'var(--color-primary)',
           to: '/creators',
-        },
-        {
-          label: 'Recordings',
-          value: String(stats.totalRecordings),
-          sub: weeklyDelta !== undefined ? `${weeklyDelta >= 0 ? '+' : ''}${weeklyDelta}% this week` : `${completed} completed`,
-          icon: Video,
-          accent: '#34d399',
-          to: '/recordings',
-        },
-        {
-          label: 'Plugins',
-          value: String(stats.totalPlugins),
-          sub: stats.totalPlugins > 0 ? `${enabledPlugins} enabled` : 'none installed',
-          icon: Puzzle,
-          accent: '#38bdf8',
-          to: '/plugins',
-        },
-        {
-          label: 'Storage Used',
-          value: formatBytes(stats.totalStorageBytes),
-          sub: storageStats ? `${formatBytes(storageStats.availableBytes)} free` : undefined,
-          icon: HardDrive,
-          accent: '#fbbf24',
-          to: '/library',
         },
         {
           label: 'Live',
           value: String(monitorDashboard?.liveCreators ?? 0),
           sub: 'creators streaming',
           icon: Radio,
-          accent: '#34d399',
-          onClick: undefined, // opens Quick Download — handled in StatCard
         },
         {
-          label: 'Success Rate',
-          value: `${successRate}%`,
-          sub: `${completed} completed · ${failed} failed`,
-          icon: CheckCircle,
-          accent: successRate >= 90 ? '#34d399' : successRate >= 50 ? '#fbbf24' : '#f87171',
-          ringPercent: successRate,
-          to: '/analytics',
+          label: 'Recordings',
+          value: String(stats.totalRecordings),
+          sub: weeklyDelta !== undefined ? `${weeklyDelta >= 0 ? '+' : ''}${weeklyDelta}% this week` : `${completed} completed`,
+          icon: Video,
+          to: '/recordings',
         },
         {
-          label: 'Active Jobs',
-          value: String(stats.activeJobs),
-          sub: 'in the pipeline',
-          icon: Clock,
-          accent: 'var(--color-primary)',
-          to: '/recordings?filter=active',
-        },
-        {
-          label: 'Failed',
-          value: String(stats.failedRecordings),
-          sub: stats.failedRecordings > 0 ? 'needs attention' : 'all clear',
-          icon: XCircle,
-          accent: '#f87171',
-          to: '/recordings?filter=failed',
+          label: 'Storage',
+          value: formatBytes(stats.totalStorageBytes),
+          sub: storageSub,
+          icon: HardDrive,
+          to: '/library',
         },
       ]
     : [];
 
+  // Smaller secondary metrics — plain text chips, no accent tiles.
+  const secondaryCards: { label: string; value: string; to?: string; tone?: 'error' }[] = [
+    { label: 'Success rate', value: `${successRate}%`, to: '/analytics' },
+    { label: 'Active jobs', value: String(stats?.activeJobs ?? 0), to: '/recordings?filter=active' },
+    { label: 'Failed', value: String(failed), to: '/recordings?filter=failed', tone: failed > 0 ? 'error' : undefined },
+    {
+      label: 'Plugins',
+      value: String(stats?.totalPlugins ?? 0),
+      to: '/plugins',
+    },
+  ];
+
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {Array.from({ length: 8 }).map((_, i) => (
+        {Array.from({ length: 4 }).map((_, i) => (
           <Skeleton key={i} className="h-20" />
         ))}
       </div>
@@ -918,95 +874,87 @@ function StatsRow({ onQuickDownload }: { onQuickDownload: () => void }) {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {cards.map((card, idx) => (
-        <motion.div
-          key={card.label}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, delay: idx * 0.03, ease: 'easeOut' }}
-        >
-          <StatCard card={card} isLiveCard={card.label === 'Live'} onLiveClick={onQuickDownload} onNavigate={navigate} />
-        </motion.div>
-      ))}
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {primaryCards.map((card) => (
+          <StatCard key={card.label} card={card} onNavigate={navigate} />
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {secondaryCards.map((card) => {
+          const chip = (
+            <>
+              <span className="truncate text-xs text-foreground-muted">{card.label}</span>
+              <span
+                className={`text-sm font-semibold tabular-nums leading-none ${card.tone === 'error' ? 'text-error' : 'text-foreground'}`}
+              >
+                {card.value}
+              </span>
+            </>
+          );
+          return card.to !== undefined ? (
+            <button
+              key={card.label}
+              type="button"
+              onClick={() => navigate(card.to!)}
+              title={`${card.label}: ${card.value}`}
+              className="flex cursor-pointer items-center justify-between gap-2 rounded-md bg-surface px-3 py-2 transition-colors duration-150 hover:bg-elevated/60 hover:ring-1 hover:ring-border"
+            >
+              {chip}
+            </button>
+          ) : (
+            <div
+              key={card.label}
+              className="flex items-center justify-between gap-2 rounded-md bg-surface px-3 py-2"
+            >
+              {chip}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function StatCard({
-  card,
-  isLiveCard,
-  onLiveClick,
-  onNavigate,
-}: {
-  card: StatCardDef;
-  isLiveCard: boolean;
-  onLiveClick: () => void;
-  onNavigate: (to: string) => void;
-}) {
-  const target = isLiveCard ? undefined : card.to;
-  const clickable = target !== undefined || card.onClick !== undefined || isLiveCard;
+function StatCard({ card, onNavigate }: { card: StatCardDef; onNavigate: (to: string) => void }) {
+  const clickable = card.to !== undefined;
+  const body = (
+    <>
+      {/* Neutral icon tile — stat tiles carry no accent tint. */}
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-elevated">
+        <card.icon size={16} aria-hidden="true" className="text-foreground-secondary" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs text-foreground-muted">{card.label}</p>
+        <p className="text-lg font-semibold tabular-nums leading-tight text-foreground">{card.value}</p>
+        {card.sub !== undefined && <p className="truncate text-xs tabular-nums text-foreground-muted">{card.sub}</p>}
+      </div>
+    </>
+  );
 
-  const activate = (): void => {
-    if (isLiveCard) onLiveClick();
-    else if (card.onClick !== undefined) card.onClick();
-    else if (target !== undefined) onNavigate(target);
-  };
-
-  const deg = Math.round(((card.ringPercent ?? 0) / 100) * 360);
+  if (!clickable) {
+    return (
+      <Card className="h-full">
+        <div className="flex items-center gap-3">{body}</div>
+      </Card>
+    );
+  }
 
   return (
     <Card
-      role={clickable ? 'button' : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      aria-label={clickable ? `Open ${card.label}` : undefined}
-      className={`${clickable ? 'cursor-pointer transition-colors hover:bg-elevated/60' : ''} h-full`}
-      onClick={clickable ? activate : undefined}
-      onKeyDown={
-        clickable
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                activate();
-              }
-            }
-          : undefined
-      }
+      role="button"
+      tabIndex={0}
+      aria-label={`Open ${card.label}`}
+      className="h-full cursor-pointer transition-[background-color,border-color] duration-150 hover:border-border hover:bg-elevated/60"
+      onClick={() => onNavigate(card.to!)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onNavigate(card.to!);
+        }
+      }}
     >
-      <div className="flex items-center gap-3">
-        {card.ringPercent !== undefined ? (
-          <div
-            className="relative h-9 w-9 shrink-0 rounded-full"
-            style={{ background: `conic-gradient(${card.accent} ${deg}deg, var(--color-elevated) ${deg}deg)` }}
-          >
-            <div className="absolute inset-[4px] rounded-full bg-surface" />
-          </div>
-        ) : (
-          <div
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border"
-            style={{
-              color: card.accent,
-              borderColor: 'color-mix(in srgb, currentColor 25%, transparent)',
-              background: 'color-mix(in srgb, currentColor 8%, transparent)',
-            }}
-          >
-            <card.icon size={16} />
-          </div>
-        )}
-        <div className="min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-foreground-muted">{card.label}</p>
-          <motion.p
-            key={card.value}
-            initial={{ opacity: 0.35 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.35 }}
-            className="text-lg font-semibold tabular-nums leading-tight text-foreground"
-          >
-            {card.value}
-          </motion.p>
-          {card.sub !== undefined && <p className="truncate text-[10px] tabular-nums text-foreground-muted">{card.sub}</p>}
-        </div>
-      </div>
+      <div className="flex items-center gap-3">{body}</div>
     </Card>
   );
 }
@@ -1089,23 +1037,23 @@ function MonitoringStatus() {
       ) : (
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
-            <MiniStat label="Checking" value={dashboard.currentlyChecking} accent="var(--color-primary)" />
-            <MiniStat label="Queued" value={dashboard.queuedJobs} accent="#38bdf8" />
-            <MiniStat label="Live" value={dashboard.liveCreators} accent="#34d399" />
+            <MiniStat label="Checking" value={dashboard.currentlyChecking} />
+            <MiniStat label="Queued" value={dashboard.queuedJobs} />
+            <MiniStat label="Live" value={dashboard.liveCreators} />
             <MiniStat label="Offline" value={dashboard.offlineCreators} />
           </div>
-          <div className="flex items-center justify-between rounded-sm border border-border bg-elevated px-3 py-2 text-xs">
-            <span className="text-foreground-muted">Avg. Check Duration</span>
+          <div className="flex items-center justify-between rounded-md bg-elevated px-3 py-2 text-xs">
+            <span className="text-foreground-muted">Avg. check duration</span>
             <span className="tabular-nums text-foreground">{Math.round(dashboard.averageCheckDurationMs)}ms</span>
           </div>
-          <div className="flex items-center justify-between rounded-sm border border-border bg-elevated px-3 py-2 text-xs">
-            <span className="text-foreground-muted">Failed Jobs</span>
+          <div className="flex items-center justify-between rounded-md bg-elevated px-3 py-2 text-xs">
+            <span className="text-foreground-muted">Failed jobs</span>
             <span className={`tabular-nums ${dashboard.failedJobs > 0 ? 'text-error' : 'text-foreground'}`}>
               {dashboard.failedJobs}
             </span>
           </div>
           {running && (status?.uptime ?? 0) > 0 && (
-            <div className="flex items-center justify-between rounded-sm border border-border bg-elevated px-3 py-2 text-xs">
+            <div className="flex items-center justify-between rounded-md bg-elevated px-3 py-2 text-xs">
               <span className="text-foreground-muted">Uptime</span>
               <span className="tabular-nums text-foreground">{formatDuration((status!.uptime) / 1000)}</span>
             </div>
@@ -1116,13 +1064,14 @@ function MonitoringStatus() {
   );
 }
 
-function MiniStat({ label, value, accent }: { label: string; value: number; accent?: string }) {
+function MiniStat({ label, value, tone }: { label: string; value: number; tone?: 'error' }) {
   return (
-    <div className="rounded-sm border border-border bg-elevated px-3 py-2">
-      <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-foreground-muted">{label}</p>
+    <div className="rounded-md bg-elevated px-3 py-2">
+      <p className="text-xs text-foreground-muted">{label}</p>
       <p
-        className={`text-lg font-semibold tabular-nums leading-tight ${accent ? '' : 'text-foreground'}`}
-        style={accent ? { color: accent } : undefined}
+        className={`text-lg font-semibold tabular-nums leading-tight ${
+          tone === 'error' ? 'text-error' : 'text-foreground'
+        }`}
       >
         {value}
       </p>
@@ -1229,35 +1178,38 @@ function JobRow({ job }: { job: RecordingJobDto }) {
   // ponytail: live captures have no known total size, so percent stays 0 —
   // previously that meant NO bar rendered at all and the row looked broken.
   const streaming = job.status === 'recording' && job.percent <= 0;
-  const showShimmer = indeterminate || streaming;
+  const showStaticBar = indeterminate || streaming;
   const elapsed =
     job.status === 'recording' && job.startedAt
       ? Math.max(0, (Date.now() - new Date(job.startedAt).getTime()) / 1000)
       : undefined;
-  const barColor = job.status === 'recording' ? 'bg-primary' : 'bg-info';
+  // Recording is red (status color); pipeline states are neutral — the accent
+  // stays reserved for progress fills.
+  const barColor = job.status === 'recording' ? 'bg-error' : 'bg-foreground/30';
+  const staticBarClass = job.status === 'recording' ? 'bg-error/25' : 'bg-foreground/10';
 
   return (
-    <li className="space-y-2 rounded-sm border border-border bg-elevated/40 p-3">
+    <li className="space-y-2 rounded-md bg-elevated/40 p-3">
       <div className="flex items-center gap-3">
         <span
           className={`h-2 w-2 shrink-0 rounded-full ${
-            job.status === 'recording' ? 'animate-pulse bg-error' : job.status === 'paused' ? 'bg-warning' : 'bg-primary'
+            job.status === 'recording' ? 'bg-error' : job.status === 'paused' ? 'bg-warning' : 'bg-info'
           }`}
         />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-foreground">{job.title}</p>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] uppercase tracking-wide text-foreground-muted">
-            <span>{job.status}</span>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-foreground-muted">
+            <span className="capitalize">{job.status}</span>
             <span>· {job.pluginId}</span>
-            {job.speed > 0 && <span className="tabular-nums normal-case">↓ {formatSpeed(job.speed)}</span>}
-            {job.eta > 0 && <span className="tabular-nums normal-case">ETA {formatEta(job.eta)}</span>}
+            {job.speed > 0 && <span className="tabular-nums">↓ {formatSpeed(job.speed)}</span>}
+            {job.eta > 0 && <span className="tabular-nums">ETA {formatEta(job.eta)}</span>}
             {job.bytesDownloaded > 0 && (
-              <span className="tabular-nums normal-case">{formatBytes(job.bytesDownloaded)} captured</span>
+              <span className="tabular-nums">{formatBytes(job.bytesDownloaded)} captured</span>
             )}
-            {job.attempts > 1 && <span className="tabular-nums normal-case">attempt {job.attempts}/{job.maxAttempts}</span>}
+            {job.attempts > 1 && <span className="tabular-nums">attempt {job.attempts}/{job.maxAttempts}</span>}
             {elapsed !== undefined && (
-              <span className="flex items-center gap-1 normal-case tabular-nums text-error">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-error" />
+              <span className="flex items-center gap-1 tabular-nums text-error">
+                <span className="h-1.5 w-1.5 rounded-full bg-error" />
                 {formatDuration(elapsed)}
               </span>
             )}
@@ -1282,14 +1234,14 @@ function JobRow({ job }: { job: RecordingJobDto }) {
           </Button>
         </div>
       </div>
-      {/* always render the track — shimmer for pipeline/streaming states,
-      determinate fill once a percent is known */}
-      <div className="h-1 w-full overflow-hidden rounded-full bg-background">
-        {showShimmer ? (
-          <div className={`h-full w-1/3 animate-pulse rounded-full ${barColor}`} />
+      {/* always render the track — a static muted fill for pipeline/streaming
+      states where no percent is known, determinate fill once a percent is */}
+      <div className="h-1 w-full overflow-hidden rounded-full bg-canvas">
+        {showStaticBar ? (
+          <div className={`h-full w-full rounded-full ${staticBarClass}`} />
         ) : (
           <div
-            className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+            className={`h-full rounded-full transition-all duration-300 ${barColor}`}
             style={{ width: `${Math.min(100, Math.max(0, job.percent))}%` }}
           />
         )}
@@ -1371,7 +1323,7 @@ function RecentRecordings() {
                     >
                       {rec.title}
                     </p>
-                    <p className="text-[10px] uppercase tracking-wide text-foreground-muted">
+                    <p className="text-xs text-foreground-muted">
                       {rec.platformId} · {rec.sizeBytes ? formatBytes(rec.sizeBytes) : '—'}
                       {rec.durationSeconds ? ` · ${formatDuration(rec.durationSeconds)}` : ''}
                     </p>
@@ -1474,7 +1426,7 @@ function RecentActivity() {
                   <Icon size={14} className={`mt-0.5 shrink-0 ${color}`} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm text-foreground">{log.message}</p>
-                    <p className="text-[10px] uppercase tracking-wide text-foreground-muted">
+                    <p className="text-xs text-foreground-muted">
                       {log.scope} · {new Date(log.time).toLocaleTimeString()}
                     </p>
                   </div>
@@ -1525,9 +1477,9 @@ function PluginHealth() {
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
             <MiniStat label="Installed" value={plugins!.length} />
-            <MiniStat label="Enabled" value={enabled.length} accent="#34d399" />
+            <MiniStat label="Enabled" value={enabled.length} />
             <MiniStat label="Disabled" value={disabled.length} />
-            <MiniStat label="Errors" value={errors.length} accent={errors.length > 0 ? '#f87171' : undefined} />
+            <MiniStat label="Errors" value={errors.length} tone={errors.length > 0 ? 'error' : undefined} />
           </div>
           {errors.length > 0 && (
             <div className="space-y-2">
@@ -1584,9 +1536,11 @@ function StorageUsage() {
     refetchInterval: 5000,
   });
 
-  const totalBytes = storageStats?.totalBytes ?? 0;
-  const availableBytes = storageStats?.availableBytes ?? 0;
-  const usedBytes = totalBytes > 0 ? Math.max(0, totalBytes - availableBytes) : 0;
+  const totalBytes = storageStats?.totalBytes ?? null;
+  const availableBytes = storageStats?.availableBytes ?? null;
+  // ponytail: disk space can be unreadable (null) — show "unknown" rather than pretending 0 B free.
+  const hasDisk = totalBytes != null && availableBytes != null && totalBytes > 0;
+  const usedBytes = hasDisk ? Math.max(0, totalBytes! - availableBytes!) : 0;
 
   // ponytail: segments bounded by actually-used disk space; anything the app
   // didn't create shows as "other system files".
@@ -1598,7 +1552,7 @@ function StorageUsage() {
   );
   const otherSeg = Math.max(0, usedBytes - recordingsSeg - downloadsSeg - cacheSeg);
 
-  const usedPct = totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 100) : 0;
+  const usedPct = hasDisk && totalBytes != null ? Math.round((usedBytes / totalBytes) * 100) : 0;
   const diskTone = usedPct >= 90 ? 'bg-error' : usedPct >= 75 ? 'bg-warning' : 'bg-primary';
   const textTone = usedPct >= 90 ? 'text-error' : usedPct >= 75 ? 'text-warning' : 'text-foreground';
 
@@ -1632,18 +1586,18 @@ function StorageUsage() {
         {/* ponytail: proportion-of-used-disk bar — was previously divided by a
         hardcoded 10 GB, which wildly misrepresented real capacity. */}
         <div className="flex h-2 overflow-hidden rounded-full bg-elevated">
-          {totalBytes > 0 && usedBytes > 0 ? (
+          {hasDisk && totalBytes > 0 && usedBytes > 0 ? (
             <>
               <div
-                className={`h-full ${diskTone} transition-all duration-500`}
+                className={`h-full ${diskTone} transition-[width] duration-150`}
                 style={{ width: `${(recordingsSeg / totalBytes) * 100}%` }}
               />
               <div
-                className="h-full bg-[#38bdf8] transition-all duration-500"
+                className="h-full bg-[#38bdf8] transition-[width] duration-150"
                 style={{ width: `${(downloadsSeg / totalBytes) * 100}%` }}
               />
               <div
-                className="h-full bg-[#fbbf24] transition-all duration-500"
+                className="h-full bg-[#fbbf24] transition-[width] duration-150"
                 style={{ width: `${(cacheSeg / totalBytes) * 100}%` }}
               />
               <div
@@ -1656,9 +1610,9 @@ function StorageUsage() {
         <div className="flex items-center justify-between text-xs">
           <span className="text-foreground-muted">Disk</span>
           <span className={`tabular-nums ${textTone}`}>
-            {totalBytes > 0
+            {hasDisk
               ? `${usedPct}% used · ${formatBytes(availableBytes)} free of ${formatBytes(totalBytes)}`
-              : '—'}
+              : 'Disk space unknown'}
           </span>
         </div>
         <div className="flex items-center justify-between text-xs">
@@ -1791,7 +1745,7 @@ function SystemStatus() {
             {item.meter && (
               <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-elevated">
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ${meterColor(item.meter)}`}
+                  className={`h-full rounded-full transition-[width] duration-150 ${meterColor(item.meter)}`}
                   style={{ width: `${Math.min(100, Math.max(0, item.meter.percent))}%` }}
                 />
               </div>

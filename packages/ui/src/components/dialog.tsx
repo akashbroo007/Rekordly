@@ -12,9 +12,15 @@ export interface DialogContentProps {
   description?: string;
   children?: ReactNode;
   className?: string;
+  /**
+   * Actions rendered inline at the right of the title/description header row
+   * (instead of a separate row above the content). `pr-12` on the row keeps
+   * clear of the dialog's own overlay close button.
+   */
+  headerActions?: ReactNode;
 }
 
-export function DialogContent({ title, description, children, className }: DialogContentProps) {
+export function DialogContent({ title, description, children, className, headerActions }: DialogContentProps) {
   return (
     <RadixDialog.Portal>
       <RadixDialog.Overlay asChild>
@@ -30,16 +36,21 @@ export function DialogContent({ title, description, children, className }: Dialo
           initial={{ opacity: 0, x: '-50%', y: '-50%', scale: 0.97 }}
           animate={{ opacity: 1, x: '-50%', y: '-50%', scale: 1 }}
           transition={{ duration: 0.15, ease: 'easeOut' }}
-          className={`fixed left-1/2 top-1/2 z-50 w-full max-w-md max-h-[85vh] overflow-y-auto rounded-xl border border-border bg-surface p-6 shadow-dialog ${className ?? ''}`}
+          className={`fixed left-1/2 top-1/2 z-50 w-full max-w-md max-h-[85vh] overflow-y-auto rounded-xl border border-border bg-elevated p-6 shadow-dialog ${className ?? ''}`}
         >
-          <RadixDialog.Title className="text-base font-semibold text-foreground">
-            {title}
-          </RadixDialog.Title>
-          {description && (
-            <RadixDialog.Description className="mt-1 text-sm text-foreground-muted">
-              {description}
-            </RadixDialog.Description>
-          )}
+          <div className="flex items-center justify-between gap-4 pr-12">
+            <div className="min-w-0">
+              <RadixDialog.Title className="text-base font-semibold text-foreground">
+                {title}
+              </RadixDialog.Title>
+              {description && (
+                <RadixDialog.Description className="mt-1 text-sm text-foreground-muted">
+                  {description}
+                </RadixDialog.Description>
+              )}
+            </div>
+            {headerActions && <div className="shrink-0">{headerActions}</div>}
+          </div>
           <div className="mt-4">{children}</div>
           <RadixDialog.Close asChild>
             <button

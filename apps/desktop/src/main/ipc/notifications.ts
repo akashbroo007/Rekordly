@@ -32,4 +32,12 @@ export function registerNotificationsIpc({ getWindow, notifications }: IpcContex
     trusted(event, getWindow);
     return notifications.unreadCount();
   });
+
+  ipcMain.handle(IPC_CHANNELS.notificationsDismiss, (event, id: unknown) => {
+    trusted(event, getWindow);
+    if (typeof id !== 'number' || !Number.isInteger(id)) {
+      throw new Error('Invalid notification id');
+    }
+    notifications.dismiss(id);
+  });
 }

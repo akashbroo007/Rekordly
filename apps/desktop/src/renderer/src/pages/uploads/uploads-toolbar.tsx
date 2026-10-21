@@ -10,7 +10,7 @@
  */
 import type { ReactNode } from 'react';
 import { Search, X } from 'lucide-react';
-import { Input, MultiSelect, type MultiSelectOption } from '@rekordly/ui';
+import { Input, MultiSelect, Select, type MultiSelectOption } from '@rekordly/ui';
 import { KebabMenu, type KebabItem } from '../../components/kebab-menu';
 import { PrivacyModeButton } from '../../components/privacy-mode';
 
@@ -42,7 +42,7 @@ export interface UploadsToolbarProps {
   };
   /** "Clear history…" menu items (Clear completed… / Clear failed…). */
   pageMenuItems?: KebabItem[];
-  /** Privacy mode — the shared global toggle (blur thumbnails + titles). */
+  /** Privacy mode — this page's own toggle (blur thumbnails + titles). */
   privacy: {
     on: boolean;
     onToggle: () => void;
@@ -116,6 +116,7 @@ export function UploadsToolbar({
 
         {/* Provider filter */}
         <MultiSelect
+          small
           className="w-44 shrink-0"
           placeholder="All providers"
           options={providerOptions}
@@ -124,20 +125,23 @@ export function UploadsToolbar({
         />
 
         {/* Sort */}
-        <select
+        <Select
+          small
+          className="w-32 shrink-0"
           value={filters.sort}
-          onChange={(e) => onChange({ sort: e.target.value as UploadSort })}
-          aria-label="Sort uploads"
-          className="h-9 shrink-0 cursor-pointer rounded-sm border border-border bg-elevated px-2.5 text-sm text-foreground transition-colors duration-150 focus:border-primary focus:outline-none"
-        >
-          <option value="newest">Newest</option>
-          <option value="oldest">Oldest</option>
-          <option value="largest">Largest</option>
-        </select>
+          onChange={(sort) => onChange({ sort: sort as UploadSort })}
+          options={[
+            { value: 'newest', label: 'Newest' },
+            { value: 'oldest', label: 'Oldest' },
+            { value: 'largest', label: 'Largest' },
+          ]}
+          ariaLabel="Sort uploads"
+        />
 
         <div className="ml-auto flex items-center gap-2">
-          {/* Privacy mode — blur thumbnails + titles for screen sharing */}
-          <PrivacyModeButton on={privacy.on} onToggle={privacy.onToggle} />
+          {/* Privacy mode — blur thumbnails + titles for screen sharing
+              (Uploads only — other pages have their own toggles). */}
+          <PrivacyModeButton on={privacy.on} onToggle={privacy.onToggle} section="Uploads" />
 
           {selectAll !== undefined && (
             <label className="flex cursor-pointer items-center gap-1.5 text-xs text-foreground-secondary">
@@ -148,7 +152,7 @@ export function UploadsToolbar({
                   if (node !== null) node.indeterminate = selectAll.indeterminate === true;
                 }}
                 onChange={(e) => selectAll.onChange(e.target.checked)}
-                className="h-[15px] w-[15px] cursor-pointer accent-[var(--color-primary)]"
+                className="h-[15px] w-[15px] cursor-pointer"
                 aria-label={selectAll.label}
               />
               Select all

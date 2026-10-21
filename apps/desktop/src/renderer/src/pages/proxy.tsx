@@ -119,7 +119,7 @@ export function ProxyPage() {
             ) : effective.state === 'idle' ? (
               <ShieldOff size={20} className="mt-0.5 shrink-0 text-foreground-muted" />
             ) : (
-              <Shield size={20} className="mt-0.5 shrink-0 animate-pulse text-info" />
+              <Shield size={20} className="mt-0.5 shrink-0 text-info" />
             )}
             <div>
               <div className="flex items-center gap-2">

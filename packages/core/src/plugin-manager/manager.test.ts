@@ -90,6 +90,7 @@ class InMemoryLogRepo implements LogRepo {
   unreadNotificationCount(): number {
     return 0;
   }
+  deleteNotification(): void {}
 }
 
 let tempRoot: string;

@@ -1,6 +1,6 @@
 import { LayoutGrid, List, Search, SlidersHorizontal, X } from 'lucide-react';
 import type { CreatorTagDto } from '@rekordly/shared';
-import { Button, Input, MultiSelect, type MultiSelectOption } from '@rekordly/ui';
+import { Button, Input, MultiSelect, Select, type MultiSelectOption } from '@rekordly/ui';
 import { platformColor } from '../../components/platform-config';
 import type {
   CreatorsFilterState,
@@ -88,6 +88,7 @@ export function FilterBar({
 
         {/* Platform dynamic filter */}
         <MultiSelect
+          small
           className="w-40"
           icon={<SlidersHorizontal size={13} className="text-foreground-muted" />}
           placeholder="All platforms"
@@ -98,6 +99,7 @@ export function FilterBar({
 
         {/* Tags filter */}
         <MultiSelect
+          small
           className="w-36"
           placeholder="All tags"
           options={tagOptions}
@@ -128,16 +130,18 @@ export function FilterBar({
 
         <div className="ml-auto flex items-center gap-2">
           {/* Sort */}
-          <select
+          <Select
+            small
+            className="w-36 shrink-0"
             value={filters.sortField}
-            onChange={(e) => onChange({ sortField: e.target.value as CreatorSortField })}
-            aria-label="Sort creators by"
-            className="h-9 rounded-sm border border-border bg-elevated px-2.5 text-sm text-foreground transition-colors duration-150 focus:border-primary focus:outline-none"
-          >
-            <option value="liveFirst">Live first</option>
-            <option value="displayName">Name</option>
-            <option value="lastLive">Last live</option>
-          </select>
+            onChange={(sortField) => onChange({ sortField: sortField as CreatorSortField })}
+            options={[
+              { value: 'liveFirst', label: 'Live first' },
+              { value: 'displayName', label: 'Name' },
+              { value: 'lastLive', label: 'Last live' },
+            ]}
+            ariaLabel="Sort creators by"
+          />
           {filters.sortField === 'displayName' && (
             <Button
               variant="ghost"

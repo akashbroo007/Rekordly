@@ -162,7 +162,7 @@ export function QuickDownloadDialog({
             <Select
               label="Duration"
               value={duration}
-              onChange={(e) => setDuration(e.target.value)}
+              onChange={setDuration}
               options={[
                 { value: '', label: 'Until stream ends' },
                 { value: '2', label: '2 minutes' },
@@ -176,7 +176,7 @@ export function QuickDownloadDialog({
             <Select
               label="Quality"
               value={quality}
-              onChange={(e) => setQuality(e.target.value)}
+              onChange={setQuality}
               options={[
                 { value: 'best', label: 'Best available' },
                 { value: '1080p', label: '1080p' },

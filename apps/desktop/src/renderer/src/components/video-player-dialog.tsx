@@ -37,6 +37,7 @@ import {
   X,
 } from 'lucide-react';
 import { formatDuration } from '@rekordly/shared/format';
+import { Select } from '@rekordly/ui';
 import Hls from 'hls.js';
 import type { EditorTimelineDto, RecordingDto } from '@rekordly/shared/contracts';
 import { EditorPanel } from './editor/editor-panel';
@@ -1560,7 +1561,7 @@ export function VideoPlayerDialog({
           <div className="pointer-events-none absolute left-3 top-3 z-10 flex items-center gap-2">
             {liveStream && (
               <span className="flex items-center gap-1.5 rounded-sm bg-red-600/90 px-2 py-1 text-[11px] font-semibold text-white">
-                <Radio size={11} /> LIVE
+                <Radio size={11} /> Live
               </span>
             )}
             <span className="rounded-sm bg-black/70 px-2 py-1 text-[11px] text-white/80">
@@ -1625,13 +1626,12 @@ export function VideoPlayerDialog({
           </div>
         )}
 
-        {/* #14 double-tap skip ripple */}
+        {/* #14 double-tap skip indicator (static — no ping ring) */}
         {ripple !== null && (
           <div
             key={ripple.seq}
             className={`pointer-events-none absolute top-1/2 z-10 flex h-24 w-24 -translate-y-1/2 items-center justify-center ${ripple.side === 'left' ? 'left-[12%]' : 'right-[12%]'}`}
           >
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white/25" />
             <span className="relative rounded-full bg-black/60 px-2 py-1 text-[11px] font-medium text-white">
               {ripple.side === 'left' ? '« 10s' : '10s »'}
             </span>
@@ -1929,40 +1929,46 @@ export function VideoPlayerDialog({
               </button>
               {vrActive && (
                 <>
-                  <select
+                  <Select
+                    small
+                    neverSearch
+                    align="start"
+                    className="w-32 shrink-0"
                     value={vrProjection}
-                    onChange={(e) => setVrProjection(e.target.value as VrProjection)}
-                    className="rounded-sm bg-white/10 px-1 py-0.5 text-xs text-white outline-none"
-                    aria-label="VR projection"
-                    title="Fisheye (Dreamcam VR) or 360° equirectangular"
-                  >
-                    {(Object.keys(VR_PROJECTION_LABEL) as VrProjection[]).map((p) => (
-                      <option key={p} value={p} className="text-black">{VR_PROJECTION_LABEL[p]}</option>
-                    ))}
-                  </select>
-                  <select
+                    onChange={(value) => setVrProjection(value as VrProjection)}
+                    options={(Object.keys(VR_PROJECTION_LABEL) as VrProjection[]).map((p) => ({
+                      value: p,
+                      label: VR_PROJECTION_LABEL[p],
+                    }))}
+                    ariaLabel="VR projection"
+                  />
+                  <Select
+                    small
+                    neverSearch
+                    align="start"
+                    className="w-36 shrink-0"
                     value={vrStereo}
-                    onChange={(e) => setVrStereo(e.target.value as VrStereo)}
-                    className="rounded-sm bg-white/10 px-1 py-0.5 text-xs text-white outline-none"
-                    aria-label="VR stereo layout"
-                    title="Stereo layout — Auto detects SBS/Top-bottom/Mono from the frame shape"
-                  >
-                    {(Object.keys(VR_STEREO_LABEL) as VrStereo[]).map((s) => (
-                      <option key={s} value={s} className="text-black">{VR_STEREO_LABEL[s]}</option>
-                    ))}
-                  </select>
+                    onChange={(value) => setVrStereo(value as VrStereo)}
+                    options={(Object.keys(VR_STEREO_LABEL) as VrStereo[]).map((s) => ({
+                      value: s,
+                      label: VR_STEREO_LABEL[s],
+                    }))}
+                    ariaLabel="VR stereo layout"
+                  />
                   {vrProjection === 'fisheye' && (
-                    <select
-                      value={vrLens}
-                      onChange={(e) => setVrLens(Number(e.target.value))}
-                      className="rounded-sm bg-white/10 px-1 py-0.5 text-xs text-white outline-none"
-                      aria-label="Fisheye lens angle"
-                      title="Lens field of view of the capture (180° = full-frame fisheye, Dreamcam VR default)"
-                    >
-                      {[180, 200, 220, 150, 120, 100].map((deg) => (
-                        <option key={deg} value={deg} className="text-black">{deg}°</option>
-                      ))}
-                    </select>
+                    <Select
+                      small
+                      neverSearch
+                      align="start"
+                      className="w-20 shrink-0"
+                      value={String(vrLens)}
+                      onChange={(value) => setVrLens(Number(value))}
+                      options={[180, 200, 220, 150, 120, 100].map((deg) => ({
+                        value: String(deg),
+                        label: `${deg}°`,
+                      }))}
+                      ariaLabel="Fisheye lens angle"
+                    />
                   )}
                   <button
                     type="button"
@@ -1997,21 +2003,21 @@ export function VideoPlayerDialog({
                 </>
               )}
             </div>
-            <select
-              value={speed}
-              onChange={(e) => {
-                const s = Number(e.target.value);
+            <Select
+              small
+              neverSearch
+              align="end"
+              className="w-20 shrink-0"
+              value={String(speed)}
+              onChange={(value) => {
+                const s = Number(value);
                 setSpeed(s);
                 const v = videoRef.current;
                 if (v) v.playbackRate = s;
               }}
-              className="rounded-sm bg-white/10 px-1 py-0.5 text-xs text-white outline-none"
-              aria-label="Playback speed"
-            >
-              {SPEEDS.map((s) => (
-                <option key={s} value={s} className="text-black">{s}x</option>
-              ))}
-            </select>
+              options={SPEEDS.map((s) => ({ value: String(s), label: `${s}x` }))}
+              ariaLabel="Playback speed"
+            />
           {/* #10 playlist navigation */}
           {previousRecording !== null && previousRecording !== undefined && onPlayRecording !== undefined && (
             <button
@@ -2121,7 +2127,7 @@ export function VideoPlayerDialog({
               e.preventDefault();
               void pickSubtitle();
             }}
-            className={`p-1 hover:text-primary ${subtitleUrl === null ? 'text-white/30' : captionsOn ? 'text-primary' : 'text-white/50'} ${pickingSubtitle ? 'animate-pulse' : ''}`}
+            className={`p-1 hover:text-primary ${subtitleUrl === null ? 'text-white/30' : captionsOn ? 'text-primary' : 'text-white/50'}`}
             aria-label="Subtitles"
             title={subtitleUrl !== null ? `Subtitles (C) — right-click to change file (${subtitleLabel ?? ''})` : 'Load a subtitle file (.srt/.vtt/.ass)'}
           >

@@ -68,19 +68,18 @@ export function downloadVariantFor(status: string): DownloadRowVariant {
 interface StatusDotSpec {
   dot: string;
   label: string;
-  pulse: boolean;
 }
 
 const STATUS_DOT: Record<string, StatusDotSpec> = {
-  queued: { dot: 'bg-info/70', label: 'Queued', pulse: false },
-  downloading: { dot: 'bg-info', label: 'Downloading', pulse: true },
-  paused: { dot: 'bg-warning', label: 'Paused', pulse: false },
-  completed: { dot: 'bg-success', label: 'Completed', pulse: false },
-  failed: { dot: 'bg-error', label: 'Failed', pulse: false },
-  cancelled: { dot: 'bg-foreground-disabled', label: 'Cancelled', pulse: false },
+  queued: { dot: 'bg-info/70', label: 'Queued' },
+  downloading: { dot: 'bg-info', label: 'Downloading' },
+  paused: { dot: 'bg-warning', label: 'Paused' },
+  completed: { dot: 'bg-success', label: 'Completed' },
+  failed: { dot: 'bg-error', label: 'Failed' },
+  cancelled: { dot: 'bg-foreground-disabled', label: 'Cancelled' },
 };
 
-const FALLBACK_DOT: StatusDotSpec = { dot: 'bg-foreground-disabled', label: 'Download', pulse: false };
+const FALLBACK_DOT: StatusDotSpec = { dot: 'bg-foreground-disabled', label: 'Download' };
 
 function statusDotFor(status: string): StatusDotSpec {
   return STATUS_DOT[status] ?? FALLBACK_DOT;
@@ -89,21 +88,13 @@ function statusDotFor(status: string): StatusDotSpec {
 /** The single status indicator on the row (dot only; the label is its a11y name). */
 function StatusDot({ status }: { status: string }) {
   const spec = statusDotFor(status);
-  if (!spec.pulse) {
-    return (
-      <span
-        role="img"
-        aria-label={spec.label}
-        title={spec.label}
-        className={`inline-block h-2 w-2 shrink-0 rounded-full ${spec.dot}`}
-      />
-    );
-  }
   return (
-    <span role="img" aria-label={spec.label} title={spec.label} className="relative flex h-2 w-2 shrink-0">
-      <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${spec.dot}`} />
-      <span className={`relative inline-flex h-2 w-2 rounded-full ${spec.dot}`} />
-    </span>
+    <span
+      role="img"
+      aria-label={spec.label}
+      title={spec.label}
+      className={`inline-block h-2 w-2 shrink-0 rounded-full ${spec.dot}`}
+    />
   );
 }
 

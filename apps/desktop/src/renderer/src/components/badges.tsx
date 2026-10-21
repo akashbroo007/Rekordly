@@ -100,12 +100,10 @@ export interface StatusBadgeProps extends HTMLAttributes<HTMLSpanElement> {
   status: string;
   /** Falls back to the raw status text when unmapped. */
   label?: string;
-  /** Gently pulsing dot for in-progress (recording) states. */
-  pulse?: boolean;
 }
 
 /** One colored dot + one label — the single status indicator on a row. */
-export function StatusBadge({ status, label, pulse = false, className, ...props }: StatusBadgeProps) {
+export function StatusBadge({ status, label, className, ...props }: StatusBadgeProps) {
   const mapped = STATUS_TONES[status];
   const tone = mapped?.tone ?? 'neutral';
   const text = label ?? mapped?.label ?? status;
@@ -115,21 +113,13 @@ export function StatusBadge({ status, label, pulse = false, className, ...props 
       className={`inline-flex shrink-0 items-center gap-1.5 rounded-sm border px-1.5 py-0.5 text-xs font-medium leading-none ${classes.border} ${classes.bg} ${classes.text} ${className ?? ''}`}
       {...props}
     >
-      <StatusDot tone={tone} pulse={pulse} />
+      <StatusDot tone={tone} />
       {text}
     </span>
   );
 }
 
-function StatusDot({ tone, pulse }: { tone: BadgeTone; pulse: boolean }) {
-  const dotClass = TONE_CLASSES[tone].dot;
-  if (!pulse) {
-    return <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClass}`} />;
-  }
-  return (
-    <span aria-hidden="true" className="relative flex h-1.5 w-1.5 shrink-0">
-      <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${dotClass}`} />
-      <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${dotClass}`} />
-    </span>
-  );
+/** Static solid dot — activity is carried by the label (and live timers). */
+function StatusDot({ tone }: { tone: BadgeTone }) {
+  return <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_CLASSES[tone].dot}`} />;
 }

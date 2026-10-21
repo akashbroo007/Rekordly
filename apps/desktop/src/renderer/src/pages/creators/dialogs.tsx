@@ -2,10 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Info, Loader2, Radio, Shield, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { CreatorDto, CreatorLookupDto } from '@rekordly/shared';
-import { Button, Dialog, DialogContent, Input, Select, Switch, Textarea } from '@rekordly/ui';
+import { Button, Combobox, Dialog, DialogContent, Input, Select, Switch, Textarea } from '@rekordly/ui';
 import { useToastStore } from '../../stores/toast-store';
+import { usePluginPickerOptions } from './plugin-picker-options';
 import { friendlyErrorMessage } from '../../lib/errors';
-
 export interface CreatorFieldHints {
   idLabel: string;
   idPlaceholder: string;
@@ -103,6 +103,10 @@ export function AddCreatorDialog({ open, onOpenChange }: { open: boolean; onOpen
     queryKey: ['plugins'],
     queryFn: () => window.desktop.plugins.list(),
   });
+  // Shared plugin picker model: platform tiles, disabled needs-setup rows
+  // with a "Set up" action, developer plugins behind the preference toggle,
+  // alphabetical. Purely presentational — validation logic below is intact.
+  const pluginOptions = usePluginPickerOptions(plugins);
 
   const [pluginId, setPluginId] = useState('');
   const [externalId, setExternalId] = useState('');
@@ -244,18 +248,16 @@ export function AddCreatorDialog({ open, onOpenChange }: { open: boolean; onOpen
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent title="Add Creator" description="Add a new creator to monitor.">
         <div className="space-y-4">
-          <Select
+          <Combobox
             label="Plugin"
+            placeholder="Select a plugin..."
             value={pluginId}
-            onChange={(e) => setPluginId(e.target.value)}
-            options={[
-              { value: '', label: 'Select a plugin...' },
-              ...enabledPlugins.map((p) => ({ value: p.id, label: p.name })),
-            ]}
+            onChange={setPluginId}
+            options={pluginOptions}
           />
           {pluginId !== '' && (
             <div className="rounded-sm border border-border bg-elevated px-3 py-2.5">
-              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-foreground-muted">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground-muted">
                 <Info size={12} className="text-info" />
                 What to enter
               </p>
@@ -359,7 +361,7 @@ export function AddCreatorDialog({ open, onOpenChange }: { open: boolean; onOpen
                 label="Auto-record quality"
                 hint="Set once — used for every future auto-recording of this creator. Lower quality = far less disk."
                 value={autoRecordQuality}
-                onChange={(e) => setAutoRecordQuality(e.target.value)}
+                onChange={setAutoRecordQuality}
                 options={[
                   { value: 'best', label: 'Best (source quality)' },
                   { value: '1080p', label: '1080p' },
@@ -477,7 +479,7 @@ export function EditCreatorDialog({
               label="Auto-record quality"
               hint="Used for all future auto-recordings of this creator."
               value={autoRecordQuality}
-              onChange={(e) => setAutoRecordQuality(e.target.value)}
+              onChange={setAutoRecordQuality}
               options={[
                 { value: 'best', label: 'Best (source quality)' },
                 { value: '1080p', label: '1080p' },
@@ -561,7 +563,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           <Select
             label="Format"
             value={format}
-            onChange={(e) => setFormat(e.target.value as 'json' | 'csv')}
+            onChange={(value) => setFormat(value as 'json' | 'csv')}
             options={[
               { value: 'json', label: 'JSON' },
               { value: 'csv', label: 'CSV' },
@@ -645,7 +647,7 @@ export function RecordDialog({
               label="Stream type"
               hint="VR (3D) records the stereoscopic feed and plays back with VR controls in the player."
               value={streamType}
-              onChange={(e) => setStreamType(e.target.value)}
+              onChange={setStreamType}
               options={[
                 { value: 'auto', label: 'Auto (site default)' },
                 ...pluginStreamTypes.map((t) => ({
@@ -658,7 +660,7 @@ export function RecordDialog({
           <Select
             label="Quality"
             value={quality}
-            onChange={(e) => setQuality(e.target.value)}
+            onChange={setQuality}
             options={[
               { value: 'best', label: 'Best (auto)' },
               { value: '1080p', label: '1080p' },
@@ -670,7 +672,7 @@ export function RecordDialog({
             label="Duration"
             hint="Total length of the recording. With a split selected, this covers all parts together."
             value={duration}
-            onChange={(e) => setDuration(e.target.value)}
+            onChange={setDuration}
             options={[
               { value: '', label: 'Until stream ends' },
               { value: '2', label: '2 minutes' },
@@ -686,7 +688,7 @@ export function RecordDialog({
             label="Split into parts (optional)"
             hint="Each part is saved to the Library as it finishes — recommended for long streams."
             value={segment}
-            onChange={(e) => setSegment(e.target.value)}
+            onChange={setSegment}
             options={[
               { value: '', label: 'No split (single file)' },
               { value: '5', label: 'Every 5 minutes' },
@@ -707,7 +709,7 @@ export function RecordDialog({
 export function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-4 py-2 first:pt-0 last:pb-0">
-      <dt className="text-[11px] font-medium uppercase tracking-wide text-foreground-muted">{label}</dt>
+      <dt className="text-xs font-medium text-foreground-muted">{label}</dt>
       <dd className="max-w-[60%] truncate text-right tabular-nums text-foreground-secondary" title={value}>{value}</dd>
     </div>
   );

@@ -349,7 +349,7 @@ function FinalCta() {
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <ShimmerLinkButton
               size="lg"
-              href={site.releasesUrl}
+              href={site.installerDownloadUrl}
               external
               className="font-semibold shadow-lg shadow-white/10"
             >

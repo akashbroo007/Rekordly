@@ -9,7 +9,7 @@
  */
 import type { ReactNode } from 'react';
 import { Search, X } from 'lucide-react';
-import { Input, MultiSelect, type MultiSelectOption } from '@rekordly/ui';
+import { Input, MultiSelect, Select, type MultiSelectOption } from '@rekordly/ui';
 import { PrivacyModeButton } from '../../components/privacy-mode';
 
 export type DownloadFilterTab =
@@ -81,6 +81,7 @@ export function DownloadsToolbar({
 
         {/* Source filter */}
         <MultiSelect
+          small
           className="w-44 shrink-0"
           placeholder="All sites"
           options={siteOptions}
@@ -89,21 +90,24 @@ export function DownloadsToolbar({
         />
 
         {/* Sort */}
-        <select
+        <Select
+          small
+          className="w-36 shrink-0"
           value={filters.sort}
-          onChange={(e) => onChange({ sort: e.target.value as DownloadSort })}
-          aria-label="Sort downloads"
-          className="h-9 shrink-0 cursor-pointer rounded-sm border border-border bg-elevated px-2.5 text-sm text-foreground transition-colors duration-150 focus:border-primary focus:outline-none"
-        >
-          <option value="newest">Newest</option>
-          <option value="oldest">Oldest</option>
-          <option value="largest">Largest</option>
-          <option value="progress">Progress</option>
-        </select>
+          onChange={(sort) => onChange({ sort: sort as DownloadSort })}
+          options={[
+            { value: 'newest', label: 'Newest' },
+            { value: 'oldest', label: 'Oldest' },
+            { value: 'largest', label: 'Largest' },
+            { value: 'progress', label: 'Progress' },
+          ]}
+          ariaLabel="Sort downloads"
+        />
 
         <div className="ml-auto flex items-center gap-2">
-          {/* Privacy mode — blur thumbnails + titles for screen sharing */}
-          <PrivacyModeButton on={privacy.on} onToggle={privacy.onToggle} />
+          {/* Privacy mode — blur thumbnails + titles for screen sharing
+              (Downloads only — other pages have their own toggles). */}
+          <PrivacyModeButton on={privacy.on} onToggle={privacy.onToggle} section="Downloads" />
 
           {selectAll !== undefined && (
             <label className="flex cursor-pointer items-center gap-1.5 text-sm text-foreground-secondary">
@@ -114,7 +118,7 @@ export function DownloadsToolbar({
                   if (node !== null) node.indeterminate = selectAll.indeterminate === true;
                 }}
                 onChange={(e) => selectAll.onChange(e.target.checked)}
-                className="h-[15px] w-[15px] cursor-pointer accent-[var(--color-primary)]"
+                className="h-[15px] w-[15px] cursor-pointer"
                 aria-label={selectAll.label}
               />
               Select all

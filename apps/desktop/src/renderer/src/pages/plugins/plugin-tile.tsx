@@ -105,7 +105,7 @@ export interface PluginTileProps {
    * path/data URL and always tried before the web favicon.
    */
   iconUrl?: string;
-  size?: 40 | 48;
+  size?: 20 | 40 | 48;
   dimmed?: boolean;
 }
 
@@ -122,7 +122,8 @@ export function PluginTile({ pluginId, name, homepage, iconUrl, size = 40, dimme
 
   const initial = pluginInitials(name) || '?';
   const px = `${size}px`;
-  const font = size === 40 ? 'text-[15px]' : 'text-base';
+  const font = size === 40 ? 'text-[15px]' : size === 20 ? 'text-[9px]' : 'text-base';
+  // Dropdown option rows pin tiles to the 20px spec regardless of size.
   const frame = {
     width: px,
     height: px,

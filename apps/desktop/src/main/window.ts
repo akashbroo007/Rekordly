@@ -27,7 +27,7 @@ export function createMainWindow(
     // ponytail: brand icon for the window + Windows taskbar (dev mode; the
     // packaged exe uses the embedded icon from build/icon.ico).
     icon: appIconIco(),
-    backgroundColor: '#0F1115',
+    backgroundColor: '#000000',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,

@@ -101,21 +101,24 @@ export function AnalyticsPage() {
           label="Total Recordings"
           value={String(stats!.totalRecordings)}
           sub={`${stats!.successfulRecordings} archived`}
-          accent="var(--color-primary)"
         />
         <KpiCard
           icon={Users}
           label="Creators"
           value={String(stats!.totalCreators)}
           sub={`${stats!.liveCreators} live now`}
-          accent="#34d399"
         />
         <KpiCard
           icon={HardDrive}
           label="Storage Used"
           value={formatBytes(stats!.totalStorageBytes)}
-          sub={storageStats ? `${formatBytes(storageStats.availableBytes)} free` : undefined}
-          accent="#38bdf8"
+          sub={
+            storageStats
+              ? storageStats.availableBytes === null
+                ? 'Free space unknown'
+                : `${formatBytes(storageStats.availableBytes)} free`
+              : undefined
+          }
         />
         <SuccessRateRing percent={successRate} failed={jobOutcomes.failed + jobOutcomes.cancelled} />
       </div>
@@ -165,21 +168,19 @@ function KpiCard({
   label,
   value,
   sub,
-  accent,
 }: {
   icon: typeof Film;
   label: string;
   value: string;
   sub?: string;
-  accent: string;
 }) {
   return (
     <Card className="p-4 transition-colors hover:bg-elevated/60">
       <div className="flex items-center justify-between">
-        <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-foreground-muted">{label}</p>
-        <Icon size={14} style={{ color: accent }} className="opacity-80" />
+        <p className="text-[13px] font-medium text-foreground-muted">{label}</p>
+        <Icon size={14} className="text-foreground-muted" />
       </div>
-      <p className="mt-2 font-semibold tabular-nums tracking-tight text-foreground" style={{ fontSize: '1.65rem', lineHeight: 1.1 }}>
+      <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight text-foreground">
         {value}
       </p>
       {sub !== undefined && <p className="mt-1 text-xs text-foreground-muted">{sub}</p>}
@@ -197,7 +198,7 @@ function SuccessRateRing({ percent, failed }: { percent: number; failed: number 
   return (
     <Card className="relative overflow-hidden p-4">
       <div className="flex items-center justify-between">
-        <p className="text-[10px] font-medium uppercase tracking-[0.14em] text-foreground-muted">Success Rate</p>
+        <p className="text-[13px] font-medium text-foreground-muted">Success Rate</p>
         {percent >= 90 ? (
           <ArrowUpRight size={14} className="text-success" />
         ) : (
@@ -410,7 +411,7 @@ function ReliabilityPanel({ outcomes }: { outcomes: JobOutcomes }) {
             </div>
             <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-elevated">
               <div
-                className="h-full rounded-full transition-[width] duration-500"
+                className="h-full rounded-full transition-[width] duration-150"
                 style={{
                   width: `${Math.max((row.count / max) * 100, row.count > 0 ? 4 : 0)}%`,
                   background: row.color,
@@ -498,7 +499,7 @@ function PlatformBreakdown({ jobs }: { jobs: RecordingJobDto[] }) {
                   <div
                     key={o.key}
                     title={`${o.label}: ${count}`}
-                    className="h-full transition-[width] duration-500"
+                    className="h-full transition-[width] duration-150"
                     style={{ width: `${(count / p.total) * 100}%`, background: o.color }}
                   />
                 );
@@ -522,9 +523,14 @@ function StoragePanel({ storage }: { storage: NonNullable<Awaited<ReturnType<typ
     { label: 'Logs', value: storage.logSizeBytes, color: '#34d399' },
     { label: 'Temp', value: storage.tempSizeBytes, color: '#fbbf24' },
   ];
+  const totalBytes = storage.totalBytes ?? null;
+  const availableBytes = storage.availableBytes ?? null;
+  const diskKnown = totalBytes != null && availableBytes != null && totalBytes > 0;
   const used = parts.reduce((s, p) => s + p.value, 0);
-  const total = Math.max(storage.totalBytes, used, 1);
-  const usedPct = Math.min(Math.round((used / total) * 100), 100);
+  // Share of the whole disk the app occupies; when disk stats are unreadable the
+  // donut falls back to showing only the app's own data footprint.
+  const total = diskKnown ? totalBytes! : Math.max(used, 1);
+  const usedPct = diskKnown ? Math.min(Math.round((used / total) * 100), 100) : null;
 
   let accDeg = 0;
   const stops = parts
@@ -543,7 +549,11 @@ function StoragePanel({ storage }: { storage: NonNullable<Awaited<ReturnType<typ
       <div className="mb-4 flex items-start justify-between">
         <div>
           <h3 className="text-sm font-semibold text-foreground">Storage</h3>
-          <p className="text-xs text-foreground-muted">{formatBytes(storage.availableBytes)} available of {formatBytes(storage.totalBytes)}</p>
+          <p className="text-xs text-foreground-muted">
+            {availableBytes !== null
+              ? `${formatBytes(availableBytes)} available of ${formatBytes(totalBytes ?? 0)}`
+              : 'Free space unknown'}
+          </p>
         </div>
         <HardDrive size={15} className="text-foreground-muted" />
       </div>
@@ -551,8 +561,12 @@ function StoragePanel({ storage }: { storage: NonNullable<Awaited<ReturnType<typ
       <div className="flex items-center gap-6">
         <div className="relative h-28 w-28 shrink-0 rounded-full" style={{ background: donut }}>
           <div className="absolute inset-[10px] flex flex-col items-center justify-center rounded-full bg-surface">
-            <span className="text-lg font-semibold tabular-nums leading-none text-foreground">{usedPct}%</span>
-            <span className="mt-0.5 text-[10px] uppercase tracking-wide text-foreground-muted">used</span>
+            <span className="text-lg font-semibold tabular-nums leading-none text-foreground">
+              {usedPct !== null ? `${usedPct}%` : formatBytes(used)}
+            </span>
+            <span className="mt-0.5 text-xs text-foreground-muted">
+              {usedPct !== null ? 'used' : 'app data'}
+            </span>
           </div>
         </div>
         <ul className="min-w-0 flex-1 space-y-2">
@@ -614,7 +628,7 @@ function CreatorLeaderboard({ recordings }: { recordings: RecordingDto[] }) {
             </div>
             <div className="ml-6 mt-1 h-1 overflow-hidden rounded-full bg-elevated">
               <div
-                className="h-full rounded-full transition-[width] duration-500"
+                className="h-full rounded-full transition-[width] duration-150"
                 style={{
                   width: `${Math.max((leader.bytes / maxBytes) * 100, 4)}%`,
                   background: i === 0 ? 'var(--color-primary)' : 'color-mix(in srgb, var(--color-primary) 45%, transparent)',
@@ -660,14 +674,14 @@ function HeaviestFiles({ recordings }: { recordings: HeavyFile[] }) {
               <p className="truncate text-sm text-foreground-secondary">{rec.title}</p>
               <div className="mt-1 h-1 w-full max-w-56 overflow-hidden rounded-full bg-elevated">
                 <div
-                  className="h-full rounded-full bg-primary transition-[width] duration-500"
+                  className="h-full rounded-full bg-primary transition-[width] duration-150"
                   style={{ width: `${Math.max((rec.sizeBytes / maxSize) * 100, 3)}%` }}
                 />
               </div>
             </div>
             <div className="shrink-0 text-right">
               <p className="text-sm font-medium tabular-nums text-foreground">{formatBytes(rec.sizeBytes)}</p>
-              <p className="text-[10px] uppercase tracking-wide text-foreground-muted">on disk</p>
+              <p className="text-xs text-foreground-muted">on disk</p>
             </div>
           </li>
         ))}

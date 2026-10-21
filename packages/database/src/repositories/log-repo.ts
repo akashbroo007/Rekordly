@@ -32,6 +32,7 @@ export interface LogRepo {
   markNotificationRead(id: number): void;
   markAllNotificationsRead(): void;
   unreadNotificationCount(): number;
+  deleteNotification(id: number): void;
 }
 
 export function createLogRepo(orm: BetterSQLite3Database): LogRepo {
@@ -112,6 +113,10 @@ export function createLogRepo(orm: BetterSQLite3Database): LogRepo {
         .where(eq(notifications.read, false))
         .get();
       return row?.total ?? 0;
+    },
+
+    deleteNotification(id: number): void {
+      orm.delete(notifications).where(eq(notifications.id, id)).run();
     },
   };
 }

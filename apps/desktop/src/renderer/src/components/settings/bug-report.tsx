@@ -5,7 +5,9 @@ import { Button, Select, Textarea } from '@rekordly/ui';
 import type { AppInfo } from '@rekordly/shared/contracts';
 import { useToastStore } from '../../stores/toast-store';
 
-const ISSUES_URL = 'https://github.com/akashbroo007/Rekordly/issues/new?template=bug_report.md';
+// ponytail: exported so the top-bar Help menu's "Report an issue" reuses the
+// same pre-filled issue template instead of re-stating the URL elsewhere.
+export const ISSUES_URL = 'https://github.com/akashbroo007/Rekordly/issues/new?template=bug_report.md';
 const FEATURE_URL = 'https://github.com/akashbroo007/Rekordly/issues/new?template=feature_request.md';
 const DISCUSSIONS_URL = 'https://github.com/akashbroo007/Rekordly/discussions';
 
@@ -135,7 +137,7 @@ export function BugReportSettings() {
             label="What is this about?"
             options={KIND_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
             value={kind}
-            onChange={(event) => setKind(event.target.value as ReportKind)}
+            onChange={(value) => setKind(value as ReportKind)}
           />
 
           <Textarea

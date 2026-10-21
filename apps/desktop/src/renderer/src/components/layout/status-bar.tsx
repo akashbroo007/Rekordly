@@ -33,7 +33,7 @@ export function StatusBar() {
   const totalMemory = (stats?.memoryRss ?? 0) + (stats?.childMemoryBytes ?? 0);
 
   return (
-    <footer className="flex h-7 shrink-0 items-center gap-4 border-t border-border bg-panel px-4 text-[11px] text-foreground-muted">
+    <footer className="flex h-7 shrink-0 items-center gap-4 border-t border-border bg-panel px-4 text-xs text-foreground-muted">
       <span className="flex items-center gap-1">
         <Puzzle size={12} aria-hidden="true" /> {plugins?.length ?? 0} plugins
       </span>

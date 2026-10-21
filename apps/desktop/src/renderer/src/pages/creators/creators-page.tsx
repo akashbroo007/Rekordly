@@ -632,8 +632,10 @@ export function CreatorsPage() {
                 <X size={14} /> Clear filters
               </Button>
             ) : (
+              // ponytail: zero-creators first-run state gets its own CTA copy;
+              // page-header's filled "Add Creator" stays the primary entry.
               <Button onClick={() => setAddOpen(true)}>
-                <Plus size={14} /> Add Creator
+                <Plus size={14} /> {counts.total === 0 ? 'Add your first creator' : 'Add Creator'}
               </Button>
             )
           }
@@ -726,7 +728,7 @@ export function CreatorsPage() {
         >
           <div className="space-y-4">
             <div className="rounded-sm border border-warning/40 bg-warning/10 px-3 py-2.5">
-              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-warning">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-warning">
                 <Info size={12} /> Storage notice
               </p>
               <ul className="mt-1.5 list-disc space-y-1 pl-4 text-xs leading-relaxed text-foreground-secondary">

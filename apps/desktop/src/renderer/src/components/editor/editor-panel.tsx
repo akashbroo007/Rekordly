@@ -654,7 +654,7 @@ export function EditorPanel({
             type="checkbox"
             checked={accurate}
             onChange={(e) => setAccurate(e.target.checked)}
-            className="mt-0.5 accent-[var(--color-primary,#6366f1)]"
+            className="mt-0.5"
           />
           <span>
             Accurate boundaries (slower re-encode).

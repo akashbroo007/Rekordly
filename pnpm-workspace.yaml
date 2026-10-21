@@ -3,6 +3,17 @@ packages:
   - packages/*
   - plugins/*
 
+# One physical instance per Radix context-carrying sub-package. The app's
+# Dialog (old release line) and the shared dropdown's Popover/DropdownMenu
+# (new release line) previously resolved two different react-dismissable-layer
+# and react-focus-scope copies — React context only links per module instance,
+# so popovers portaled inside modal dialogs never registered with the dialog's
+# layer: the dialog treated panel clicks as outside (closing itself) and body
+# pointer-events: none made the whole panel inert.
+overrides:
+  '@radix-ui/react-dismissable-layer': 1.2.1
+  '@radix-ui/react-focus-scope': 1.3.1
+
 allowBuilds:
   better-sqlite3: true
   electron: true

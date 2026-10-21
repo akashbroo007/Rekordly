@@ -54,6 +54,7 @@ export const IPC_CHANNELS = {
   notificationsMarkRead: 'notifications:mark-read',
   notificationsMarkAllRead: 'notifications:mark-all-read',
   notificationsUnreadCount: 'notifications:unread-count',
+  notificationsDismiss: 'notifications:dismiss',
   notificationsEvent: 'notifications:event',
 
   creatorsList: 'creators:list',
@@ -944,8 +945,10 @@ export interface LibrarySearchResultDto {
 export interface StorageStatsDto {
   totalRecordings: number;
   totalSizeBytes: number;
-  availableBytes: number;
-  totalBytes: number;
+  /** Free disk space in bytes; null when the filesystem stats are unreadable. */
+  availableBytes: number | null;
+  /** Total disk capacity in bytes; null when the filesystem stats are unreadable. */
+  totalBytes: number | null;
   cacheSizeBytes: number;
   logSizeBytes: number;
   tempSizeBytes: number;
@@ -1301,6 +1304,7 @@ export interface DesktopApi {
     markRead(id: number): Promise<void>;
     markAllRead(): Promise<void>;
     unreadCount(): Promise<number>;
+    dismiss(id: number): Promise<void>;
     onNotification(callback: (notification: NotificationDto) => void): () => void;
   };
   creators: {

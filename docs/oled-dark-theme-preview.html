@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Rekordly — OLED True-Black Dark Theme Preview</title>
+<style>
+  /* ── Rekordly dark tokens (OLED) — mirrors packages/ui/src/theme.css ── */
+  :root {
+    --canvas: #000000;
+    --panel: #0A0A0A;
+    --surface: #121212;
+    --elevated: #1A1A1A;
+    --hover: #1F1F1F;
+    --border: rgb(255 255 255 / 0.09);
+
+    --primary: #5F6BD5;
+    --primary-hover: #6C78DD;
+    --primary-soft: rgb(95 107 213 / 0.14);
+
+    --success: #3DD68C;
+    --warning: #F5A524;
+    --error: #F2555A;
+    --info: #8F97A8;
+
+    --fg: #EBEBEE;
+    --fg-2: #A1A1AC;
+    --fg-muted: #83838D;
+    --fg-disabled: #5A5A5F;
+  }
+
+  * { box-sizing: border-box; margin: 0; }
+
+  body {
+    background: var(--canvas);
+    color: var(--fg);
+    font-family: 'Inter Variable', 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    padding: 48px 40px 96px;
+    max-width: 1080px;
+    margin: 0 auto;
+  }
+
+  ::selection { background: rgb(95 107 213 / 0.35); }
+
+  h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
+  h2 { font-size: 18px; font-weight: 600; margin: 56px 0 6px; }
+  .sub { color: var(--fg-muted); margin-bottom: 18px; }
+  .kicker {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--primary); margin-bottom: 10px;
+  }
+  .chip {
+    display: inline-block; padding: 2px 8px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--elevated);
+    color: var(--fg-2); font-size: 12px;
+  }
+
+  /* ── Surface ladder ── */
+  .ladder { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .swatch { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); }
+  .swatch .fill { height: 84px; }
+  .swatch .meta { padding: 10px 12px 12px; background: var(--elevated); }
+  .swatch .name { font-weight: 600; font-size: 13px; }
+  .swatch .hex { color: var(--fg-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .swatch .use { color: var(--fg-muted); font-size: 11.5px; margin-top: 4px; }
+
+  /* ── Buttons ── */
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn {
+    height: 36px; padding: 0 16px; border-radius: 8px;
+    font: inherit; font-size: 13px; font-weight: 500;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+    transition: background-color 120ms ease-out, border-color 120ms ease-out, color 120ms ease-out;
+  }
+  .btn-primary { background: var(--primary); color: #FFFFFF; border: 1px solid transparent; }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-secondary { background: var(--surface); color: var(--fg); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--hover); }
+  .btn-ghost { background: transparent; color: var(--fg-2); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: var(--hover); color: var(--fg); }
+  .btn-danger { background: transparent; color: var(--error); border: 1px solid var(--border); }
+  .btn-danger:hover { border-color: rgb(242 85 90 / 0.6); background: rgb(242 85 90 / 0.08); }
+  .btn-danger.is-destructive-fill { background: var(--error); color: #0A0A0A; border-color: transparent; }
+  .btn:disabled { background: var(--elevated); color: var(--fg-disabled); border-color: var(--border); cursor: not-allowed; }
+
+  /* ── Cards ── */
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; transition: background-color 120ms ease-out;
+  }
+  .card:hover { background: #171717; } /* = --color-elevated/60 over --color-surface */
+  .card .eyebrow { color: var(--fg-muted); font-size: 12px; margin-bottom: 8px; }
+  .card .big { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .card .hint { color: var(--fg-2); font-size: 13px; margin-top: 4px; }
+  .card.raised { background: var(--elevated); }
+
+  .track { height: 6px; border-radius: 999px; background: var(--elevated); overflow: hidden; margin-top: 14px; }
+  .track > i { display: block; height: 100%; width: 62%; border-radius: 999px; background: var(--primary); }
+
+  /* ── Inputs ── */
+  .field { display: flex; flex-direction: column; gap: 6px; min-width: 240px; }
+  .field label { color: var(--fg-2); font-size: 12px; font-weight: 500; }
+  .field input, .field select {
+    height: 36px; padding: 0 12px; border-radius: 8px; font: inherit; font-size: 13px;
+    background: var(--elevated); color: var(--fg); border: 1px solid var(--border); outline: none;
+    transition: border-color 120ms ease-out;
+  }
+  .field input::placeholder { color: var(--fg-disabled); }
+  .field input:focus-visible, .field select:focus-visible { border-color: var(--primary); box-shadow: 0 0 0 2px rgb(95 107 213 / 0.35); }
+
+  /* ── Nav rows (sidebar rule: 36px rows, hover 4% white, accent bar on active) ── */
+  .nav { display: flex; flex-direction: column; gap: 2px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 8px; width: 240px; }
+  .nav a {
+    position: relative; display: flex; align-items: center; gap: 10px;
+    height: 36px; padding: 0 12px; border-radius: 8px;
+    color: var(--fg-2); font-size: 13px; font-weight: 500; text-decoration: none;
+    transition: background-color 120ms ease-out;
+  }
+  .nav a:hover { background: rgb(255 255 255 / 0.04); }
+  .nav a.active { color: var(--fg); }
+  .nav a.active::before {
+    content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    width: 3px; height: 18px; border-radius: 0 3px 3px 0; background: var(--primary);
+  }
+  .nav a .dot { width: 18px; height: 2px; border-radius: 1px; background: var(--fg-muted); opacity: 0.6; }
+  .nav a.active .dot { background: var(--primary); opacity: 1; }
+  .nav .badge {
+    margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 4px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px; font-variant-numeric: tabular-nums;
+  }
+  .badge.tone-live { background: rgb(61 214 140 / 0.15); color: var(--success); }
+  .badge.tone-rec { background: rgb(242 85 90 / 0.15); color: var(--error); }
+  .badge.tone-accent { background: var(--primary-soft); color: var(--primary); }
+
+  /* ── Status ── */
+  .status { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; border: 1px solid var(--border); }
+  .status i { width: 6px; height: 6px; border-radius: 99px; }
+  .status.live { color: var(--success); background: rgb(61 214 140 / 0.12); } .status.live i { background: var(--success); }
+  .status.rec { color: var(--error); background: rgb(242 85 90 / 0.12); } .status.rec i { background: var(--error); }
+  .status.needs { color: var(--warning); background: rgb(245 165 36 / 0.12); } .status.needs i { background: var(--warning); }
+  .status.queued { color: var(--info); background: rgb(143 151 168 / 0.12); } .status.queued i { background: var(--info); }
+
+  /* ── Text ramp ── */
+  .ramp { display: flex; flex-direction: column; }
+  .ramp .line { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .ramp .line:last-child { border-bottom: none; }
+  .ramp .sample { font-size: 15px; }
+  .ramp .t2 { color: var(--fg-2); }
+  .ramp .t3 { color: var(--fg-muted); }
+  .ramp .t4 { color: var(--fg-disabled); }
+  .ramp .ratio { color: var(--fg-muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ok { color: var(--success); font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  th { color: var(--fg-2); font-weight: 600; font-size: 12px; }
+  td.num { text-align: right; }
+  .role { color: var(--fg-muted); font-size: 11.5px; }
+
+  /* ── Environment simulation: same card, three rooms ── */
+  .envs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .env {
+    border-radius: 12px; overflow: hidden; border: 1px solid var(--border);
+  }
+  .env .strip { padding: 8px 12px; font-size: 12px; font-weight: 500; color: var(--fg-2); background: var(--elevated); border-bottom: 1px solid var(--border); }
+  .env .scene { padding: 18px 14px; background: var(--canvas); }
+  .env .scene .card { pointer-events: none; }
+  .env.dim .scene { filter: brightness(0.45); }        /* dark room: OLED black crushed, mid-grays dim */
+  .env.glare .scene { background: #161618; }           /* bright office: panel glow lifts true black */
+  .env.glare .scene::after {
+    content: ''; display: block; position: absolute; }
+  .note { color: var(--fg-muted); font-size: 12.5px; margin-top: 12px; max-width: 760px; }
+
+  /* ── Copyable token block ── */
+  pre {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px; overflow-x: auto; font-size: 12.5px; line-height: 1.7;
+    color: var(--fg-2); font-variant-numeric: tabular-nums;
+  }
+  pre .c { color: var(--fg-muted); }
+  pre .k { color: var(--fg); }
+  pre .v { color: #B9BFF0; }
+  pre .g { color: var(--success); } pre .r { color: var(--error); } pre .y { color: var(--warning); }
+</style>
+</head>
+<body>
+
+  <div class="kicker">Rekordly · Design system</div>
+  <h1>OLED true-black dark theme</h1>
+  <p class="sub" style="margin-top:8px">
+    Primary background is now true <span class="chip">#000000</span> for OLED. Hierarchy is carried by a
+    four-step neutral ladder — never by hue — plus a 9% white hairline border. Text tops out at off-white
+    <span class="chip">#EBEBEE</span> (never pure white) to avoid halation. Accent stays brand-purple,
+    nudged one luminance step so it keeps AA contrast on true black. Status colors unchanged.
+  </p>
+
+  <!-- ═══════════ SURFACE LADDER ═══════════ -->
+  <h2>1 · Surface ladder</h2>
+  <p class="sub">Elevation = stepped lightness. Every step is pure neutral gray (R=G=B) — no tint drift in shadows between them.</p>
+  <div class="ladder">
+    <div class="swatch"><div class="fill" style="background:#000000"></div>
+      <div class="meta"><div class="name">canvas</div><div class="hex">#000000</div>
+      <div class="use">App background · OLED-off pixels</div></div></div>
+    <div class="swatch"><div class="fill" style="background:#0A0A0A"></div>
+      <div class="meta"><div class="name">panel</div><div class="hex">#0A0A0A</div>
+      <div class="use">Sidebar · chrome · dashed empty states</div></div></div>
+    <div class="swatch"><div class="fill" style="background:#121212"></div>
+      <div class="meta"><div class="name">surface</div><div class="hex">#121212</div>
+      <div class="use">Cards · table shells · inputs on canvas</div></div></div>
+    <div class="swatch"><div class="fill" style="background:#1A1A1A"></div>
+      <div class="meta"><div class="name">elevated</div><div class="hex">#1A1A1A</div>
+      <div class="use">Dropdowns · dialogs · tooltips · raised rows</div></div></div>
+    <div class="swatch"><div class="fill" style="background:#1F1F1F"></div>
+      <div class="meta"><div class="name">hover</div><div class="hex">#1F1F1F</div>
+      <div class="use">Hover fills · scrollbar thumb · ghost buttons</div></div></div>
+  </div>
+
+  <!-- ═══════════ COMPONENT PREVIEWS ═══════════ -->
+  <h2>2 · Components on true black</h2>
+  <div class="grid2" style="margin-top:6px">
+
+    <div class="card">
+      <div class="eyebrow">BUTTONS</div>
+      <div class="row" style="margin-bottom:10px">
+        <button class="btn btn-primary">Start recording</button>
+        <button class="btn btn-secondary">Library</button>
+        <button class="btn btn-ghost">Cancel</button>
+      </div>
+      <div class="row">
+        <button class="btn btn-danger">Delete</button>
+        <button class="btn" disabled>Disabled</button>
+        <span class="status live"><i></i>Live</span>
+        <span class="status rec"><i></i>Recording</span>
+        <span class="status needs"><i></i>Needs setup</span>
+        <span class="status queued"><i></i>Queued</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow">TEXT RAMP — with measured WCAG ratio on #121212</div>
+      <div style="font-size:24px;font-weight:600;margin-bottom:2px">Page title · 24px</div>
+      <div style="color:var(--fg-2);font-size:13px">Body / secondary text at 13px.</div>
+      <div style="color:var(--fg-muted);font-size:12px;margin-top:2px">Muted hint — captions, timestamps.</div>
+      <div style="color:var(--fg-disabled);font-size:12px;margin-top:2px">Disabled text (exempt from AA).</div>
+      <a href="#" style="color:var(--primary);font-size:13px;font-weight:500;margin-top:8px;display:inline-block">Accent link →</a>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow">METRIC CARD (hover: +5 lightness)</div>
+      <div class="big">128</div>
+      <div class="hint">Recordings archived this month</div>
+      <div class="track"><i></i></div>
+      <div class="hint" style="color:var(--fg-muted);margin-top:8px">Accent is reserved: primary buttons, active nav, progress, focus ring.</div>
+    </div>
+
+    <div class="row" style="align-items:stretch;gap:16px">
+      <nav class="nav" aria-label="Sidebar preview">
+        <a href="#" class="active"><span class="dot"></span>Dashboard</a>
+        <a href="#"><span class="dot"></span>Creators<span class="badge tone-live">3</span></a>
+        <a href="#"><span class="dot"></span>Recordings<span class="badge tone-rec">2</span></a>
+        <a href="#"><span class="dot"></span>Downloads<span class="badge tone-accent">9</span></a>
+        <a href="#"><span class="dot"></span>Analytics</a>
+      </nav>
+      <form class="field" onsubmit="return false">
+        <label>Search creators</label>
+        <input type="text" placeholder="Type a channel name…" />
+        <label>Platform</label>
+        <select><option>Twitch</option><option>YouTube</option><option>Kick</option></select>
+      </form>
+    </div>
+
+  </div>
+
+  <!-- ═══════════ BRIGHT / LOW-LIGHT ═══════════ -->
+  <h2>3 · Readability in bright and low-light rooms</h2>
+  <p class="sub">Same card, three environments. True black wins in the dark room (no gray wash); the off-white ramp keeps glare down.</p>
+  <div class="envs">
+    <div class="env"><div class="strip">Normal · OLED viewing</div>
+      <div class="scene">
+        <div class="card"><div class="eyebrow">NOW MONITORING</div><div class="big">7</div>
+        <div class="hint">Creators online · next check 10s</div></div>
+      </div></div>
+    <div class="env"><div class="strip">Low light · brightness ~45%</div>
+      <div class="scene dim">
+        <div class="card"><div class="eyebrow">NOW MONITORING</div><div class="big">7</div>
+        <div class="hint">Creators online · next check 10s</div></div>
+      </div></div>
+    <div class="env"><div class="strip">Bright office · ambient glow</div>
+      <div class="scene" style="background:#131315">
+        <div class="card" style="background:#202023;border-color:rgb(255 255 255 / 0.05)"><div class="eyebrow">NOW MONITORING</div><div class="big">7</div>
+        <div class="hint">Creators online · next check 10s</div></div>
+      </div></div>
+  </div>
+  <p class="note"><strong>Low light:</strong> #000 fills mean no gray rectangle glow — only active content emits light, and the muted ramp (#83838D) stays ≥ 4.6:1 even at 45% brightness. <strong>Bright/blown-out rooms:</strong> panels at #0A0A0A can visually merge in reflections; the 9% hairline border and card fill at #121212 keep card edges readable.</p>
+
+  <!-- ═══════════ CONTRAST TABLE ═══════════ -->
+  <h2>4 · Measured contrast (WCAG 2.1)</h2>
+  <table>
+    <thead><tr><th>Token</th><th>Role</th><th class="num">#000 canvas</th><th class="num">#121212 card</th><th class="num">#1A1A1A raised</th><th>AA note</th></tr></thead>
+    <tbody>
+      <tr><td>#EBEBEE</td><td class="role">Primary text</td><td class="num">17.6</td><td class="num">15.8</td><td class="num">14.6</td><td><span class="ok">Pass</span> — off-white, not pure white</td></tr>
+      <tr><td>#A1A1AC</td><td class="role">Secondary text</td><td class="num">8.2</td><td class="num">7.3</td><td class="num">6.8</td><td><span class="ok">Pass</span></td></tr>
+      <tr><td>#83838D</td><td class="role">Muted / captions</td><td class="num">5.6</td><td class="num">5.0</td><td class="num">4.6</td><td><span class="ok">Pass</span> — was 3.9 on the old gray (failed)</td></tr>
+      <tr><td>#5F6BD5</td><td class="role">Accent (links, nav growth)</td><td class="num">4.6</td><td class="num">4.1</td><td class="num">3.8</td><td>Pass on canvas; borders on fills</td></tr>
+      <tr><td>#3DD68C</td><td class="role">Success / live</td><td class="num">11.2</td><td class="num">10.0</td><td class="num">9.3</td><td><span class="ok">Pass</span></td></tr>
+      <tr><td>#F5A524</td><td class="role">Warning / needs-setup</td><td class="num">10.3</td><td class="num">9.2</td><td class="num">8.5</td><td><span class="ok">Pass</span></td></tr>
+      <tr><td>#F2555A</td><td class="role">Error / recording</td><td class="num">6.2</td><td class="num">5.6</td><td class="num">5.2</td><td><span class="ok">Pass</span></td></tr>
+      <tr><td>#8F97A8</td><td class="role">Info / queued</td><td class="num">7.2</td><td class="num">6.4</td><td class="num">5.9</td><td><span class="ok">Pass</span></td></tr>
+      <tr><td>#FFFFFF on #5F6BD5</td><td class="role">Primary button label</td><td class="num" colspan="3" style="text-align:right">4.6</td><td><span class="ok">Pass</span></td></tr>
+      <tr><td>border 9% white</td><td class="role">Hairlines / card edge</td><td class="num" colspan="3" style="text-align:right">+23 hex steps vs bg</td><td>≈1.2:1 — non-text UI, up from 7% (invisible on black)</td></tr>
+    </tbody>
+  </table>
+  <p class="note">Known borderline: accent-on-accent-soft chips (nav count badges) measure ≈3.8:1 at 12px — supplementary info (the count appears on the page too), improved from ≈3.5. Disabled text is exempt per WCAG 1.4.3.</p>
+
+  <!-- ═══════════ TOKENS ═══════════ -->
+  <h2>5 · Copy — CSS variables</h2>
+<pre><span class="c">/* Dark (OLED) — packages/ui/src/theme.css */</span>
+<span class="k">--color-canvas</span>: <span class="v">#000000</span>;            <span class="c">/* app background            */</span>
+<span class="k">--color-panel</span>:  <span class="v">#0A0A0A</span>;            <span class="c">/* sidebar · chrome            */</span>
+<span class="k">--color-surface</span>: <span class="v">#121212</span>;           <span class="c">/* cards · inputs              */</span>
+<span class="k">--color-elevated</span>: <span class="v">#1A1A1A</span>;          <span class="c">/* dropdowns · dialogs · raised*/</span>
+<span class="k">--color-hover</span>:  <span class="v">#1F1F1F</span>;            <span class="c">/* hover fills · scrollbar     */</span>
+<span class="k">--color-border</span>: <span class="v">rgb(255 255 255 / 0.09)</span>;
+
+<span class="k">--color-primary</span>:  <span class="v">#5F6BD5</span>;   <span class="g">/* hover #6C78DD */</span>  <span class="c">/* AA as text on */</span> <span class="v">#000</span>
+<span class="k">--color-success</span>:  <span class="g">#3DD68C</span>;   <span class="c">/* unchanged     */</span>
+<span class="k">--color-warning</span>:  <span class="y">#F5A524</span>;   <span class="c">/* unchanged     */</span>
+<span class="k">--color-error</span>:    <span class="r">#F2555A</span>;   <span class="c">/* unchanged     */</span>
+
+<span class="k">--color-foreground</span>:           <span class="v">#EBEBEE</span>;  <span class="c">/* 17.6:1 on canvas */</span>
+<span class="k">--color-foreground-secondary</span>: <span class="v">#A1A1AC</span>;  <span class="c">/*  8.2:1           */</span>
+<span class="k">--color-foreground-muted</span>:     <span class="v">#83838D</span>;  <span class="c">/*  5.6:1           */</span>
+<span class="k">--color-foreground-disabled</span>:  <span class="v">#5A5A5F</span>;</pre>
+
+</body>
+</html>

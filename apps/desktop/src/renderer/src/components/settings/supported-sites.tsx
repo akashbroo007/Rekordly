@@ -82,7 +82,7 @@ export function SupportedSitesContent() {
             const Icon = group.icon;
             return (
               <div key={group.label}>
-                <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-foreground-muted">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground-muted">
                   <Icon size={12} /> {group.label}
                 </p>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">

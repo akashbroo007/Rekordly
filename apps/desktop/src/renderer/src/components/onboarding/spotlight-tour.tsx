@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@rekordly/ui';
 
@@ -43,6 +43,8 @@ const PADDING = 8;
 export function SpotlightTour({ steps, onFinish, onSkip }: SpotlightTourProps) {
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [tooltipHeight, setTooltipHeight] = useState(0);
   const navigate = useNavigate();
   const step = steps[index];
 
@@ -79,6 +81,13 @@ export function SpotlightTour({ steps, onFinish, onSkip }: SpotlightTourProps) {
     };
   }, [measure]);
 
+  // ponytail: the card's real height feeds the placement math below — bottom
+  // edge targets like Settings would otherwise push the card off-screen.
+  // Re-measure after each step paints (description length changes the height).
+  useLayoutEffect(() => {
+    setTooltipHeight(tooltipRef.current?.offsetHeight ?? 0);
+  }, [index, rect]);
+
   const advance = useCallback((): void => {
     if (index >= steps.length - 1) onFinish();
     else setIndex(index + 1);
@@ -99,24 +108,32 @@ export function SpotlightTour({ steps, onFinish, onSkip }: SpotlightTourProps) {
   if (step === undefined) return null;
 
   // Tooltip placement: sidebar targets get the card to their right,
-  // vertically centered; falls back below when there is no room.
+  // vertically centered; falls back below when there is no room. Everything
+  // is clamped inside the viewport — targets near the bottom edge (Settings)
+  // flip the card above themselves instead of clipping off-screen.
   let tooltipStyle: React.CSSProperties = {};
   if (rect !== null) {
     const tooltipWidth = 320;
+    const margin = 16;
+    // Measured height once available; a sane guess for the first paint.
+    const estHeight = tooltipHeight > 0 ? tooltipHeight : 260;
     const spaceRight = window.innerWidth - (rect.left + rect.width);
+    let left: number;
+    let top: number;
     if (spaceRight > tooltipWidth + 32) {
-      tooltipStyle = {
-        left: rect.left + rect.width + 20,
-        top: Math.max(16, rect.top + rect.height / 2 - 80),
-        width: tooltipWidth,
-      };
+      left = rect.left + rect.width + 20;
+      top = rect.top + rect.height / 2 - estHeight / 2;
     } else {
-      tooltipStyle = {
-        left: Math.min(rect.left, window.innerWidth - tooltipWidth - 16),
-        top: rect.top + rect.height + 12,
-        width: tooltipWidth,
-      };
+      left = Math.min(rect.left, window.innerWidth - tooltipWidth - margin);
+      top = rect.top + rect.height + 12;
     }
+    // No room below the target? Try above it, then hard-clamp.
+    if (top + estHeight > window.innerHeight - margin) {
+      top = rect.top - estHeight - 12;
+    }
+    top = Math.max(margin, Math.min(top, window.innerHeight - estHeight - margin));
+    left = Math.max(margin, Math.min(left, window.innerWidth - tooltipWidth - margin));
+    tooltipStyle = { left, top, width: tooltipWidth };
   }
 
   const isLast = index >= steps.length - 1;
@@ -126,7 +143,7 @@ export function SpotlightTour({ steps, onFinish, onSkip }: SpotlightTourProps) {
       {/* Cutout: transparent hole over the target, huge shadow dims the rest */}
       {rect !== null && (
         <div
-          className="pointer-events-none absolute rounded-lg transition-all duration-300 ease-out"
+          className="pointer-events-none absolute rounded-lg transition-all duration-150 ease-out"
           style={{
             top: rect.top,
             left: rect.left,
@@ -135,18 +152,18 @@ export function SpotlightTour({ steps, onFinish, onSkip }: SpotlightTourProps) {
             boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.65)',
           }}
         >
-          {/* ponytail: pulsing ring draws the eye to the active target. */}
-          <div className="absolute -inset-1 animate-ping rounded-lg border-2 border-primary/50" />
+          {/* ponytail: static dim + sharp cutout only — no pulsing ring. */}
         </div>
       )}
 
       {/* Tooltip card */}
       <div
-        className="absolute rounded-lg border border-border bg-panel p-4 shadow-xl transition-all duration-300"
+        ref={tooltipRef}
+        className="absolute rounded-lg border border-border bg-panel p-4 shadow-xl transition-all duration-150 ease-out"
         style={tooltipStyle}
       >
         <div className="flex items-center justify-between">
-          <p className="text-xs font-medium uppercase tracking-wide text-primary">
+          <p className="text-xs font-medium text-primary">
             {step.emoji} Step {index + 1} of {steps.length}
           </p>
           {/* Progress dots — quick glance at how far along you are */}
