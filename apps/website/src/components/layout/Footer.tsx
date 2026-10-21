@@ -68,6 +68,21 @@ export function Footer() {
                 GitHub
               </a>
             </div>
+            <a
+              href="https://alternativeto.net/software/rekordly/about/?utm_source=badge&utm_medium=referral"
+              target="_blank"
+              rel="noreferrer"
+              className="mt-5 inline-block transition-opacity hover:opacity-80"
+            >
+              <img
+                src="https://alternativeto.net/static/badges/badge-compact-dark.svg"
+                alt="Rekordly | AlternativeTo"
+                width={171}
+                height={58}
+                loading="lazy"
+                className="h-8 w-auto"
+              />
+            </a>
           </div>
 
           {footerNav.map((group) => (
