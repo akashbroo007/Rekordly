@@ -11,26 +11,19 @@ export default function TermsPage() {
       <div className="markdown">
         <h2>1. The software</h2>
         <p>
-          Rekordly is source-available desktop software, licensed under the{" "}
-          <a href={site.licenseUrl}>PolyForm Noncommercial License 1.0.0</a>.
-          You may use, modify, and share the software free of charge for
-          personal, educational, and other noncommercial purposes. The software
-          is provided "as is", without warranty of any kind, express or
-          implied, including but not limited to the warranties of
-          merchantability, fitness for a particular purpose, and
-          non-infringement. In no event shall the authors or copyright holders
-          be liable for any claim, damages, or other liability arising from,
-          out of, or in connection with the software or its use.
-        </p>
-
-        <h2>1b. Commercial use</h2>
-        <p>
-          Any commercial use of the software — including use by a company or
-          other business organization, resale, redistribution as part of a
-          paid product or service, or internal business use — requires a
-          separate commercial license from Rekordly. Commercial licenses are
-          available exclusively from Rekordly; contact{" "}
-          <a href={`mailto:${site.email}`}>{site.email}</a> to purchase one.
+          Rekordly is free and open-source desktop software, licensed under the{" "}
+          <a href={site.licenseUrl}>Apache License, Version 2.0</a>. You may
+          use, modify, and redistribute it — including for commercial purposes
+          — free of charge, provided the license text and copyright notice are
+          preserved in redistributions. The Rekordly name and logo are not
+          granted by the license, and neither the software nor the website is
+          affiliated with any streaming platform. The software is provided "as
+          is", without warranty of any kind, express or implied, including but
+          not limited to the warranties of merchantability, fitness for a
+          particular purpose, and non-infringement. In no event shall the
+          authors or copyright holders be liable for any claim, damages, or
+          other liability arising from, out of, or in connection with the
+          software or its use.
         </p>
 
         <h2>2. Acceptable use</h2>

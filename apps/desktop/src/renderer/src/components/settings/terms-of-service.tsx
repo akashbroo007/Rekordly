@@ -16,8 +16,10 @@ const SECTIONS: Section[] = [
   {
     title: '2. License & permitted use',
     body:
-      'Rekordly is provided for personal, non-commercial use. You may install it, use it, and modify your local copy ' +
-      'in accordance with its source-available license. You may not sell the application itself or present it as your own product.',
+      'Rekordly is free and open-source software under the Apache License 2.0. ' +
+      'You may install, use, modify, and redistribute it — including for commercial purposes — ' +
+      'as long as redistributions keep the license and copyright notice and mark any modified files. ' +
+      'The Rekordly name and logo are not covered by the license.',
   },
   {
     title: '3. Respect for platforms and content owners',

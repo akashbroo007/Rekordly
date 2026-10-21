@@ -6,14 +6,14 @@
 
 **Monitor, record, and download live streams — automatically.**
 
-Rekordly is a free, source-available Windows desktop app that monitors
+Rekordly is a free, open-source Windows desktop app that monitors
 creators, automatically records live streams, downloads videos and VODs,
 and organizes your recordings into a searchable library.
 
 The source code is publicly available for inspection, building, and
 contribution. Rekordly is licensed under the
-[PolyForm Noncommercial License 1.0.0](LICENSE.txt) — free for personal
-use, paid for commercial use.
+[Apache License, Version 2.0](LICENSE.txt) — free for personal and
+commercial use alike.
 
 [Download](https://github.com/akashbroo007/Rekordly/releases) •
 [Features](#features) •
@@ -22,7 +22,7 @@ use, paid for commercial use.
 [Contributing](#contributing)
 
 [![GitHub release](https://img.shields.io/github/v/release/akashbroo007/Rekordly?style=flat-square)](https://github.com/akashbroo007/Rekordly/releases)
-[![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm_Noncommercial_1.0.0-blue.svg?style=flat-square)](LICENSE.txt)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square)](LICENSE.txt)
 [![Platform: Windows](https://img.shields.io/badge/platform-Windows-blue?style=flat-square)](https://github.com/akashbroo007/Rekordly/releases)
 [![Electron](https://img.shields.io/badge/Electron-37-47848F?style=flat-square&logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
@@ -42,21 +42,20 @@ use, paid for commercial use.
 - [Project Structure](#project-structure)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
-- [Why Source Available?](#why-source-available)
+- [Why Open Source?](#why-open-source)
 - [License](#license)
 
 ---
 
 ## License Model
 
-Rekordly is **free for personal, educational, and other noncommercial use** —
+Rekordly is **free and open source under Apache-2.0** —
 everything is included with no feature caps: unlimited creator monitoring,
 unlimited simultaneous live recordings at unlimited length, unlimited
 downloads, remote control from Telegram, plus full access to the local
 library, cloud uploads, and the plugin system.
 
-Commercial use requires a separate
-commercial license.
+Commercial use is free too — the license covers everyone.
 
 ---
 
@@ -290,38 +289,37 @@ configs are in the repo; Husky hooks run on commit).
 
 ---
 
-## Why Source Available?
+## Why Open Source?
 
-Rekordly is intentionally source available. We want developers to be able to
+Rekordly is intentionally open source. We want developers to be able to
 inspect how it works, contribute improvements, and build plugins for
 platforms we do not support yet.
 
-At the same time, keeping the project sustainable matters. The official
-Rekordly distribution is supported through commercial licensing, which
-funds ongoing development of the core app and the plugin ecosystem.
+Open source keeps the tooling honest: anyone can audit exactly what the app
+does, fork it, and self-host their own recording pipeline without asking
+permission.
 
-Because Rekordly is source available, you are free to inspect and modify the
-code within the license terms. Modified builds are not official Rekordly
-releases and are not covered by official support or release guarantees.
+One caveat: modified builds are not official Rekordly releases. They are not
+covered by the official release or auto-update guarantees, and per the
+Apache-2.0 trademark carve-out they must not present themselves as
+official Rekordly builds.
 
 ---
 
 ## License
 
-Rekordly is source-available software licensed under the
-[PolyForm Noncommercial License 1.0.0](LICENSE.txt).
+Rekordly is free, open-source software licensed under the
+[Apache License, Version 2.0](LICENSE.txt).
 
-The source code is publicly available and may be used, modified, and shared
-within the permissions granted by the license.
+- **Everyone is welcome to use it** — personal, educational, commercial, and
+  internal business use included.
+- **You may modify and redistribute**, provided you keep the license text and
+  copyright notice and mark any modified files, per the standard Apache-2.0
+  conditions.
+- The Rekordly name and logo are not covered by the license.
+- The vendored yt-dlp and ffmpeg binaries keep their own licenses.
 
-- **Personal, educational, and other permitted noncommercial use:** free.
-- **Commercial use** is not granted by the PolyForm Noncommercial license
-  and requires a separate commercial license from Rekordly — contact
-  [hello@rekordly.in](mailto:hello@rekordly.in).
-
-Rekordly is source-available under the PolyForm Noncommercial License —
-free for personal, educational, and other noncommercial use; commercial
-use requires a paid license.
+See [LICENSE.txt](LICENSE.txt) for the full text.
 
 The capture engine shells out to [yt-dlp](https://github.com/yt-dlp/yt-dlp)
 and [ffmpeg](https://ffmpeg.org/) (both vendored for convenience); those

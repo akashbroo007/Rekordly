@@ -36,12 +36,12 @@ const pageFaqs = [
   {
     question: "Is it free?",
     answer:
-      "Rekordly is free for personal, educational, and other noncommercial use, under the PolyForm Noncommercial license. Everything is included — unlimited creator monitoring, unlimited live recordings, and unlimited downloads. Commercial use requires a separate commercial license.",
+      "Rekordly is free and open-source software (Apache-2.0). Everything is included — unlimited creator monitoring, unlimited live recordings, and unlimited downloads. Yes, commercial use too — the license doesn't wall that off.",
   },
   {
     question: "Is there a completely free Stripchat or BongaCams recorder?",
     answer:
-      "Yes — Rekordly is free for personal use (PolyForm Noncommercial license) and supports both platforms out of the box. For Stripchat you get automatic live recording, VR (3D) capture, and VOD/clip downloads; for BongaCams, automatic live recording of shows (VOD downloads are not offered there, so live capture is how shows get archived). There is no watermark and no paywalled recording limits.",
+      "Yes — Rekordly is free and open source (Apache-2.0 license) and supports both platforms out of the box. For Stripchat you get automatic live recording, VR (3D) capture, and VOD/clip downloads; for BongaCams, automatic live recording of shows (VOD downloads are not offered there, so live capture is how shows get archived). There is no watermark and no paywalled recording limits.",
   },
   {
     question: "How do I record a cam show automatically?",

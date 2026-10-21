@@ -1,6 +1,6 @@
 # Overview
 
-Rekordly is a **source-available desktop app** that watches your favorite creators, records them the moment they go live, and organizes everything into a searchable library. It's free for personal and noncommercial use; commercial use requires a [paid license](license).
+Rekordly is a **free, open-source desktop app** (Apache-2.0) that watches your favorite creators, records them the moment they go live, and organizes everything into a searchable library.
 
 It was built around one simple observation: streams worth watching are often live at inconvenient hours, and scrolling through VOD lists afterwards is a losing game. Rekordly turns that chore into a background process — you add a creator once, and the app handles detection, capture, and organization from then on.
 

@@ -117,7 +117,7 @@ const comparisonGroups: ComparisonGroup[] = [
       },
       {
         capability: "Commercial use",
-        included: "Requires commercial license",
+        included: true,
       },
     ],
   },
@@ -161,8 +161,8 @@ function FeatureComparison() {
 
         <p className="mt-4 text-xs leading-6 text-white/50">
           Nothing is metered — a 3-hour live stream records in full, and a
-          3-hour VOD downloads in full. All included features apply to
-          personal use; commercial use requires a separate commercial license.
+          3-hour VOD downloads in full. Everything above applies to every user
+          under the Apache-2.0 license.
         </p>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
@@ -220,7 +220,7 @@ export default function FeaturesPage() {
   useSeo({
     title: "Features — monitoring, auto-record, downloads, editor & more",
     description:
-      "Every Rekordly feature: live monitoring across 8 sites, auto-record with safety rails, VOD downloads, built-in editor, cloud uploads, and a Secure Proxy for blocked networks.",
+      "Every Rekordly feature: live monitoring across 13 sites, auto-record with safety rails, VOD downloads, built-in editor, cloud uploads, and a Secure Proxy for blocked networks.",
     path: "/features",
   });
 

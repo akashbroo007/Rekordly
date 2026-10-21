@@ -1,6 +1,6 @@
 # Supported Platforms
 
-Rekordly supports the following sites out of the box (Stripchat and Dreamcam including VR cams):
+Rekordly supports the following 13 sites out of the box (Stripchat and Dreamcam including VR cams), plus a Tango Live plugin available from the [Marketplace](/marketplace):
 
 | Site       | Live detection | Recording | Downloads | VR (3D) |
 | ---------- | :------------: | :-------: | :-------: | :-----: |
@@ -17,6 +17,9 @@ Rekordly supports the following sites out of the box (Stripchat and Dreamcam inc
 | CamSoda    |       ✓        |     ✓     |     —     |    —    |
 | MyFreeCams |       ✓        |     ✓     |     —     |    —    |
 | Dreamcam   |       ✓        |     ✓     |     —     |    ✓    |
+| Tango Live |       ✓        |     ✓     |     ✓     |    —    |
+
+Tango Live is distributed as a **marketplace plugin**: download the zip from the [Marketplace](/marketplace) and install it from inside the app (Plugins → Install plugin). The 13 sites above ship inside the installer itself.
 
 Stripchat and Dreamcam recordings can capture the **VR (3D) stereoscopic feed** and play it back in the built-in look-around player — see [VR Playback & Recording](vr).
 

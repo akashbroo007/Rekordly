@@ -17,14 +17,15 @@ export default function MarketplacePage() {
     title:
       "Plugin Marketplace — streaming platform & site plugins for Rekordly",
     description:
-      "Rekordly is live-stream recording and monitoring technology. Browse platform plugins — Twitch, YouTube, and more coming — or request support for a new streaming platform.",
+      "Browse 14 ready-to-install plugins: Twitch, YouTube, Rumble, Kick, Tango Live, and 9 live-cam sites — or request support for a new streaming platform.",
     path: "/marketplace",
   });
 
-  const platformCount = plugins.filter(
+  const shippable = plugins.filter((plugin) => !plugin.developer);
+  const platformCount = shippable.filter(
     (plugin) => plugin.category === "platform",
   ).length;
-  const totalCount = plugins.length;
+  const totalCount = shippable.length;
 
   return (
     <>

@@ -46,6 +46,12 @@ export interface PluginEntry {
   download?: string;
   /** True when the site supports video/VOD downloads (mirrors the platform matrix). */
   downloads?: boolean;
+  /**
+   * True for developer/example plugins (mirrors the desktop app, which hides
+   * them behind its "Show developer plugins" toggle). These are excluded
+   * from the marketplace grid and from ship-count copy.
+   */
+  developer?: boolean;
 }
 
 export const plugins: PluginEntry[] = [
@@ -202,7 +208,7 @@ export const plugins: PluginEntry[] = [
     name: "BongaCams",
     description: "Monitor and record livestreams from BongaCams.",
     author: "Rekordly",
-    version: "0.1.0",
+    version: "0.1.1",
     category: "cam",
     capabilities: [
       "auth",
@@ -222,7 +228,7 @@ export const plugins: PluginEntry[] = [
     name: "Cam4",
     description: "Monitor and record livestreams from Cam4 (www.cam4.com).",
     author: "Rekordly",
-    version: "0.1.0",
+    version: "0.1.1",
     category: "cam",
     domain: "cam4.com",
     capabilities: [
@@ -389,6 +395,7 @@ export const plugins: PluginEntry[] = [
     ],
     permissions: ["network", "cookies", "recording"],
     bundled: false,
+    developer: true,
   },
 ];
 
@@ -406,9 +413,9 @@ export const capabilityLabels: Record<PluginCapability, string> = {
 /**
  * Generic live-streaming platforms on the roadmap. Shown in a "coming soon"
  * strip on the marketplace, after the bundled generic platform plugins.
+ * Rumble is deliberately absent — its plugin already ships.
  */
 export const plannedPlatforms = [
-  "Rumble",
   "Trovo",
   "DLive",
   "Picarto",

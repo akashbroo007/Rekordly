@@ -1,6 +1,6 @@
 # Rekordly
 
-> Rekordly is a free, source-available Windows desktop app that monitors
+> Rekordly is a free, open-source Windows desktop app that monitors
 > content creators, automatically records their live streams, downloads
 > videos and VODs, and organizes everything into a searchable local library.
 
@@ -8,13 +8,13 @@ Rekordly watches the creators you follow across supported streaming sites,
 hits record the moment they go live, and files every capture into a
 searchable local library. Recording is a lossless straight copy powered by
 bundled yt-dlp and ffmpeg — nothing else to install. The app is local-first:
-no account, no telemetry, all data stays in SQLite on your machine. Free for
-personal, educational, and other noncommercial use under the PolyForm
-Noncommercial License 1.0.0; commercial use requires a separate license.
+no account, no telemetry, all data stays in SQLite on your machine. Free and
+open source under the Apache License 2.0, including commercial use.
 
-Supported platforms: Twitch, YouTube, Kick, Chaturbate, Stripchat, BongaCams,
-CamSoda, MyFreeCams, and Dreamcam — extensible to any site through the community
-plugin system and its typed SDK.
+Supported platforms: Twitch, YouTube, Rumble, Kick, Chaturbate, Stripchat,
+BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, and Dreamcam —
+with a Tango Live plugin available from the marketplace — extensible to any
+site through the community plugin system and its typed SDK.
 
 ## Main pages
 
@@ -45,6 +45,15 @@ plugin system and its typed SDK.
 - [What is Rekordly and how do you get started?](https://rekordly.in/blog/what-is-rekordly): a plain-English tour and a four-step quick start
 - [The problem Rekordly solves](https://rekordly.in/blog/the-problem-rekordly-solves): why streams disappear and how auto-archiving fixes it
 - [Who is Rekordly for?](https://rekordly.in/blog/who-is-rekordly-for): five user groups and their workflows
+- [Free cam site recorder guide](https://rekordly.in/blog/free-cam-site-recorder): why screen recorders fail and how stream-copy recording works
+- [Stripchat recorder guide](https://rekordly.in/blog/stripchat-recorder): automatic live recording, VR (3D), and VOD downloads
+- [BongaCams recorder guide](https://rekordly.in/blog/bongacams-recorder): free automatic archiving via live capture
+- [Chaturbate recorder guide](https://rekordly.in/blog/chaturbate-recorder): auto-record shows and grab VODs and clips
+- [VR cam show recorder guide](https://rekordly.in/blog/vr-cam-recorder): true 3D capture for Dreamcam and Stripchat
+- [Tango Live recorder guide](https://rekordly.in/blog/tango-recorder): record phone-first Tango streams on your PC
+- [YouTube recorder guide](https://rekordly.in/blog/youtube-recorder): automatic livestream recording with the Data API
+- [Twitch recorder guide](https://rekordly.in/blog/twitch-recorder): lives, VODs, and clips on autopilot
+- [Kick recorder guide](https://rekordly.in/blog/kick-recorder): record Kick streams and VODs without an account
 
 ## Optional
 

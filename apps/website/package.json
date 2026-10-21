@@ -2,7 +2,7 @@
   "name": "@rekordly/website",
   "version": "0.1.0",
   "private": true,
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "Apache-2.0",
   "description": "Rekordly marketing website",
   "type": "module",
   "scripts": {

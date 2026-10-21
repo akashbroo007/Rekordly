@@ -59,7 +59,7 @@ export function Footer() {
               <span className="text-lg font-bold text-white">{site.name}</span>
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-6 text-white/60">
-              {site.tagline} Free for personal and noncommercial use.
+              {site.tagline} Free and open source under Apache-2.0.
             </p>
             <div className="mt-5 flex flex-wrap items-center gap-3">
               <a
@@ -133,7 +133,7 @@ export function Footer() {
 
         <div className="mt-12 flex flex-col gap-4 border-t border-white/10 pt-8 md:mt-14 md:flex-row md:items-center md:justify-between">
           <p className="text-xs leading-5 text-white/50">
-            © {new Date().getFullYear()} {site.name}. Source available under
+            © {new Date().getFullYear()} {site.name}. Open source under
             the{" "}
             <a
               href={site.licenseUrl}
@@ -141,9 +141,9 @@ export function Footer() {
               rel="noreferrer"
               className="underline decoration-white/30 underline-offset-2 transition-colors hover:text-white/80"
             >
-              PolyForm Noncommercial License 1.0.0
+              Apache License 2.0
             </a>
-            . Free for personal use; commercial use requires a license.
+            . Commercial use is free too.
           </p>
           <p className="max-w-xl text-xs leading-5 text-white/50">
             Not affiliated with, endorsed by, or sponsored by any of the

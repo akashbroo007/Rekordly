@@ -207,7 +207,7 @@ export const docGroups: DocGroup[] = [
         title: "License",
         group: "Help",
         description:
-          "Rekordly's licensing model: free for personal use, paid commercial licenses.",
+          "Rekordly's license: free and open source under Apache-2.0, including commercial use.",
         content: licenseMd,
       },
     ],

@@ -2,7 +2,7 @@
 
 ## Is Rekordly really free?
 
-Yes — for personal, educational, and other noncommercial use. Rekordly is source-available software under the [PolyForm Noncommercial license](license). Everything is included: unlimited creator monitoring, unlimited live recordings, unlimited downloads, push notifications with remote control from Telegram, and full access to the library and plugins. Companies and other commercial users need a paid commercial license — contact [hello@rekordly.in](mailto:hello@rekordly.in). The vendored yt-dlp and ffmpeg binaries keep their own licenses.
+Yes — completely. Rekordly is free and open-source software under the [Apache License 2.0](license). Everything is included: unlimited creator monitoring, unlimited live recordings, unlimited downloads, push notifications with remote control from Telegram, and full access to the library and plugins — for individuals, businesses, and everyone else. The vendored yt-dlp and ffmpeg binaries keep their own licenses.
 
 ## Do I need to install ffmpeg or yt-dlp?
 
@@ -10,7 +10,7 @@ No. Both are vendored inside the app — download the installer, run it, and you
 
 ## Which platforms are supported?
 
-Twitch, YouTube, Rumble, Kick, Chaturbate, Stripchat, BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, and Dreamcam are supported out of the box for live detection and recording — Dreamcam including VR (3D) shows. New sites can be added as plugins without touching the core app — see [Plugins](plugins) and [Supported Platforms](platforms).
+Twitch, YouTube, Rumble, Kick, Chaturbate, Stripchat, BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, and Dreamcam are supported out of the box for live detection and recording — Dreamcam including VR (3D) shows. A Tango Live plugin is also available from the [Marketplace](/marketplace). New sites can be added as plugins without touching the core app — see [Plugins](plugins) and [Supported Platforms](platforms).
 
 ## My ISP blocks one of the sites — can I still record?
 

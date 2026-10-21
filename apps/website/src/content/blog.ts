@@ -27,13 +27,13 @@ export const blogPosts: BlogPost[] = [
     readingTime: "7 min read",
     emoji: "🚀",
     body: `
-Rekordly is a free, source-available desktop app for Windows that does one job end to end: it watches the creators you follow, hits record the moment they go live, and files every capture into a searchable local library. Bundled yt-dlp and ffmpeg mean there is nothing else to install.
+Rekordly is a free, open-source desktop app for Windows that does one job end to end: it watches the creators you follow, hits record the moment they go live, and files every capture into a searchable local library. Bundled yt-dlp and ffmpeg mean there is nothing else to install.
 
 If you have ever refreshed a follower page 30 times hoping to catch a stream, or lost a VOD because the platform deleted it two days later, this post is for you.
 
 ## What Rekordly actually does
 
-- **Live monitoring** — track creators across 12 sites (Twitch, YouTube, Rumble, Kick, Chaturbate, Stripchat, BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, Dreamcam) from one dashboard with live status, viewer counts, and stream titles.
+- **Live monitoring** — track creators across 13 sites (Twitch, YouTube, Rumble, Kick, Chaturbate, Stripchat, BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, Dreamcam) from one dashboard with live status, viewer counts, and stream titles.
 - **Auto-Record** — flip one per-creator switch and recording starts the second the creator goes live, then stops cleanly when the stream ends.
 - **Downloads** — grab VODs, clips, and highlights, or extract audio-only MP3s from anything.
 - **Library** — every capture lands in a local, searchable library with tags, collections, favorites, and notes.
@@ -62,7 +62,7 @@ Every capture is organized with tags, collections, favorites, and notes. Use the
 
 ## Is it really free?
 
-Yes. Rekordly is free for personal, educational, and noncommercial use under the PolyForm Noncommercial license. Everything is included — unlimited monitoring, unlimited live recordings, and unlimited downloads — with no features locked behind a paywall. Commercial use requires a paid commercial license; see the [license docs](/docs/license) for the fine print.
+Yes — completely. Rekordly is free and open-source software under the Apache License 2.0. Everything is included — unlimited monitoring, unlimited live recordings, and unlimited downloads — with no features locked behind a paywall, for individuals and businesses alike. See the [license docs](/docs/license) for the fine print.
 
 ## Where to go next
 
@@ -110,7 +110,7 @@ A naive "record when live" toggle can fill your disk overnight or hang on a cras
 ## What it is *not*
 
 - **Not a screen recorder.** Recording is a straight copy of the stream, so quality is lossless and CPU use stays low.
-- **Not a subscription.** The app is entirely free for personal use under the PolyForm Noncommercial license — there is no paid tier to upgrade to, no monthly fee, and no locked features.
+- **Not a subscription.** The app is entirely free and open source under the Apache License 2.0 — there is no paid tier to upgrade to, no monthly fee, and no locked features.
 - **Not cloud-based.** Creators, recordings, and the library database live in local SQLite on your machine. Nothing is uploaded unless you explicitly configure a [cloud provider](/docs/cloud-uploads).
 
 ## The 30-second test
@@ -163,7 +163,7 @@ The built-in Secure Proxy routes a blocked creator's traffic with one toggle; th
 
 ## What Rekordly is not for
 
-To be clear about boundaries: Rekordly is not for redistributing other people's content, and commercial use requires a [commercial license](/docs/license). You are responsible for respecting the platforms you record from and the laws in your jurisdiction.
+To be clear about boundaries: Rekordly is not for redistributing other people's content — the license is generous, but copyright and platform rules still apply. You are responsible for respecting the platforms you record from and the laws in your jurisdiction.
 
 ## Find your starting point
 
@@ -213,7 +213,7 @@ One more thing that matters more than it sounds: if your network blocks the site
 
 ## Money, honestly asked about
 
-Is a free Stripchat recorder actually free? Here it is: yes for personal use. PolyForm Noncommercial license, unlimited monitoring, unlimited recordings, unlimited downloads, no watermark, no "premium settings" nonsense behind a paywall. Companies pay for a [commercial license](/docs/license); that's the entire business model.
+Is a free Stripchat recorder actually free? Here it is: yes, completely. It's free and open source under the Apache License 2.0 — unlimited monitoring, unlimited recordings, unlimited downloads, no watermark, no "premium settings" nonsense behind a paywall. Personal use, business use, whatever you're doing: the license is Apache-2.0 for everyone.
 
 Straight answers to the usual questions:
 
@@ -270,7 +270,7 @@ Here's the part most BongaCams "downloaders" won't tell you. Downloads for Bonga
 
 ## What you'll pay
 
-Nothing, for personal use. PolyForm Noncommercial license, no watermark, no recording quotas, no upsell screen. Monitoring unlimited, recordings unlimited. The only people who pay are commercial users, and they do it for a [license](/docs/license) rather than for permissions inside the app.
+Nothing. Rekordly is free and open source under the Apache License 2.0, no watermark, no recording quotas, no upsell screen. Monitoring unlimited, recordings unlimited. The only thing anyone spends money on around here is their own storage and bandwidth.
 
 ## Questions from the inbox
 
@@ -326,7 +326,7 @@ Compared to the other big cam sites, Chaturbate is the dream case for an archive
 
 ## What it costs, and the questions that follow
 
-Free for personal use, PolyForm Noncommercial license. Nothing personal is gated: monitoring, recording, downloads, the library, the editor. Companies take a paid [license](/docs/license), which is one paragraph of honesty that lots of other "free recorders" skip.
+Free and open source under the Apache License 2.0. Nothing is gated for anyone: monitoring, recording, downloads, the library, the editor — commercial use included. It's one plain sentence most other "free recorders" won't give you.
 
 A few of the messages we get, answered plainly:
 
@@ -381,7 +381,7 @@ The catch is that every streaming site is its own small project: different listi
 
 ## What a properly-built version looks like
 
-Rekordly is a free, source-available Windows app, and its shape is: watch, capture, keep.
+Rekordly is a free, open-source Windows app, and its shape is: watch, capture, keep.
 
 Number one, monitoring. A single dashboard tracks your creators across 13 bundled sites at the moment: Twitch, YouTube, Rumble, Kick, Chaturbate, Stripchat, BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, and Dreamcam, with live status, viewer count, and the current stream title for each row.
 
@@ -395,9 +395,9 @@ Per-platform facts live on the [cam recording hub page](/adult-stream-recording)
 
 ## What about extensions and one-click "downloader" web tools?
 
-Worth saying directly: browser extensions and "paste the URL" web pages for cam sites can run as downloaders only by some third party's proxy holding your session. On top of the reliability problems (they break the day the site changes), you're trusting whoever runs that server with traffic around an account you care about. A desktop app that vendors its own tools, is source-available, and runs local has fewer hands in the middle. Those are the actual reasons we built it this way, not just the ones that fit in a feature box.
+Worth saying directly: browser extensions and "paste the URL" web pages for cam sites can run as downloaders only by some third party's proxy holding your session. On top of the reliability problems (they break the day the site changes), you're trusting whoever runs that server with traffic around an account you care about. A desktop app that vendors its own tools, is open source, and runs local has fewer hands in the middle. Those are the actual reasons we built it this way, not just the ones that fit in a feature box.
 
-The price question comes up in every thread about free cam recorders, so, plainly: Rekordly is free for personal use under PolyForm Noncommercial. No watermark, no recording limits, no settings gated behind a plan. The one paid thing is the [commercial license](/docs/license) for companies, which is how development keeps paying for the pipes it runs on.
+The price question comes up in every thread about free cam recorders, so, plainly: Rekordly is free and open source under Apache-2.0. No watermark, no recording limits, no settings gated behind a plan, no commercial-use asterisk either — the license covers everyone.
 
 ## Questions that keep showing up
 
@@ -448,7 +448,7 @@ While a show runs, the same rails apply as anywhere: recording stops cleanly at 
 ## Small honest print
 
 - Platform coverage is exactly two sites, because they're the ones broadcasting native VR today. When the matrix changes, it updates in the [platform docs](/docs/platforms) and on the [cam recording hub](/adult-stream-recording) first.
-- Price is the usual: free, personal use, PolyForm Noncommercial; companies take a [license](/docs/license). No watermark. The strip of "premium VR settings" you'd find on some tools doesn't exist here at all.
+- Price is the usual: free and open source under Apache-2.0. No watermark. The strip of "premium VR settings" you'd find on some tools doesn't exist here at all.
 - Headset playback depends on what your headset's player accepts. The safest path: files on disk plus the app's own look-around player, which is available even when the headset isn't.
 - The regular rules apply unchanged: the platforms' terms and your local laws are on you, not on the app. Public broadcast isn't redistribution permission.
 
@@ -498,7 +498,7 @@ Long shows? Segment splitting plus the disk-space guardrail means a marathon can
 
 **Are recordings a weird proprietary format?** No. Standard files on your disk, any player opens them, the library is just a tidy index on top.
 
-**So, the price?** Free for personal use under PolyForm Noncommercial. Unlimited monitoring, unlimited recording. There is no watermarked "basic mode". A commercial license is a separate document for companies, not a pop-up blinking at personal users.
+**So, the price?** Free and open source under Apache-2.0. Unlimited monitoring, unlimited recording. There is no watermarked "basic mode", and there is no separate commercial agreement either — the license already covers companies.
 
 **Do you also record other apps like this?** The list changes as plugins land; the [cam recording hub](/adult-stream-recording) keeps the current truth. Neighbouring guides: [Stripchat](/blog/stripchat-recorder), [BongaCams](/blog/bongacams-recorder), [Chaturbate](/blog/chaturbate-recorder).
 
@@ -618,7 +618,7 @@ Twitch VOD retention is the platform's business, not ours, and it changes; anyth
 
 **What about the cam sites I also watch?** Different guide, same app: see the [cam recording hub](/adult-stream-recording), and the [Stripchat recorder walkthrough](/blog/stripchat-recorder) if VR is your thing.
 
-**Cost?** Free for personal use under PolyForm Noncommercial. No watermark, no recording quotas, no upsells. Companies take the paid [license](/docs/license) and everyone else keeps their money.
+**Cost?** Free and open source under Apache-2.0. No watermark, no recording quotas, no upsells — and no commercial-use asterisk; everyone keeps their money.
 
 ## The disclaimer paragraph I write every time
 
@@ -674,9 +674,9 @@ One live-truth note: platforms rearrange their plumbing, Kick included, and a do
 
 **Files proprietary?** No. Standard files, any player opens them, library is just the index on top.
 
-**Also does other platforms?** Twitch and YouTube and Rumble and twelve cam sites; full list in the [platform docs](/docs/platforms), cam guides at the [cam recording hub](/adult-stream-recording), and the [Twitch guide](/blog/twitch-recorder) has the one platform that needs API credentials.
+**Also does other platforms?** Twitch, YouTube, Rumble, Kick, and nine cam sites; full list in the [platform docs](/docs/platforms), cam guides at the [cam recording hub](/adult-stream-recording), and the [Twitch guide](/blog/twitch-recorder) and [YouTube guide](/blog/youtube-recorder) cover the two platforms that need free API credentials.
 
-**Price?** Free for personal use, PolyForm Noncommercial, no watermarks, no quotas. Companies buy the [license](/docs/license); personal pockets stay shut.
+**Price?** Free and open source under Apache-2.0, no watermarks, no quotas — for personal and commercial pockets alike.
 
 ## The one rule I keep repeating
 

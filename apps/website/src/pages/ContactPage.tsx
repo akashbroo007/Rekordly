@@ -185,7 +185,7 @@ export default function ContactPage() {
   useSeo({
     title: "Contact — bug reports, feature ideas & press",
     description:
-      "Get in touch with the Rekordly team: report bugs on GitHub, request features, ask about commercial licensing, or email us for anything else.",
+      "Get in touch with the Rekordly team: report bugs on GitHub, request features, ask about the project or its license, or email us for anything else.",
     path: "/contact",
   });
 

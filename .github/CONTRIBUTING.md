@@ -76,4 +76,4 @@ Please follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the PolyForm Noncommercial License 1.0.0, and you grant Rekordly the right to include, relicense, and commercially license your contributions as part of Rekordly.
+By contributing, you agree that your contributions will be licensed under the Apache License, Version 2.0, without any additional terms or conditions, and you grant Rekordly (as the project) the right to include your contributions as part of Rekordly.

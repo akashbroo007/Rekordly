@@ -200,6 +200,6 @@ export function softwareAppSchema(): Record<string, unknown> {
       price: "0",
       priceCurrency: "USD",
     },
-    license: "https://polyformproject.org/licenses/noncommercial/1.0.0",
+    license: "https://www.apache.org/licenses/LICENSE-2.0.html",
   };
 }

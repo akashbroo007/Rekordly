@@ -137,6 +137,31 @@ export const featureBoxes: FeatureBox[] = features.map((feature) => ({
   ...boxLink(feature.title),
 }));
 
+/**
+ * Box titles shown on the homepage grid, in display order. Post-Recording
+ * Automation is not here — the homepage AutomationBanner below the grid
+ * highlights it. The remaining boxes stay reachable via /features.
+ */
+const homeBoxTitles = [
+  "Live Monitoring",
+  "Auto-Record with safety rails",
+  "Recording & Downloads",
+  "Library & Analytics",
+  "Cloud Uploads",
+  "Built-in Video Editor",
+] as const;
+
+function homeBox(title: string): FeatureBox {
+  const box = featureBoxes.find((candidate) => candidate.title === title);
+  if (!box) {
+    throw new Error(`featuresConfig: no feature box titled "${title}"`);
+  }
+  return box;
+}
+
+/** The 6 homepage grid boxes, each with its link attached. */
+export const homeFeatureBoxes: FeatureBox[] = homeBoxTitles.map(homeBox);
+
 /** The exact link for a box title (used by mention-linking helpers). */
 const featured: FeatureBox[] = featureBoxes.filter((box) => box.featured);
 if (featured.length !== 1) {

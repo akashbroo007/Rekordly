@@ -21,7 +21,7 @@ Architecture:
 Plugin-first Desktop Application
 
 License:
-PolyForm Noncommercial 1.0.0 (free for noncommercial use; commercial use requires a license from Rekordly — hello@rekordly.in)
+Apache License, Version 2.0 (free for everyone, including commercial use; full text in LICENSE.txt)
 
 Language:
 English
@@ -38,7 +38,7 @@ The application should be:
 - Easy to contribute to
 - Easy to maintain
 - Easy to understand
-- Source Available (contribution friendly)
+- Open source, Apache-2.0 (contribution friendly)
 
 Avoid unnecessary enterprise complexity.
 

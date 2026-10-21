@@ -73,8 +73,8 @@ priority order:
 **Partnerships**
 - Plugin authors who build site integrations will link their plugin pages
   back to Rekordly — the plugin guide already encourages public repos.
-- Offer the commercial license page a "powered by Rekordly" badge that
-  customers can embed (classic badge backlink).
+- Offer the license page a "powered by Rekordly" badge that
+  users can embed (classic badge backlink).
 
 **What to avoid**
 - Buying links or bulk directory spam — Google devalues/penalizes these.

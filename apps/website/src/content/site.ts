@@ -12,7 +12,7 @@ export const site = {
   name: "Rekordly",
   tagline: "Monitor, record, and download live streams — automatically.",
   description:
-    "A free, source-available Windows desktop app for monitoring creators, automatically recording live streams, downloading videos and VODs, and organizing your recordings.",
+    "A free, open-source Windows desktop app for monitoring creators, automatically recording live streams, downloading videos and VODs, and organizing your recordings.",
   repoUrl: "https://github.com/akashbroo007/Rekordly",
   releasesUrl: "https://github.com/akashbroo007/Rekordly/releases",
   latestReleaseUrl: "https://github.com/akashbroo007/Rekordly/releases/latest",
@@ -58,12 +58,12 @@ export const secondaryNavLinks = [
 ] as const;
 
 export const hero = {
-  badge: "Free for personal use — source available",
+  badge: "Open source — Apache-2.0",
   titleLead: "Never miss a",
   titleAccent: "live stream",
   titleTail: "again",
   subtitle:
-    "A free, source-available Windows app for monitoring creators, automatically recording live streams, downloading videos and VODs, and organizing your recordings.",
+    "A free, open-source Windows app for monitoring creators, automatically recording live streams, downloading videos and VODs, and organizing your recordings.",
   primaryCta: {
     label: "Download for Windows",
     // One-click: straight to the pinned `Rekordly Setup <ver>.exe` asset on
@@ -73,7 +73,7 @@ export const hero = {
     href: site.installerDownloadUrl,
   },  secondaryCta: { label: "View on GitHub", href: site.repoUrl },
   stats: [
-    { value: "12", label: "Sites supported" },
+    { value: "13", label: "Sites supported" },
     { value: "0", label: "Setup — yt-dlp & ffmpeg bundled" },
     { value: "100%", label: "Free for personal use" },
   ],
@@ -203,7 +203,7 @@ export const faqs = [
   {
     question: "Is Rekordly really free?",
     answer:
-      "Yes — for personal, educational, and other noncommercial use, under the PolyForm Noncommercial license. Everything is included: unlimited creator monitoring, unlimited live recordings, unlimited downloads, push notifications with remote control via Telegram, and full access to the library and plugins. Companies and other commercial users need a paid commercial license — see the License page or contact us.",
+      "Yes — completely. Rekordly is free and open-source software under the Apache License 2.0. Everything is included: unlimited creator monitoring, unlimited live recordings, unlimited downloads, push notifications with remote control via Telegram, and full access to the library and plugins. The vendored yt-dlp and ffmpeg binaries keep their own licenses — see the License page for details.",
   },
   {
     question: "Do I need to install ffmpeg or yt-dlp?",
@@ -213,7 +213,7 @@ export const faqs = [
   {
     question: "Which platforms are supported?",
     answer:
-      "Twitch, YouTube, Rumble, Kick, Chaturbate, Stripchat, BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, and Dreamcam are supported out of the box for live detection and recording — Dreamcam including VR (3D) shows. New sites can be added as plugins without touching the core app.",
+      "Twitch, YouTube, Rumble, Kick, Chaturbate, Stripchat, BongaCams, Cam4, CamSoda, Jerkmate, Streamate, MyFreeCams, and Dreamcam are supported out of the box for live detection and recording — Dreamcam including VR (3D) shows. A Tango Live plugin is also available from the Plugin Marketplace. New sites can be added as plugins without touching the core app.",
   },
   {
     question: "My ISP blocks one of the sites — can I still record?",
@@ -240,6 +240,19 @@ export const faqs = [
     answer:
       "You are responsible for using Rekordly in a way that respects the terms of the platforms you record from and the laws in your jurisdiction. Please record responsibly.",
   },
+] as const;
+
+/**
+ * The 5 FAQs shown on the homepage — free/use, install, platforms, ISP
+ * blocking, and data locality. The full list stays on /docs/faq and is what
+ * `faqs` above feeds.
+ */
+export const homepageFaqs = [
+  faqs[0],
+  faqs[1],
+  faqs[2],
+  faqs[3],
+  faqs[5],
 ] as const;
 
 export const contactChannels = [
@@ -334,6 +347,18 @@ export const roadmap: RoadmapGroup[] = [
           "Push finished recordings to Gofile, Catbox, MixDrop, or Google Drive with per-provider credential handling.",
         target: "0.1.x",
       },
+      {
+        title: "In-app bug reporting & auto-updater",
+        description:
+          "Report problems from Settings with environment info attached (a prepared report is copied to your clipboard for a GitHub issue), and one-click self-updates against GitHub Releases.",
+        target: "1.0.0",
+      },
+      {
+        title: "In-app plugin install",
+        description:
+          "Install an unpacked site-plugin folder from inside the app — the Plugins page, the top-bar New menu, and the command palette all wire into the same managed-install flow with SDK validation.",
+        target: "1.0.0",
+      },
     ],
   },
   {
@@ -342,16 +367,9 @@ export const roadmap: RoadmapGroup[] = [
     description: "Actively being worked on right now.",
     items: [
       {
-        title: "In-app bug reporting",
-        description:
-          "Report a problem from Settings with environment info attached automatically — a prepared report is copied to your clipboard ready for a GitHub issue.",
-        target: "Next release",
-        issueUrl: site.issuesUrl,
-      },
-      {
         title: "Plugin developer mode",
         description:
-          "Load unpacked plugin folders with hot-reloading for faster community plugin development.",
+          "Unpacked plugin folders already load automatically in dev builds and can be installed from disk in packaged builds — hot-reloading is next, so community plugin development stays instant.",
         target: "Next release",
         issueUrl: site.discussionsUrl,
       },
@@ -375,9 +393,9 @@ export const roadmap: RoadmapGroup[] = [
         target: "1.1",
       },
       {
-        title: "Plugin marketplace",
+        title: "Marketplace browsing in-app",
         description:
-          "Browse and install community plugins from inside the app.",
+          "Browse the website's plugin marketplace from inside the app and install a listing with one click. Installing a built plugin folder from disk already works.",
         target: "1.2",
       },
       {

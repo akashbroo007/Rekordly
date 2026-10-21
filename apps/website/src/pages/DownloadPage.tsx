@@ -164,7 +164,7 @@ export default function DownloadPage() {
           eyebrow="Download"
           as="h1"
           title="Get Rekordly for Windows"
-          description="Free for personal use under the PolyForm Noncommercial license. Every release ships an installer and a portable build."
+          description="Free and open source under the Apache License 2.0. Every release ships an installer and a portable build."
         />
         <div className="mx-auto mt-12 grid max-w-4xl grid-cols-1 gap-6 sm:grid-cols-2">
           {builds.map((build, index) => (

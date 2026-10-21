@@ -106,7 +106,7 @@ doc's row flipped to ✅ shipped.
 |---|---|
 | can you record stripchat | `/blog/stripchat-recorder` FAQ |
 | is it legal to record cam shows | adult page FAQ + every guide's FAQ |
-| does recording webcam shows cost money | all guides ("free under PolyForm") |
+| does recording webcam shows cost money | all guides ("free and open source under Apache-2.0") |
 | do i need to keep a browser tab open | adult page FAQ ("no — stream copy") |
 | will the creator know i recorded (platform notifications live status) | avoid promising anything: answer = platform-dependent, Rekordly reads public pages like a viewer |
 | what happens when a stream ends mid-recording | docs/troubleshooting |

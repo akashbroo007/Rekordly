@@ -47,9 +47,10 @@ function matchesFilter(plugin: PluginEntry, filter: PluginFilterId): boolean {
  * Brand-tinted icon tile. Renders the plugin's real site icon (from
  * /public/plugins, mirroring the desktop app's per-site favicons) when the
  * entry has one; anything else — e.g. the mock platform — keeps the generic
- * puzzle glyph.
+ * puzzle glyph. Exported so the homepage platform strip renders the same
+ * site assets.
  */
-const PLATFORM_TILE_COLORS: Record<string, string> = {
+export const PLATFORM_TILE_COLORS: Record<string, string> = {
   twitch: "#9147ff",
   youtube: "#ff0033",
   rumble: "#0dbf43",
@@ -192,9 +193,17 @@ export function PluginMarketplace() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<PluginFilterId>("all");
 
+  // Developer/example plugins mirror the desktop app: hidden unless the user
+  // enables "Show developer plugins", so they never appear in ship counts
+  // or the default marketplace listing.
+  const catalog = useMemo(
+    () => plugins.filter((plugin) => !plugin.developer),
+    [],
+  );
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const filtered = plugins.filter((plugin) => {
+    const filtered = catalog.filter((plugin) => {
       if (!matchesFilter(plugin, filter)) return false;
       if (!q) return true;
       return (
@@ -205,7 +214,7 @@ export function PluginMarketplace() {
     });
     // Generic platform plugins first, cam sites after.
     return sortForMarketplace(filtered);
-  }, [query, filter]);
+  }, [catalog, query, filter]);
 
   const platformPlugins = visible.filter((p) => p.category === "platform");
   const camPlugins = visible.filter((p) => p.category === "cam");
