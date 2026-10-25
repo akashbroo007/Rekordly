@@ -2,7 +2,15 @@
 import { existsSync, renameSync } from 'node:fs';
 import { statfs } from 'node:fs/promises';
 import { join } from 'node:path';
-import { app, BrowserWindow, dialog, nativeTheme, Notification as ElectronNotification } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  nativeTheme,
+  Notification as ElectronNotification,
+  powerMonitor,
+  powerSaveBlocker,
+} from 'electron';
 import {
   createDatabase,
   createLogRepo,
@@ -52,6 +60,8 @@ import {
   type CoreEvents,
 } from '@rekordly/core';
 import { registerIpcHandlers } from './ipc';
+import { startRecordingForCreator as sharedStartRecordingForCreator } from './record-start';
+import { startLagProbe } from './lag-probe';
 import { refreshCreatorAvatar } from './creator-avatars';
 import { initAppUpdater } from './updater';
 import { registerMediaScheme, registerMediaProtocolHandler } from './media-protocol';
@@ -344,6 +354,29 @@ async function bootstrap(): Promise<void> {
   logger.info({ dirs, logLevel: initialLogLevel }, 'application starting');
   logger.info({ dbPath: dirs.dbPath }, 'database initialized');
 
+  // ponytail (2026-10-24): last-resort resilience net. A background-plumbing
+  // error (e.g. an async EPIPE on a capture child's stdin during an
+  // intentional stop) used to reach Node's uncaughtException path and pop
+  // Electron's fatal "A JavaScript error occurred in the main process"
+  // dialog over a session with live recordings. Once ANY handler exists,
+  // Electron stops showing that modal: the error is logged and the app —
+  // and every running capture — keeps going. Genuine startup crashes still
+  // surface on the console: this is installed after the logger exists.
+  const logUncaught = (kind: 'exception' | 'rejection', error: unknown): void => {
+    try {
+      logger.error(
+        { err: error, kind },
+        kind === 'exception'
+          ? 'uncaught exception in the main process — logged, app continues (no fatal dialog)'
+          : 'unhandled rejection in the main process — logged, app continues',
+      );
+    } catch {
+      console.error(kind, error); // the logger itself is broken — still surface it
+    }
+  };
+  process.on('uncaughtException', (error) => logUncaught('exception', error));
+  process.on('unhandledRejection', (error) => logUncaught('rejection', error));
+
   const pluginRepo = createPluginRepo(database.orm);
   const logRepo = createLogRepo(database.orm);
   const creatorRepo = createCreatorRepo(database.orm);
@@ -377,78 +410,17 @@ async function bootstrap(): Promise<void> {
     },
   });
 
-  // ponytail: shared "record this creator now" used by BOTH the renderer's
-  // Record dialog (via IPC) and Telegram button taps — one implementation so  // plugin extraction, FK-safe creator ids and duplicate guards stay in sync.
+  // ponytail: shared "record this creator now" — Telegram taps use it here;
+  // the renderer's Record dialog (via IPC) and the batch "Record All Live"
+  // endpoint all go through the same main/record-start.ts implementation, so
+  // plugin extraction, FK-safe creator ids and the duplicate guard stay sync.
   const startRecordingForCreator: (creatorDbId: string, options: {
     quality?: string;
     durationMinutes?: number;
     segmentMinutes?: number;
     streamType?: string;
-  }) => Promise<string> = async (creatorDbId, startOptions) => {
-    const creator = creatorRepo.get(creatorDbId);
-    if (creator === undefined) throw new Error('Creator not found');
-    const monitorId = `${creator.pluginId}:${creator.externalId}`;
-    const managed = pluginManager.get(creator.pluginId);
-    const jobs = monitoring.getJobs();
-    const job = jobs.find((j) => j.creatorId === monitorId);
-    let lastResult = job?.lastResult;
-    const liveDetection = managed?.instance?.capabilities.liveDetection;
-    if (lastResult?.streamUrl === undefined) {
-      if (liveDetection === undefined) {
-        throw new Error(`${creator.displayName} is not live or has no stream URL`);
-      }
-      const status = await liveDetection.getLiveStatus(monitorId);
-      if (!status.isLive) {
-        throw new Error(`${creator.displayName} is not live or has no stream URL`);
-      }
-      lastResult = {
-        isLive: true,
-        title: status.title,
-        thumbnail: status.thumbnail,
-        viewerCount: status.viewerCount,
-        streamUrl: status.streamUrl,
-        startedAt: status.startedAt,
-        checkedAt: new Date().toISOString(),
-        durationMs: 0,
-      };
-    }
-    let stream: StreamObject | null = null;
-    const extract = managed?.instance?.capabilities.streamExtraction;
-    if (extract !== undefined) {
-      try {
-        stream = await extract.extractStream(monitorId, { streamType: startOptions.streamType });
-      } catch {
-        /* fall back to the live-check URL below */
-      }
-    }
-    if (stream === null) {
-      if (lastResult.streamUrl === undefined) {
-        throw new Error(`${creator.displayName} is not live or has no stream URL`);
-      }
-      stream = {
-        creatorId: creator.id,
-        creatorName: creator.displayName,
-        platformId: job?.pluginId ?? creator.pluginId,
-        title: lastResult.title ?? `${creator.displayName} live`,
-        streamUrl: lastResult.streamUrl,
-        thumbnail: lastResult.thumbnail,
-        startedAt: lastResult.startedAt,
-      };
-    } else {
-      stream = { ...stream, creatorId: creator.id, creatorName: creator.displayName };
-    }
-    // Duplicate guard — same as the auto-record path.
-    const ACTIVE_STATUSES = ['queued', 'preparing', 'recording', 'paused', 'stopping'];
-    const hasActive = recording
-        .getJobs()
-      .some(
-        (j) => ACTIVE_STATUSES.includes(j.status) && j.creatorId !== null && j.creatorId === creator.id,
-      );
-    if (hasActive) {
-      throw new Error(`${creator.displayName} already has an active recording.`);
-    }
-    return recording.startRecording(stream, startOptions);
-  };
+  }) => Promise<string> = (creatorDbId, startOptions) =>
+    sharedStartRecordingForCreator({ creatorRepo, pluginManager, monitoring, recording }, creatorDbId, startOptions);
 
   // ponytail: Telegram two-way control — button taps on the bot's pushes can
   // start (with the full Record-dialog option wizard) and stop/pause/resume
@@ -822,11 +794,15 @@ async function bootstrap(): Promise<void> {
 
   const hardware = new HardwareService({ logger, probeDir: dirs.recordingsDir });
 
-  // ponytail: mass-capture gate (plan §10) — at 5+ live recordings both
-  // resource monitors drop to a ~10s cadence so tasklist/powershell spawns
-  // stop stealing CPU from the capture workers themselves.
-  const isMassRecordingLoad = (): boolean =>
-    recording.getJobs().filter((job) => job.status === 'recording').length >= 5;
+  // ponytail: recording-load gate — the resource monitors spawn one
+  // powershell (Get-NetAdapterStatistics) every 1.5s and one tasklist every
+  // 2s into the Electron main thread. The old relief valve only opened at a
+  // FIVE-recording floor, so 2-3 live captures kept paying ~40 powershell
+  // spawns/min on every machine — the borderline where weaker boxes choke.
+  // ONE active recording now drops both monitors to their 10s mass cadence;
+  // idle keeps the fast cadence so the status chips stay live.
+  const isRecordingLoad = (): boolean =>
+    recording.getJobs().some((job) => job.status === 'recording');
 
   // ponytail: process monitor polls child process (yt-dlp/ffmpeg) PIDs for
   // CPU/memory usage, giving the UI visibility into recording resource impact.
@@ -835,7 +811,7 @@ async function bootstrap(): Promise<void> {
     getActivePids: () => recording.getActiveChildPids(),
     pollIntervalMs: 2000,
     massPollIntervalMs: 10_000,
-    isMassLoad: isMassRecordingLoad,
+    isMassLoad: isRecordingLoad,
   });
 
   // ponytail: network monitor polls network interface counters to calculate
@@ -844,7 +820,7 @@ async function bootstrap(): Promise<void> {
     logger,
     pollIntervalMs: 1500,
     massPollIntervalMs: 10_000,
-    isMassLoad: isMassRecordingLoad,
+    isMassLoad: isRecordingLoad,
   });
 
   trayController = new TrayController({ getWindow: () => mainWindow, logger });
@@ -870,6 +846,63 @@ async function bootstrap(): Promise<void> {
   } catch (err) {
     logger.error({ err }, 'network monitor failed to start');
   }
+
+  // ponytail (2026-10-24): block system suspension while any capture is
+  // running. The machine SLEEPING is not the same as being locked: a Modern-
+  // Standby idle sleep under recordings suspends every child process and
+  // kills the live sockets — on resume the whole session unwinds into
+  // truncated files plus a watchdog cascade (the 21.4-minute "driftMs:
+  // 1282242" log was exactly this: locked laptop → idle timeout → 21 min of
+  // nothing → everything fired at once). Held while ≥1 job is
+  // recording/preparing; released when none so an idle laptop still sleeps.
+  // the lid-close power action cannot be bypassed by any user-space API —
+  // recording with the lid shut needs Windows "close lid → do nothing".
+  let sleepBlockerId: number | null = null;
+  const syncSleepBlocker = (): void => {
+    try {
+      const busy = recording
+        .getJobs()
+        .some((job) => job.status === 'recording' || job.status === 'preparing');
+      if (busy && sleepBlockerId === null) {
+        sleepBlockerId = powerSaveBlocker.start('prevent-app-suspension');
+        logger.info({ blockerId: sleepBlockerId }, 'system sleep blocked while captures run');
+      } else if (!busy && sleepBlockerId !== null) {
+        powerSaveBlocker.stop(sleepBlockerId);
+        sleepBlockerId = null;
+        logger.info('idle — system sleep block released');
+      }
+    } catch (error) {
+      // A power-API failure must never wedge stop/starts.
+      logger.warn({ error }, 'powerSaveBlocker sync failed');
+    }
+  };
+
+  // ponytail: sleep/wake bookkeeping — the events go to the log AND to the
+  // lag probe so suspension-sized timer drifts self-attribute instead of
+  // reading as mystery freezes.
+  let lastResumeAt = 0;
+  const sleepContext = (): Record<string, unknown> => {
+    // A resume in the last 90s explains any drift right after it.
+    if (lastResumeAt !== 0 && Date.now() - lastResumeAt < 90_000) {
+      return { msSinceResume: Date.now() - lastResumeAt };
+    }
+    return {};
+  };
+  powerMonitor.on('suspend', () => {
+    logger.warn({}, 'system suspending — running captures freeze with the machine');
+  });
+  powerMonitor.on('resume', () => {
+    lastResumeAt = Date.now();
+    logger.warn({}, 'system resumed — watch for interrupted captures unwinding below');
+  });
+
+  // ponytail: main-thread responsiveness probe — any surviving event-loop
+  // blockage (sync subprocess/fs/DB) shows up as "event loop lagged" warns.
+  // A healthy 10-recording session must log nothing from this.
+  startLagProbe(logger, sleepContext);
+
+  // ponytail: boot-time sync — recovery may have adopted live captures.
+  syncSleepBlocker();
 
   // Start the generic download engine and forward its events to the renderer.
   // ponytail: transfers die with the process — anything still 'downloading'
@@ -1493,6 +1526,9 @@ async function bootstrap(): Promise<void> {
   });
   recording.on('event', () => {
     updateTrayStatus();
+    // ponytail (2026-10-24): hold/release the system-sleep block with
+    // actual capture activity — every lifecycle event re-evaluates.
+    syncSleepBlocker();
   });
 
   registerIpcHandlers({

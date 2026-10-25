@@ -20,6 +20,19 @@ async function fileExists(path: string): Promise<boolean> {
 }
 
 /**
+ * ponytail (2026-10-24): ffmpeg's stderr opens with a multi-line version/
+ * configuration banner; reporting its HEAD (slice(0, 500)) buried the actual
+ * failing line ("Invalid argument", "Option not found", codec names…) after
+ * hundreds of banner characters — the user-facing AppError showed a wall of
+ * build flags and no cause. Surface the TAIL of the stream instead, and
+ * collapse the line breaks so it stays one readable string.
+ */
+function stderrTail(stderr: string, max = 400): string {
+  const flat = stderr.replace(/\s+/g, ' ').trim();
+  return flat.slice(-max);
+}
+
+/**
  * A single time range in seconds: [startSeconds, endSeconds).
  * Used for both trim windows and cut (remove) ranges.
  */
@@ -160,7 +173,12 @@ export class FfmpegService {
         { timeoutMs: 30_000 },
       );
       const match = result.stderr.match(/Input #\d+,\s*([\w,]+)/);
-      return match ? (match[1] ?? null) : null;
+      // ponytail: ffprobe-style container lists can end with a trailing
+      // comma ('mpegts,') — trim that artifact so logs and comparisons see
+      // a clean name; the caller only tests /mp4/ inside the string, so
+      // this changes presentation, never remux decisions.
+      const name = (match?.[1] ?? '').replace(/,+$/, '');
+      return name === '' ? null : name;
     } catch {
       return null;
     }
@@ -193,7 +211,9 @@ export class FfmpegService {
     }
     throw new AppError({
       code: 'FFMPEG_THUMBNAIL_FAILED',
-      message: `Thumbnail generation failed: ${lastStderr.slice(0, 500) || 'no frame extracted'}`,
+      // ponytail: stderrTail — the head of ffmpeg's stderr is a version
+      // banner; the real error lives at the end.
+      message: `Thumbnail generation failed: ${stderrTail(lastStderr) || 'no frame extracted'}`,
       recoverable: true,
     });
   }
@@ -227,7 +247,8 @@ export class FfmpegService {
     }
     throw new AppError({
       code: 'FFMPEG_FRAME_FAILED',
-      message: `Frame extraction failed: ${lastStderr.slice(0, 500) || 'no frame extracted'}`,
+      // ponytail: stderrTail — see the banner-burial note on the helper.
+      message: `Frame extraction failed: ${stderrTail(lastStderr) || 'no frame extracted'}`,
       recoverable: true,
     });
   }

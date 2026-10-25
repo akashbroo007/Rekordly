@@ -111,6 +111,7 @@ export const IPC_CHANNELS = {
 
   recordingStart: 'recording:start',
   recordingStartForCreator: 'recording:start-for-creator',
+  recordingStartAllLive: 'recording:start-all-live',
   recordingPause: 'recording:pause',
   recordingResume: 'recording:resume',
   recordingCancel: 'recording:cancel',
@@ -845,7 +846,9 @@ export type RecordingEventTypeDto =
   | 'recording-finalized'
   | 'verification-started'
   | 'verification-completed'
-  | 'recording-segment-finished';
+  | 'recording-segment-finished'
+  /** ponytail: batch "Record All Live" heartbeat while starting many streams. */
+  | 'record-all-progress';
 
 export interface RecordingEventDto {
   type: RecordingEventTypeDto;
@@ -868,6 +871,63 @@ export interface RecordingSettingsDto {
   thumbnailEnabled: boolean;
   metadataEnabled: boolean;
   namingTemplate: string;
+}
+
+// --- Record All Live (master batch record) -----------------------------------
+
+/**
+ * ponytail: options for the batch "Record All Live" start — the SAME model as
+ * the per-creator Record dialog (quality / duration / split / stream type),
+ * applied to every selected creator. Only streamType is per-plugin-limited:
+ * the main process validates the pick against each plugin's manifest and
+ * falls back to 'auto' for plugins that don't declare it.
+ */
+export interface RecordAllLiveOptionsDto {
+  durationMinutes?: number;
+  quality?: string;
+  segmentMinutes?: number;
+  /** Stream variant pick (e.g. 'vr'); applied only to plugins that declare it. */
+  streamType?: string;
+  /** Explicit creator selection from the dialog checklist; omit = every live creator. */
+  creatorIds?: string[];
+}
+
+/** Why a candidate was not started. */
+export type RecordAllLiveSkipReasonDto =
+  | 'offline-at-start'
+  | 'already-recording'
+  | 'no-stream-url'
+  | 'not-found';
+
+export interface RecordAllLiveOutcomeDto {
+  creatorId: string;
+  displayName: string;
+  /** Skip reason, or the error message when the start itself failed. */
+  reason?: string;
+}
+
+export interface RecordAllLiveStartedOutcomeDto {
+  creatorId: string;
+  displayName: string;
+  jobId?: string;
+}
+
+export interface RecordAllLiveResultDto {
+  started: RecordAllLiveStartedOutcomeDto[];
+  skipped: RecordAllLiveOutcomeDto[];
+  failed: RecordAllLiveOutcomeDto[];
+}
+
+/** Heartbeat payload for batch starts (`recordingEvent`, type `record-all-progress`). */
+export interface RecordAllLiveProgressDto {
+  done: number;
+  total: number;
+  started: number;
+  skipped: number;
+  failed: number;
+  lastDisplayName?: string;
+  lastOutcome?: 'started' | 'skipped' | 'failed';
+  lastReason?: string;
 }
 
 // --- Dashboard --------------------------------------------------------------
@@ -1444,6 +1504,14 @@ export interface DesktopApi {
         streamType?: string;
       },
     ): Promise<string>;
+    /**
+     * ponytail: batch "Record All Live" — starts a recording for every
+     * selected creator that is live right now (omit `creatorIds` = all live),
+     * applying the same options model as `startForCreator` to each. One
+     * creator failing never aborts the batch; outcomes come back split into
+     * started / skipped / failed.
+     */
+    startAllLive(options?: RecordAllLiveOptionsDto): Promise<RecordAllLiveResultDto>;
     pause(jobId: string): Promise<void>;
     resume(jobId: string): Promise<void>;
     cancel(jobId: string): Promise<void>;

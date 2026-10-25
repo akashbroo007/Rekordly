@@ -23,6 +23,7 @@ import {
   LayoutDashboard,
   Library,
   Puzzle,
+  Radio,
   ScrollText,
   Search,
   Settings,
@@ -33,7 +34,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent } from '@rekordly/ui';
-import { AddCreatorDialog } from '../pages/creators/dialogs';
+import { AddCreatorDialog, RecordAllLiveDialog } from '../pages/creators/dialogs';
 import { AddDownloadDialog } from '../pages/downloads/add-download-dialog';
 import { usePluginInstallAction } from './top-bar/quick-actions';
 
@@ -81,6 +82,7 @@ export function CommandPalette() {
 
   // --- Quick action dialogs (same shared dialogs the "+ New" menu mounts) ---
   const [addCreatorOpen, setAddCreatorOpen] = useState(false);
+  const [recordAllOpen, setRecordAllOpen] = useState(false);
   const [addDownloadOpen, setAddDownloadOpen] = useState(false);
 
   const installPlugin = usePluginInstallAction();
@@ -159,6 +161,7 @@ export function CommandPalette() {
     }));
 
     const actions: PaletteItem[] = [
+      { id: 'action-record-all-live', label: 'Record All Live', icon: Radio, run: () => { setOpen(false); setRecordAllOpen(true); } },
       { id: 'action-add-creator', label: 'Add Creator', icon: Users, run: () => { setOpen(false); setAddCreatorOpen(true); } },
       { id: 'action-add-download', label: 'Add Download', icon: DownloadIcon, run: () => { setOpen(false); setAddDownloadOpen(true); } },
       { id: 'action-upload-file', label: 'Upload file', icon: CloudUpload, run: () => run('/uploads') },
@@ -333,6 +336,7 @@ export function CommandPalette() {
       </Dialog>
 
       <AddCreatorDialog open={addCreatorOpen} onOpenChange={setAddCreatorOpen} />
+      <RecordAllLiveDialog open={recordAllOpen} onOpenChange={setRecordAllOpen} />
       <AddDownloadDialog open={addDownloadOpen} onOpenChange={setAddDownloadOpen} />
     </>
   );

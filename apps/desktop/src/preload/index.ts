@@ -212,6 +212,7 @@ const desktopApi: DesktopApi = {
         streamType?: string;
       },
     ) => ipcRenderer.invoke(IPC_CHANNELS.recordingStartForCreator, { creatorId, options }),
+    startAllLive: (options) => ipcRenderer.invoke(IPC_CHANNELS.recordingStartAllLive, options),
     pause: (jobId) => ipcRenderer.invoke(IPC_CHANNELS.recordingPause, jobId),
     resume: (jobId) => ipcRenderer.invoke(IPC_CHANNELS.recordingResume, jobId),
     cancel: (jobId) => ipcRenderer.invoke(IPC_CHANNELS.recordingCancel, jobId),

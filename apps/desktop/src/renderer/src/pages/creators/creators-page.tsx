@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, Info, Plus, Star, Tags, Trash2, Upload, Users, X, Zap } from 'lucide-react';
+import { Download, Info, Plus, Radio, Star, Tags, Trash2, Upload, Users, X, Zap } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { CreatorDto, MonitoringJobDto, RecordingJobDto } from '@rekordly/shared';
@@ -17,7 +17,7 @@ import { CreatorCard, type CreatorCardStatus } from './creator-card';
 import { FilterBar, type PlatformFilterInfo, type StatusChipInfo, type TagFilterInfo } from './filter-bar';
 import { activeFilterCount, loadFilters, saveFilters, type CreatorsFilterState } from './filter-model';
 import { friendlyErrorMessage } from '../../lib/errors';
-import { AddCreatorDialog, DeleteCreatorDialog, EditCreatorDialog, ImportDialog, RecordDialog } from './dialogs';
+import { AddCreatorDialog, DeleteCreatorDialog, EditCreatorDialog, ImportDialog, RecordAllLiveDialog, RecordDialog } from './dialogs';
 import { CreatorDetailsDialog } from './details-dialog';
 import { usePaged, Pagination } from '../../components/pagination';
 import { BulkTagDialog, CollectionsDialog, TagsDialog } from './tag-dialogs';
@@ -543,6 +543,9 @@ export function CreatorsPage() {
   const [collectionsOpen, setCollectionsOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [recordCreator, setRecordCreator] = useState<CreatorDto | null>(null);
+  // ponytail: master "Record All Live" batch — header button (the + New menu
+  // and command palette reuse this same dialog).
+  const [recordAllOpen, setRecordAllOpen] = useState(false);
 
   const exportJson = useMutation({
     mutationFn: () => window.desktop.creators.exportJson(),
@@ -583,6 +586,16 @@ export function CreatorsPage() {
             </Button>
             <Button variant="secondary" size="sm" loading={exportJson.isPending} onClick={() => exportJson.mutate()}>
               <Download size={14} /> Export
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={counts.live === 0}
+              title={counts.live === 0 ? 'No creators are live right now.' : undefined}
+              onClick={() => setRecordAllOpen(true)}
+            >
+              <Radio size={14} />
+              {counts.live > 0 ? `Record All Live (${counts.live})` : 'Record All Live'}
             </Button>
             <Button size="sm" onClick={() => setAddOpen(true)}>
               <Plus size={14} /> Add Creator
@@ -791,6 +804,7 @@ export function CreatorsPage() {
       <TagsDialog open={tagsOpen} onOpenChange={setTagsOpen} />
       <CollectionsDialog open={collectionsOpen} onOpenChange={setCollectionsOpen} />
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
+      <RecordAllLiveDialog open={recordAllOpen} onOpenChange={setRecordAllOpen} />
       {recordCreator && (
         <RecordDialog creator={recordCreator} open onOpenChange={() => setRecordCreator(null)} />
       )}

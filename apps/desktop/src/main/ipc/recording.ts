@@ -1,9 +1,32 @@
 import { ipcMain } from 'electron';
-import { IPC_CHANNELS, type StreamObject } from '@rekordly/shared';
+import {
+  IPC_CHANNELS,
+  type RecordAllLiveOptionsDto,
+  type RecordingEventDto,
+  type StreamObject,
+} from '@rekordly/shared';
 import type { IpcContext } from './context';
+import {
+  startAllLive,
+  startRecordingForCreator,
+  type PerCreatorRecordOptions,
+  type RecordStartDeps,
+} from '../record-start';
 
 export function registerRecordingIpc(context: IpcContext): void {
   const { recording, monitoring, creatorRepo, plugins } = context;
+
+  // ponytail: single starts and the batch share ONE implementation (main/
+  // record-start.ts) so plugin extraction, FK-safe creator ids and the
+  // duplicate-session guard cannot drift between the IPC and Telegram paths.
+  const deps: RecordStartDeps = { creatorRepo, pluginManager: plugins, monitoring, recording };
+
+  const sendRecordingEvent = (event: RecordingEventDto): void => {
+    const win = context.getWindow();
+    if (win !== null && !win.isDestroyed()) {
+      win.webContents.send(IPC_CHANNELS.recordingEvent, event);
+    }
+  };
 
   ipcMain.handle(IPC_CHANNELS.recordingStart, async (_event, stream: StreamObject) => {
     return recording.startRecording(stream);
@@ -15,90 +38,31 @@ export function registerRecordingIpc(context: IpcContext): void {
       _event,
       payload: string | {
         creatorId: string;
-        options?: {
-          durationMinutes?: number;
-          quality?: string;
-          segmentMinutes?: number;
-          /** ponytail: per-recording stream variant pick (plugin-defined, e.g. 'vr'). */
-          streamType?: string;
-        };
+        options?: PerCreatorRecordOptions;
       },
     ) => {
       const creatorDbId = typeof payload === 'string' ? payload : payload.creatorId;
       const startOptions = typeof payload === 'string' ? {} : (payload.options ?? {});
-      const creator = creatorRepo.get(creatorDbId);
-    if (creator === undefined) throw new Error(`Creator ${creatorDbId} not found`);
+      return startRecordingForCreator(deps, creatorDbId, startOptions);
+    },
+  );
 
-    const monitorId = `${creator.pluginId}:${creator.externalId}`;
-    const jobs = monitoring.getJobs();
-    const job = jobs.find((j) => j.creatorId === monitorId);
-
-    // ponytail: the plugin is the source of truth for live state. The stored
-    // check result (job.lastResult.streamUrl) is a cache that can legitimately
-    // be missing or stale — a creator added seconds ago has never been
-    // checked, and a live status can lack a resolvable URL at the moment of
-    // the last poll. Ask the plugin directly instead of refusing to record.
-    const managed = plugins.get(creator.pluginId);
-    const liveDetection = managed?.instance?.capabilities.liveDetection;
-    let lastResult = job?.lastResult;
-    if (lastResult?.streamUrl === undefined) {
-      if (liveDetection === undefined) {
-        throw new Error(`${creator.displayName} is not live or has no stream URL`);
-      }
-      const status = await liveDetection.getLiveStatus(monitorId);
-      if (!status.isLive) {
-        throw new Error(`${creator.displayName} is not live or has no stream URL`);
-      }
-      lastResult = {
-        isLive: true,
-        title: status.title,
-        thumbnail: status.thumbnail,
-        viewerCount: status.viewerCount,
-        streamUrl: status.streamUrl,
-        startedAt: status.startedAt,
-        checkedAt: new Date().toISOString(),
-        durationMs: 0,
-      };
-    }
-
-    // ponytail: prefer the plugin's extractStream — for platforms like
-    // Stripchat the live-check URL is not directly recordable (MOUFLON-
-    // obfuscated segments); extractStream returns a prepared StreamObject
-    // (local de-obfuscating proxy URL, headers, cookies).
-    let stream: StreamObject | null = null;
-    const extract = managed?.instance?.capabilities.streamExtraction;
-    if (extract !== undefined) {
-      try {
-        // ponytail: forward the Record dialog's stream type pick — VR-capable
-        // plugins (Dreamcam) switch between the 2D HLS and the VR bridge feed.
-        stream = await extract.extractStream(monitorId, {
-          streamType: startOptions.streamType,
+  // ponytail: master "Record All Live" — starts a recording for every selected
+  // creator that is live right now (omit creatorIds = all live). One creator
+  // failing never aborts the batch; heartbeat pulses go out over the regular
+  // recording event channel so the dialog can show progress while it fans out.
+  ipcMain.handle(
+    IPC_CHANNELS.recordingStartAllLive,
+    async (_event, options?: RecordAllLiveOptionsDto) => {
+      return startAllLive(deps, options ?? {}, (progress) => {
+        sendRecordingEvent({
+          type: 'record-all-progress',
+          // RecordingEventDto.data is a loose Record; consumers cast back to
+          // RecordAllLiveProgressDto (see the Record All Live dialog).
+          data: progress as unknown as Record<string, unknown>,
+          timestamp: new Date().toISOString(),
         });
-      } catch {
-        /* fall back to the live-check URL below */
-      }
-    }
-    if (stream === null) {
-      if (lastResult.streamUrl === undefined) {
-        throw new Error(`${creator.displayName} is not live or has no stream URL`);
-      }
-      stream = {
-        creatorId: creator.id,
-        creatorName: creator.displayName,
-        platformId: job?.pluginId ?? creator.pluginId,
-        title: lastResult.title ?? `${creator.displayName} live`,
-        streamUrl: lastResult.streamUrl,
-        thumbnail: lastResult.thumbnail,
-        startedAt: lastResult.startedAt,
-      };
-    } else {
-      // ponytail: extractStream returns the monitor id ("plugin:username")
-      // as creatorId, but recording_jobs.creator_id is a FK to creators.id
-      // (a DB uuid) — always use the tracked creator row's id.
-      stream = { ...stream, creatorId: creator.id, creatorName: creator.displayName };
-    }
-
-      return recording.startRecording(stream, startOptions);
+      });
     },
   );
 
@@ -147,10 +111,6 @@ export function registerRecordingIpc(context: IpcContext): void {
 
   // Forward recording events to renderer
   recording.on('event', (event) => {
-    const { getWindow } = context;
-    const win = getWindow();
-    if (win !== null && !win.isDestroyed()) {
-      win.webContents.send(IPC_CHANNELS.recordingEvent, event);
-    }
+    sendRecordingEvent(event);
   });
 }

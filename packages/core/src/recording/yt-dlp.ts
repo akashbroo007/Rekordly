@@ -10,27 +10,15 @@ const execFileAsync = promisify(execFile);
 const ytDlpBinary = new ExternalBinary('yt-dlp');
 
 /**
- * Kill a process AND its entire child tree. On Windows, killing only the
- * parent leaves grandchildren running (orphaned): yt-dlp delegates live HLS
- * to its own ffmpeg child, which would keep recording forever and hold the
- * stdio pipes open so the 'close' event never fires.
- *
- * ponytail: this MUST be synchronous — an async taskkill races the caller's
- * follow-up kill of the parent, and once the parent is gone taskkill can no
- * longer enumerate the tree ("process not found"), orphaning ffmpeg again.
+ * ponytail: all tree kills now use `killProcessTreeAsync` (below). The old
+ * `killProcessTree` ran `execFileSync('taskkill', …)` on the ELECTRON MAIN
+ * thread: every stop/cancel of a recording froze the window for the whole
+ * taskkill round-trip (tasklist-style blocking subprocess with no timeout),
+ * and "Stop All" on 3 recordings stacked 3+ of these calls back to back —
+ * the app looked dead and was killed from Task Manager by real users.
+ * Windows stop flows are documented to ignore ffmpeg's stdin 'q', so EVERY
+ * stop was a force-kill: blocking taskkill on every stop, guaranteed.
  */
-function killProcessTree(pid: number): void {
-  if (process.platform === 'win32') {
-    try {
-      execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], {
-        windowsHide: true,
-        stdio: 'ignore',
-      });
-    } catch {
-      /* process already gone — nothing to kill */
-    }
-  }
-}
 
 /**
  * ponytail: non-destructive liveness check for a process we did not spawn in
@@ -643,6 +631,20 @@ export class YtDlpService extends EventEmitter<YtDlpEvents> {
     return new Promise<YtDlpDownloadResult>((resolve, reject) => {
       const child = spawn(binary, args, { windowsHide: true });
       this.activeProcesses.set(jobId, child);
+      /**
+       * ponytail (2026-10-24, "write EPIPE" crash): a capture child can die
+       * at ANY moment (stream end, crash, system sleep) — its stdin pipe
+       * breaks with it, and the JS-level stream may still look `writable`
+       * for a beat. A write into that dead pipe raises an ASYNC EPIPE on
+       * the stream: the try/catch at the stop site can never catch it, and
+       * Node escalates an unhandled stream 'error' into
+       * uncaughtException — which used to pop Electron's fatal error
+       * dialog over a session with live recordings ("A JavaScript error
+       * occurred in the main process"). Every stop path already has its
+       * own force-kill fallback, so a stdin error is never meaningful.
+       * Swallow it here, at the source, for every job.
+       */
+      child.stdin?.on('error', () => undefined);
       // ponytail: persist the pid immediately (orphan adoption on restart).
       if (child.pid !== undefined) this.emit('spawned', jobId, child.pid);
 
@@ -809,6 +811,11 @@ export class YtDlpService extends EventEmitter<YtDlpEvents> {
     return new Promise<YtDlpDownloadResult>((resolve, reject) => {
       const child = spawn(binary, args, { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
       this.activeProcesses.set(jobId, child);
+      // ponytail: same stdin EPIPE swallow as download() — the graceful-'q'
+      // stop targets a pipe that can break under the child at any moment
+      // (stream end, crash, system suspension); the async error must never
+      // surface as an uncaughtException.
+      child.stdin?.on('error', () => undefined);
       // ponytail: direct ffmpeg reads stdin — 'q' quits gracefully and
       // finalizes the mp4 container (see stopDownload).
       this.directFfmpegJobs.add(jobId);
@@ -972,9 +979,40 @@ export class YtDlpService extends EventEmitter<YtDlpEvents> {
     this.stoppingJobs.add(jobId);
     const pid = child.pid;
 
-    /** Force-kill the whole tree as a last resort (orphan prevention). */
+    /**
+     * ponytail: force-kill the whole tree WITHOUT blocking the event loop.
+     * Order still matters (see the removed sync killProcessTree): the tree
+     * kill must land BEFORE the direct child kill — once the parent is gone
+     * taskkill can no longer enumerate its children ("process not found"),
+     * which is exactly what orphaned ffmpeg. killProcessTreeAsync /T /F
+     * already terminates the parent too; the chained child.kill is only
+     * belt-and-braces for non-Windows (taskkill is a no-op there). A final
+     * deadline fallback keeps the handle kill from being skipped entirely if
+     * the async taskkill somehow never resolves — the old sync version ran
+     * both unconditionally.
+     */
     const forceKill = (): void => {
-      if (pid !== undefined) killProcessTree(pid);
+      if (pid !== undefined) {
+        const deadline = setTimeout(() => {
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            /* already exited */
+          }
+        }, 16_000);
+        deadline.unref?.();
+        child.once('close', () => clearTimeout(deadline));
+        void killProcessTreeAsync(pid)
+          .then(() => {
+            try {
+              child.kill('SIGKILL');
+            } catch {
+              /* already exited */
+            }
+          })
+          .catch(() => undefined);
+        return;
+      }
       try {
         child.kill('SIGKILL');
       } catch {
@@ -989,13 +1027,36 @@ export class YtDlpService extends EventEmitter<YtDlpEvents> {
         // atom. Send 'q' to ffmpeg's stdin instead: that's its documented
         // graceful-quit key and it finalizes the container properly. Fall
         // back to a tree kill after a grace period in case stdin is closed.
-        try {
-          child.stdin.write('q');
-        } catch {
+        //
+        // ponytail (2026-10-24): the child can die in the window between the
+        // writable-check and this write (stream ended naturally, crashed,
+        // system slept): the pipe still LOOKS writable at the JS level but
+        // delivering into it raises an async EPIPE — the crash behind the
+        // "A JavaScript error occurred in the main process: write EPIPE"
+        // dialog stay on the finalize watchdog. The spawn site now swallows
+        // stdin errors for good; if the child already exited, skip the
+        // write entirely, and a one-shot stdin-error listener that fires in
+        // the check→write race window pulls the force-kill FORWARD instead
+        // of waiting out the 5s grace for a 'q' that can never be delivered.
+        if (child.exitCode !== null || child.signalCode !== null) {
           forceKill();
+        } else {
+          try {
+            child.stdin.write('q');
+          } catch {
+            forceKill();
+          }
+          const graceTimer = setTimeout(forceKill, 5000);
+          const onStdinError = (): void => {
+            clearTimeout(graceTimer);
+            forceKill();
+          };
+          child.stdin.once('error', onStdinError);
+          child.once('close', () => {
+            clearTimeout(graceTimer);
+            child.stdin?.removeListener('error', onStdinError);
+          });
         }
-        const graceTimer = setTimeout(forceKill, 5000);
-        child.once('close', () => clearTimeout(graceTimer));
       } else {
         // ponytail: yt-dlp path — killing only yt-dlp orphans its ffmpeg
         // grandchild, which keeps recording forever and holds the stdio
@@ -1036,19 +1097,13 @@ export class YtDlpService extends EventEmitter<YtDlpEvents> {
   /**
    * ponytail: tree-kill a process by pid — an adopted orphaned recording has
    * no ChildProcess handle in this session, so stopDownload cannot reach it.
+   * Blocking NEVER: this used to run execFileSync(taskkill) on the Electron
+   * main thread (cancel/finalize of every recording froze the window — see
+   * killProcessTree). Now delegates to the async variant, keeping the void
+   * signature so all call sites stay unchanged.
    */
   stopPidTree(pid: number): void {
-    killProcessTree(pid);
-    if (process.platform !== 'win32') {
-      // ponytail: killProcessTree is Windows-only — fall back to a direct
-      // SIGKILL so adopted orphans are still stoppable on POSIX (the
-      // yt-dlp/ffmpeg grandchild may survive until tree-kill is implemented).
-      try {
-        process.kill(pid, 'SIGKILL');
-      } catch {
-        /* already gone */
-      }
-    }
+    void this.stopPidTreeAsync(pid);
   }
 
   /**

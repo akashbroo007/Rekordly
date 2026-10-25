@@ -718,7 +718,9 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
     this.ytDlp.cancelDownload(jobId);
     // ponytail: adopted orphaned recordings have no ChildProcess handle in
     // this session — kill the whole tree by the persisted pid instead.
-    if (job.pid !== null && job.pid !== undefined) this.ytDlp.stopPidTree(job.pid);
+    // ponytail: NEVER blocking — the old sync taskkill froze the main thread
+    // per cancel ("Stop All" on 3 recordings stacked 3 blocking kills).
+    if (job.pid !== null && job.pid !== undefined) void this.ytDlp.stopPidTreeAsync(job.pid);
     this.setWorkerState(jobId, 'STOPPING');
     this.repo.updateJob(jobId, { status: 'cancelled', finishedAt: new Date().toISOString() });
 
@@ -885,8 +887,9 @@ export class RecordingService extends EventEmitter<RecordingServiceEvents> {
     const stopped = this.ytDlp.stopDownload(jobId);
     // ponytail: adopted orphaned recordings have no ChildProcess handle in
     // this session — kill the whole tree by the persisted pid instead.
+    // ponytail: never blocking the main thread (sync taskkill froze the UI).
     if (!stopped && job.pid !== null && job.pid !== undefined) {
-      this.ytDlp.stopPidTree(job.pid);
+      void this.ytDlp.stopPidTreeAsync(job.pid);
     }
   }
 

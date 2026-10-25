@@ -4,19 +4,20 @@
  * Ghost/secondary style (32px high, radius 8, 1px border token): plus icon,
  * "New" label and a chevron — never filled, because pages keep their own
  * filled primary actions in their page headers. Opens the shared Menu with
- * the four quick actions; each one runs the existing dialog/flow, nothing
+ * the five quick actions; each one runs the existing dialog/flow, nothing
  * was re-implemented:
  *
+ *   · Record all live → RecordAllLiveDialog (same batch the Creators header opens)
  *   · Add creator   → AddCreatorDialog (also bound to Ctrl+N, free)
  *   · Add download  → AddDownloadDialog
  *   · Upload file   → the Uploads page add flow
  *   · Install plugin→ window.desktop.plugins.installFromDirectory()
  */
 import { useEffect, useState } from 'react';
-import { ChevronDown, Download, CloudUpload, FolderInput, Plus, Users } from 'lucide-react';
+import { ChevronDown, Download, CloudUpload, FolderInput, Plus, Radio, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, type MenuItemDef } from '@rekordly/ui';
-import { AddCreatorDialog } from '../../pages/creators/dialogs';
+import { AddCreatorDialog, RecordAllLiveDialog } from '../../pages/creators/dialogs';
 import { AddDownloadDialog } from '../../pages/downloads/add-download-dialog';
 import { usePluginInstallAction } from './quick-actions';
 
@@ -32,6 +33,9 @@ export function NewButton() {
 
   const [addCreatorOpen, setAddCreatorOpen] = useState(false);
   const [addDownloadOpen, setAddDownloadOpen] = useState(false);
+  // Same dialog the Creators page header opens — mounted here so "Record
+  // All Live" works from any page.
+  const [recordAllOpen, setRecordAllOpen] = useState(false);
 
   // Ctrl+N is free — bind it to Add creator (mirrors the menu item).
   useEffect(() => {
@@ -47,6 +51,12 @@ export function NewButton() {
   }, []);
 
   const items: MenuItemDef[] = [
+    {
+      key: 'record-all-live',
+      label: 'Record All Live',
+      icon: <Radio size={13} />,
+      onSelect: (): void => setRecordAllOpen(true),
+    },
     {
       key: 'add-creator',
       label: 'Add Creator',
@@ -79,6 +89,7 @@ export function NewButton() {
       />
       <AddCreatorDialog open={addCreatorOpen} onOpenChange={setAddCreatorOpen} />
       <AddDownloadDialog open={addDownloadOpen} onOpenChange={setAddDownloadOpen} />
+      <RecordAllLiveDialog open={recordAllOpen} onOpenChange={setRecordAllOpen} />
     </>
   );
 }

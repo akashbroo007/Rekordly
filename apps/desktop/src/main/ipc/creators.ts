@@ -73,6 +73,16 @@ export function registerCreatorsIpc(context: IpcContext): void {
       createdAt: now,
       updatedAt: now,
     };
+    // ponytail (2026-10-24): a double-submit (fast double-click on Add, or
+    // a re-mounted dialog) raced itself into the unique index and surfaced
+    // the raw "UNIQUE constraint failed: creators.plugin_id,
+    // creators.external_id" as an unhandled handler error. Idempotent
+    // instead — the already-existing row IS what the caller asked for.
+    const existing = creatorRepo.getByExternal(record.pluginId, record.externalId);
+    if (existing !== undefined) {
+      latchProxyUsedFlag(context, existing.useProxy);
+      return existing;
+    }
     creatorRepo.create(record);
     latchProxyUsedFlag(context, record.useProxy);
     const creatorId = `${d['pluginId']}:${d['externalId']}`;

@@ -320,6 +320,42 @@ Follow-up (out of this plan, needs approval): capture to MPEG-TS on Windows
 (truncation-tolerant by design) + background remux to MP4, or a delivery
 mechanism for graceful shutdown that actually works without a console.
 
+2026-10-22 update: the STOP path itself can no longer freeze the app —
+`killProcessTree` / `stopPidTree` (execFileSync taskkill, no timeout) are gone
+from the Electron main thread; every stop/cancel/finalize tree kill now chains
+`killProcessTreeAsync` with a handle-kill deadline fallback
+(`packages/core/src/recording/yt-dlp.ts`). The limitation above (ffmpeg
+ignoring stdin 'q' → every stop is a force-kill) still stands, but it no
+longer blocks the UI while it happens. "Stop All" on N recordings stalled the
+window for N×block-kill before; verified fixed by the pause/recovery test
+suites. The resource monitors also drop to their 10s cadence from ONE active
+recording (was 5), and the storage/prune sync file walks moved off the main
+loop (`apps/desktop/src/main/ipc/media-sync.ts`,
+`packages/core/src/services/storage-service.ts`). Watch the new `startLagProbe`
+warns (`main-process event loop lagged`) for any surviving blocker.
+
+Same-day follow-ups, all validated by that first probe report: the
+`driftMs: 1282242` (21.4 min) warn traced to WINDOWS SUSPENDING THE LAPTOP
+under running captures (no power-save block existed) — lock ≠ sleep. The
+"write EPIPE" fatal dialog was an async stdin error in `stopDownload`
+reaching uncaughtException. Both classes are closed now:
+- `powerSaveBlocker('prevent-app-suspension')` held while ≥1 job is
+  recording/preparing (`apps/desktop/src/main/index.ts`, synced on every
+  recording event + at boot); released when idle. Lid-close still follows
+  the Windows power plan — recording with the lid shut needs "do nothing".
+- `powerMonitor` suspend/resume logs + `startLagProbe` classifies
+  suspension-sized drifts (>60s) with `msSinceResume` context.
+- stdin `error` swallowed at both capture spawn sites; `stopDownload` skips
+  the graceful-'q' write for already-exited children and force-kills via a
+  one-shot stdin-error listener in the check→write race window.
+- `process.on('uncaughtException' | 'unhandledRejection')` nets installed —
+  Electron no longer shows the fatal dialog; background plumbing errors log
+  and the app continues.
+- Small: `creators:create` is idempotent (upsert on the plugin_id+external_id
+  unique race), ffprobe container names are comma-trimmed, and ffmpeg
+  thumbnail/frame errors report the stderr TAIL (the banner used to bury the
+  actual error).
+
 ## 19. Future Rust
 
 Not now. Seam (§2) is the only migration boundary: later replace `FfmpegCopyBackend` with
