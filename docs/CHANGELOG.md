@@ -6,6 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-25
+
+### Added
+
+- Master "Record All Live": one click records every creator that is live
+  right now. Lives in the Creators page header (with the live count), the
+  + New menu and the command palette. Reuses the per-creator Record dialog's
+  option model — stream type, quality, duration, split — with a checklist of
+  the live creators (creators already recording render locked out). The batch
+  starts sequentially with per-creator progress and outcomes (started /
+  skipped / failed); one creator failing never aborts the rest, and a VR
+  stream-type pick never reaches plugins without VR support.
+- The "record this creator now" path now shares one implementation across
+  the Record dialog, Telegram taps and the batch, closing the missing
+  duplicate-session guard on the dialog's IPC path.
+
+### Fixed
+
+- Stop / Cancel no longer freezes the app: capture tree kills run through an
+  async taskkill with a handle-kill deadline fallback (the old sync kill
+  blocked the main thread per cancel — "Stop All" on N recordings stacked N
+  blocking kills).
+- App-suspension blocker held while any capture is recording/preparing —
+  Windows no longer suspends the laptop under running recordings; suspend
+  and resume are logged, and the new event-loop lag probe classifies
+  suspension-sized drifts.
+- Background plumbing errors no longer pop Electron's fatal dialog —
+  uncaughtException / unhandledRejection nets log and continue; stdin EPIPE
+  on already-stopped capture and download children is handled.
+- Add Creator is idempotent against double-submits (the plugin_id +
+  external_id unique race used to surface a raw constraint error).
+- Storage sync and prune walks moved off the main loop; resource monitors
+  drop to a 10s cadence with a single active recording (was 5s); ffprobe
+  container names are comma-trimmed and thumbnail/frame extraction errors
+  report the stderr tail instead of the banner.
+
 ## [1.0.1] - 2026-10-22
 
 ### Fixed
